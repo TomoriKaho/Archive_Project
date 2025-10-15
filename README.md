@@ -142,7 +142,7 @@ curl -X DELETE http://localhost:8000/domains/1
 
 ## documents 相关
 
-### 为 domain 添加 document
+### 在 domain 下创建 document
 
 ```sh
 curl -X POST http://localhost:8000/domains/1/documents \
@@ -154,6 +154,12 @@ curl -X POST http://localhost:8000/domains/1/documents \
 
 ```sh
 curl http://localhost:8000/domains/1/documents
+```
+
+### 获取指定 document
+
+```sh
+curl http://localhost:8000/domains/documents/1
 ```
 
 ### 更新 document
@@ -174,10 +180,38 @@ curl -X DELETE http://localhost:8000/domains/documents/1
 
 ## chunks 相关
 
+### 在 document 下创建 chunk
+（实际使用中，由于chunk会根据document自动生成，一般不会使用）
+```sh
+curl -X POST http://localhost:8000/domains/documents/1/chunks \
+  -H "Content-Type: application/json" \
+  -d '{"content":"chunk content","order":1}'
+```
+
 ### 获取 document 下所有 chunks
 
 ```sh
 curl http://localhost:8000/domains/documents/1/chunks
+```
+
+### 获取指定 chunk
+
+```sh
+curl http://localhost:8000/domains/chunks/1
+```
+
+### 更新 chunk
+
+```sh
+curl -X PATCH http://localhost:8000/domains/chunks/1 \
+  -H "Content-Type: application/json" \
+  -d '{"content":"new chunk content"}'
+```
+
+### 删除 chunk
+
+```sh
+curl -X DELETE http://localhost:8000/domains/chunks/1
 ```
 
 ---
@@ -245,5 +279,3 @@ curl -X DELETE http://localhost:8000/chats/messages/1
 ```
 
 ---
-
-> 如有参数或字段不同，请根据实际 schema 调整。如有 `/api` 前缀，请将所有路径改为 `/api/xxx`。

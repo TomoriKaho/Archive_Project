@@ -1,6 +1,16 @@
+from collections.abc import Generator
+from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 
-def get_db():
-    # FastAPI 的依赖：yield 一个可用的 Session，自动提交/回滚由 SessionLocal 管
-    with SessionLocal() as db:
+
+def get_db() -> Generator[Session, None, None]:
+    """FastAPI 依赖：确保请求生命周期内提交或回滚事务。"""
+    db = SessionLocal()
+    try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

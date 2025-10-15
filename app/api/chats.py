@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.api.deps import get_db
@@ -8,15 +7,19 @@ from app.repositories.chat_repo import ChatRepository
 from app.repositories.message_repo import MessageRepository
 
 router = APIRouter(prefix="/chats", tags=["chats"])
+# ---- chats ----
 
+# Create a new chat
 @router.post("/", response_model=ChatOut, status_code=status.HTTP_201_CREATED)
 def create_chat(payload: ChatCreate, db: Session = Depends(get_db)):
     return ChatRepository(db).create(**payload.model_dump())
 
+# List chats for a user with pagination
 @router.get("/", response_model=list[ChatOut])
 def list_chats(user_id: int, offset: int = 0, limit: int = Query(50, le=200), db: Session = Depends(get_db)):
     return ChatRepository(db).list_by_user(user_id, offset=offset, limit=limit)
 
+# Update a chat's details
 @router.patch("/{chat_id}", response_model=ChatOut)
 def update_chat(chat_id: int, payload: ChatUpdate, db: Session = Depends(get_db)):
     repo = ChatRepository(db)
@@ -25,22 +28,28 @@ def update_chat(chat_id: int, payload: ChatUpdate, db: Session = Depends(get_db)
         raise HTTPException(404, "chat not found")
     return repo.update(chat, **payload.model_dump(exclude_none=True))
 
+# Delete a chat by ID
 @router.delete("/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_chat(chat_id: int, db: Session = Depends(get_db)):
+    if not ChatRepository(db).get(chat_id):
+        raise HTTPException(404, "chat not found")
     ChatRepository(db).delete(chat_id)
 
 # ---- messages ----
 
+# Create a new message in a chat, chat_id from path parameter
 @router.post("/{chat_id}/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
 def create_message(chat_id: int, payload: MessageCreate, db: Session = Depends(get_db)):
     data = payload.model_dump()
     data["chat_id"] = chat_id  # 路径参数优先生效
     return MessageRepository(db).create(**data)
 
+# List messages in a chat with pagination
 @router.get("/{chat_id}/messages", response_model=list[MessageOut])
 def list_messages(chat_id: int, offset: int = 0, limit: int = Query(200, le=500), db: Session = Depends(get_db)):
     return MessageRepository(db).list_by_chat(chat_id, offset=offset, limit=limit)
 
+# Update a message's content, identified by message ID
 @router.patch("/messages/{msg_id}", response_model=MessageOut)
 def update_message(msg_id: int, payload: MessageUpdate, db: Session = Depends(get_db)):
     repo = MessageRepository(db)
@@ -49,6 +58,9 @@ def update_message(msg_id: int, payload: MessageUpdate, db: Session = Depends(ge
         raise HTTPException(404, "message not found")
     return repo.update(m, **payload.model_dump(exclude_none=True))
 
+# Delete a message by ID, identified by message ID
 @router.delete("/messages/{msg_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_message(msg_id: int, db: Session = Depends(get_db)):
+    if not MessageRepository(db).get(msg_id):
+        raise HTTPException(404, "message not found")
     MessageRepository(db).delete(msg_id)

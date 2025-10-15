@@ -7,6 +7,7 @@ class DomainCreate(ORMModel):
     description: str | None = None
 
 class DomainUpdate(ORMModel):
+    name: str | None = Field(None, min_length=1)
     description: str | None = None
 
 class DomainOut(ORMModel):
