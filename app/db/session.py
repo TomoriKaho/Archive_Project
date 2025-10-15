@@ -1,11 +1,12 @@
 import os
+from dotenv import load_dotenv, find_dotenv
 from contextlib import contextmanager
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+load_dotenv(find_dotenv())   # 自动找到项目根的 .env
+DATABASE_URL = os.getenv("DATABASE_URL") 
 
-DATABASE_URL = os.environ["DATABASE_URL"]   # 从环境变量读取数据库连接字符串
 if not DATABASE_URL:
     raise RuntimeError(
         "Missing env var DATABASE_URL. Example:\n"

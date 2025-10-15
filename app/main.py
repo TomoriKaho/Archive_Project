@@ -1,9 +1,8 @@
 from fastapi import FastAPI
 from app.api import domains, chats
 
-app = FastAPI(title="RAG Backend (Minimal)")
+app = FastAPI(title="RAG Backend")
 
-# 路由分组
 app.include_router(domains.router)
 app.include_router(chats.router)
 

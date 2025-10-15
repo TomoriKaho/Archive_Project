@@ -5,6 +5,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
+from dotenv import load_dotenv, find_dotenv
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
@@ -16,6 +17,7 @@ from app.db.session import engine, DATABASE_URL
 
 config = context.config
 
+load_dotenv(find_dotenv())
 db_url = os.getenv("DATABASE_URL")
 if db_url:
     config.set_main_option("sqlalchemy.url", db_url)

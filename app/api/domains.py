@@ -19,6 +19,14 @@ def create_domain(payload: DomainCreate, db: Session = Depends(get_db)):
         raise HTTPException(400, "domain name already exists")
     return repo.create(name=payload.name, description=payload.description)
 
+@router.get("/", response_model=list[DomainOut])
+def list_domains(
+    db: Session = Depends(get_db),
+    offset: int = 0,
+    limit: int = Query(100, le=200),
+):
+    return DomainRepository(db).list(offset=offset, limit=limit)
+
 @router.get("/{domain_id}", response_model=DomainOut)
 def get_domain(domain_id: int, db: Session = Depends(get_db)):
     dom = DomainRepository(db).get(domain_id)
