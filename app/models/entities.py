@@ -13,8 +13,7 @@ class User(Base):
     """用户实体类，对应数据库中的user表。
     包含的字段有：
     - id: 用户的唯一标识符，主键，自增。
-    - username: 用户名，唯一且不能为空。
-    - email: 用户的电子邮件地址，唯一但可为空。
+    - email: 用户的电子邮件地址，唯一且不能为空。
     - hashed_password: 用户的密码哈希值，不能为空。
     - is_admin: 布尔值，表示用户是否为管理员，默认为False，不能为空。
     - created_at: 记录用户创建时间，默认为当前时间。
@@ -23,8 +22,7 @@ class User(Base):
     """
     __tablename__: str = "user"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    email: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False) # 存储哈希后的密码
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -102,7 +100,7 @@ class Document(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id", ondelete="CASCADE"), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    doc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     domain: Mapped["Domain"] = relationship("Domain", back_populates="documents", passive_deletes=True)

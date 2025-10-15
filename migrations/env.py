@@ -16,8 +16,9 @@ from app.db.session import engine, DATABASE_URL
 
 config = context.config
 
-if DATABASE_URL:
-    config.set_main_option("sqlalchemy.url", DATABASE_URL)
+db_url = os.getenv("DATABASE_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
