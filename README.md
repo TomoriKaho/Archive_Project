@@ -1,12 +1,5 @@
-目前的项目需求：
-第一步是先尝试把后端接口写完，推荐用fastapi+postgresql的技术栈，建议用vibe coding配合着写，后端人工写，前端AI写。
-数据表建议这么设计：
-user——chat——message，各自都有增删查改的接口，一对多的关系
-domain——document——chunk，同样，各自有增删查改。然后这里的chunk存实际的文档chunk内容，向量数据库里只存id+向量，检索到向量后，再从postgresql里的chunk表里取string，domain就是指不同来源，方便做带有filter的检索
-大概需要提供的api有：
-用户登录注册（需要区分admin权限，用一个字段标记admin，初始admin用sql强制写入就行）
-问答的增删查改
-资料管理的增删查改
+chunk存实际的文档chunk内容，向量数据库里只存id+向量，检索到向量后，再从postgresql里的chunk表里取string，domain就是指不同来源，方便做带有filter的检索
+提供用户登录注册的api（需要区分admin权限，用一个字段标记admin，初始admin用sql强制写入就行）
 api可能不好想齐全，那么可以让AI帮忙设计界面后，再反过来想需要什么样的api去满足界面交互
 
 # 环境配置与服务启动
@@ -14,7 +7,7 @@ api可能不好想齐全，那么可以让AI帮忙设计界面后，再反过来
 ## 1. 克隆项目并进入目录
 
 ```sh
-git clone <your-repo-url>
+git clone git@github.com:TomoriKaho/Archive_Project.git
 cd Archive_Project
 ```
 
@@ -56,7 +49,7 @@ docker run --name rag-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres
 docker start rag-pg
 ```
 
-## 6. 启动 Qdrant（如需）
+## 6. 启动 Qdrant
 
 ```sh
 docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
@@ -66,7 +59,7 @@ docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
 docker start qdrant
 ```
 
-## 7. 初始化数据库（可选）
+## 7. 初始化数据库
 
 ```sh
 alembic upgrade head
@@ -102,12 +95,12 @@ curl http://localhost:8000/healthz
 
 ---
 
-## domains 相关
+## 资料管理相关
 
 ### 创建 domain
 
 ```sh
-curl -X POST http://localhost:8000/domains/ \
+curl -X POST http://localhost:8000/domains \
   -H "Content-Type: application/json" \
   -d '{"name":"PKU-Archive","description":"test"}'
 ```
@@ -115,19 +108,19 @@ curl -X POST http://localhost:8000/domains/ \
 ### 获取 domain 列表
 
 ```sh
-curl http://localhost:8000/domains/
+curl http://localhost:8000/domains
 ```
 
 ### 获取指定 domain
 
 ```sh
-curl http://localhost:8000/domains/1
+curl http://localhost:8000/domains/{domain_id}
 ```
 
 ### 更新 domain
 
 ```sh
-curl -X PATCH http://localhost:8000/domains/1 \
+curl -X PATCH http://localhost:8000/domains/{domain_id} \
   -H "Content-Type: application/json" \
   -d '{"name":"NewName","description":"new desc"}'
 ```
@@ -135,7 +128,7 @@ curl -X PATCH http://localhost:8000/domains/1 \
 ### 删除 domain
 
 ```sh
-curl -X DELETE http://localhost:8000/domains/1
+curl -X DELETE http://localhost:8000/domains/{domain_id}
 ```
 
 ---
@@ -145,27 +138,27 @@ curl -X DELETE http://localhost:8000/domains/1
 ### 在 domain 下创建 document
 
 ```sh
-curl -X POST http://localhost:8000/domains/1/documents \
+curl -X POST http://localhost:8000/domains/{domain_id}/documents \
   -H "Content-Type: application/json" \
-  -d '{"name":"doc1","description":"desc"}'
+  -d '{"title":"doc1", "doc_metadata": {"field1": "test"}}'
 ```
 
 ### 获取 domain 下所有 documents
 
 ```sh
-curl http://localhost:8000/domains/1/documents
+curl http://localhost:8000/domains/{domain_id}/documents
 ```
 
 ### 获取指定 document
 
 ```sh
-curl http://localhost:8000/domains/documents/1
+curl http://localhost:8000/domains/{domain_id}/documents/{doc_id}
 ```
 
 ### 更新 document
 
 ```sh
-curl -X PATCH http://localhost:8000/domains/documents/1 \
+curl -X PATCH http://localhost:8000/domains/{domain_id}/documents/{doc_id} \
   -H "Content-Type: application/json" \
   -d '{"name":"newdoc","description":"newdesc"}'
 ```
@@ -173,7 +166,7 @@ curl -X PATCH http://localhost:8000/domains/documents/1 \
 ### 删除 document
 
 ```sh
-curl -X DELETE http://localhost:8000/domains/documents/1
+curl -X DELETE http://localhost:8000/domains/{domain_id}/documents/{doc_id}
 ```
 
 ---
@@ -183,27 +176,27 @@ curl -X DELETE http://localhost:8000/domains/documents/1
 ### 在 document 下创建 chunk
 （实际使用中，由于chunk会根据document自动生成，一般不会使用）
 ```sh
-curl -X POST http://localhost:8000/domains/documents/1/chunks \
+curl -X POST http://localhost:8000/domains/{domain_id}/documents/{doc_id}/chunks \
   -H "Content-Type: application/json" \
-  -d '{"content":"chunk content","order":1}'
+  -d '{"ordinal":1, "content":"chunk content"}'
 ```
 
 ### 获取 document 下所有 chunks
 
 ```sh
-curl http://localhost:8000/domains/documents/1/chunks
+curl http://localhost:8000/domains/{domain_id}/documents/{doc_id}/chunks
 ```
 
 ### 获取指定 chunk
 
 ```sh
-curl http://localhost:8000/domains/chunks/1
+curl http://localhost:8000/domains/{domain_id}/documents/{doc_id}/chunks/{chunk_id}
 ```
 
 ### 更新 chunk
 
 ```sh
-curl -X PATCH http://localhost:8000/domains/chunks/1 \
+curl -X PATCH http://localhost:8000/{domain_id}/documents/{doc_id}/chunks/{chunk_id} \
   -H "Content-Type: application/json" \
   -d '{"content":"new chunk content"}'
 ```
@@ -211,7 +204,7 @@ curl -X PATCH http://localhost:8000/domains/chunks/1 \
 ### 删除 chunk
 
 ```sh
-curl -X DELETE http://localhost:8000/domains/chunks/1
+curl -X DELETE http://localhost:8000/{domain_id}/documents/{doc_id}/chunks/{chunk_id}
 ```
 
 ---

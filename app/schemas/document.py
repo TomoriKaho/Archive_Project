@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import Any, Dict
+from pydantic import Field
 from .base import ORMModel
 
 class DocumentCreate(ORMModel):
-    domain_id: int
-    title : str
+    title: str = Field(..., description="Document title, required")
     doc_metadata : Dict[str, Any] = {}
 
 class DocumentUpdate(ORMModel):
