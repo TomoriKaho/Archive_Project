@@ -1,47 +1,32 @@
-"""Security utilities for hashing and verifying user passwords."""
-
-from passlib.context import CryptContext
-import os
+"""Security helpers for hashing passwords and working with JWT tokens."""
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any
+
 from jose import jwt
-from jose.exceptions import JWTError
+from passlib.context import CryptContext
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev_only_change_me")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-
-pwd_context = CryptContext(
-    schemes=["bcrypt_sha256", "bcrypt"],
-    deprecated="auto",
-)
+from app.core.config import settings
 
 
-def hash_password(password: str) -> str:
-    """Return the hashed representation of a plain text password."""
-
-    return pwd_context.hash(password)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Validate a plain password against its hashed counterpart."""
-
+    """Return ``True`` if the password matches the stored hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(
-    subject: str | int,
-    extra: Optional[dict[str, Any]] = None,
-    expires_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES,
-) -> str:
-    """根据用户ID（subject）签发短期访问令牌。"""
-    to_encode: dict[str, Any] = {"sub": str(subject)}
-    if extra:
-        to_encode.update(extra)
-    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    to_encode["exp"] = expire
-    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+def get_password_hash(password: str) -> str:
+    """Hash a password using the configured password context."""
+    return pwd_context.hash(password)
 
-def decode_token(token: str) -> dict[str, Any]:
-    """解码并验证 JWT（含过期校验），返回 payload。"""
-    return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+
+def create_access_token(subject: Any, expires_delta: timedelta | None = None) -> str:
+    """Create a JWT access token for the given subject (user id)."""
+    if expires_delta is None:
+        expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
+
+    expire = datetime.now(tz=timezone.utc) + expires_delta
+    to_encode = {"sub": str(subject), "exp": expire}
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    return encoded_jwt

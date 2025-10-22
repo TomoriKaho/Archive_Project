@@ -1,119 +1,120 @@
+"""User management endpoints with administrator protection."""
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
-from app.api.deps_auth import get_current_user, get_current_admin
-from app.core.security import hash_password
+from app.api.deps import get_current_admin, get_current_user, get_db
+from app.core.security import get_password_hash
+from app.models.entities import User
 from app.repositories.user_repo import UserRepository
-from app.schemas.user import UserCreate, UserUpdate, UserOut
+from app.schemas.user import UserCreate, UserOut, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-# ---------- 管理员：列表 ----------
-@router.get("/", response_model=list[UserOut])
-def list_users(
-    q: str | None = Query(None, description="按邮箱模糊搜索"),
-    offset: int = 0,
-    limit: int = Query(50, le=200),
-    db: Session = Depends(get_db),
-    _admin = Depends(get_current_admin),
-):
-    return UserRepository(db).search(q=q, offset=offset, limit=limit)
 
-# ---------- 管理员：创建用户（可指定 is_admin） ----------
-@router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def create_user_admin(
-    payload: UserCreate,
+@router.get("/me", response_model=UserOut)
+async def read_current_user(current_user: User = Depends(get_current_user)) -> User:
+    """Return the currently authenticated user."""
+    return current_user
+
+
+@router.get("/", response_model=list[UserOut])
+async def list_users(
+    offset: int = 0,
+    limit: int = Query(50, ge=1, le=200),
+    _: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
-    _admin = Depends(get_current_admin),
-):
+) -> list[User]:
+    """List users with pagination (admin only)."""
+    repo = UserRepository(db)
+    return list(repo.list(offset=offset, limit=limit))
+
+
+@router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    payload: UserCreate,
+    _: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> User:
+    """Create a new user (admin only)."""
     repo = UserRepository(db)
     if repo.get_by_email(payload.email):
-        raise HTTPException(status.HTTP_409_CONFLICT, "email already registered")
-    hashed = hash_password(payload.password)
-    user = repo.create_user(email=payload.email.lower(), hashed_password=hashed, is_admin=payload.is_admin)
-    return UserOut.model_validate(user)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
-# ---------- 管理员：按 ID / 按邮箱 获取 ----------
+    return repo.create_user(
+        email=payload.email,
+        hashed_password=get_password_hash(payload.password),
+        is_admin=payload.is_admin,
+    )
+
+
 @router.get("/{user_id}", response_model=UserOut)
-def get_user_by_id(user_id: int, db: Session = Depends(get_db), _admin = Depends(get_current_admin)):
-    user = UserRepository(db).get(user_id)
-    if not user:
-        raise HTTPException(404, "user not found")
-    return user
-
-@router.get("/by-email/{email}", response_model=UserOut)
-def get_user_by_email(email: str, db: Session = Depends(get_db), _admin = Depends(get_current_admin)):
-    user = UserRepository(db).get_by_email(email.lower())
-    if not user:
-        raise HTTPException(404, "user not found")
-    return user
-
-# ---------- 管理员：更新/删除 任意用户 ----------
-@router.patch("/{user_id}", response_model=UserOut)
-def update_user_admin(
+async def get_user(
     user_id: int,
-    payload: UserUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    _admin = Depends(get_current_admin),
-):
+) -> User:
+    """Retrieve a user by id. Non-admins may only access themselves."""
+    if not current_user.is_admin and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
+
     repo = UserRepository(db)
     user = repo.get(user_id)
-    if not user:
-        raise HTTPException(404, "user not found")
-
-    data = payload.model_dump(exclude_unset=True, exclude_none=True)
-
-    # 改邮箱需要校验唯一
-    if "email" in data:
-        if (other := repo.get_by_email(data["email"].lower())) and other.id != user_id:
-            raise HTTPException(409, "email already registered")
-        user.email = data["email"].lower()
-
-    # 改密码要哈希
-    if "password" in data:
-        user.hashed_password = hash_password(data.pop("password"))
-
-    # 改 is_admin（管理员才走到这里）
-    if "is_admin" in data:
-        user.is_admin = bool(data["is_admin"])
-
-    repo.db.add(user)
-    repo.db.flush()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
+
+
+@router.patch("/{user_id}", response_model=UserOut)
+async def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    """Update a user. Admins can update anyone, regular users only themselves."""
+    if not current_user.is_admin and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges")
+
+    repo = UserRepository(db)
+    user = repo.get(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+
+    if "is_admin" in update_data:
+        if update_data["is_admin"] is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="is_admin cannot be null")
+        if not current_user.is_admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough privileges to change role")
+
+    if "email" in update_data:
+        new_email = update_data["email"]
+        if new_email is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email cannot be null")
+        existing = repo.get_by_email(new_email)
+        if existing and existing.id != user_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+
+    if "password" in update_data:
+        password = update_data.pop("password")
+        if password is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password cannot be null")
+        update_data["hashed_password"] = get_password_hash(password)
+
+    user = repo.update(user, **update_data)
+    return user
+
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user_admin(user_id: int, db: Session = Depends(get_db), _admin = Depends(get_current_admin)):
-    UserRepository(db).delete(user_id)
-
-# ---------- 登录用户自助：/users/me ----------
-@router.get("/me", response_model=UserOut)
-def get_me(cur = Depends(get_current_user)):
-    return cur
-
-@router.patch("/me", response_model=UserOut)
-def update_me(payload: UserUpdate, db: Session = Depends(get_db), cur = Depends(get_current_user)):
+async def delete_user(
+    user_id: int,
+    _: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Delete a user (admin only)."""
     repo = UserRepository(db)
-    user = repo.get(cur.id)
-    if not user:
-        raise HTTPException(404, "user not found")
-
-    data = payload.model_dump(exclude_unset=True, exclude_none=True)
-
-    # 普通用户不可自行变更 is_admin
-    if "is_admin" in data:
-        raise HTTPException(403, "cannot change is_admin")
-
-    # 改邮箱（检查唯一）
-    if "email" in data:
-        if (other := repo.get_by_email(data["email"].lower())) and other.id != cur.id:
-            raise HTTPException(409, "email already registered")
-        user.email = data["email"].lower()
-
-    # 改密码
-    if "password" in data:
-        user.hashed_password = hash_password(data.pop("password"))
-
-    repo.db.add(user)
-    repo.db.flush()
-    return user
+    user = repo.get(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    repo.delete(user_id)

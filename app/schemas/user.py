@@ -1,3 +1,4 @@
+"""Pydantic models for user related operations."""
 from datetime import datetime
 
 from pydantic import EmailStr, Field
@@ -30,9 +31,4 @@ class UserOut(UserBase):
 
 class UserLogin(ORMModel):
     email: EmailStr
-    password: str = Field(..., min_length=6, description="明文密码")
-
-
-class AuthResponse(ORMModel):
-    message: str = Field(default="login successful", description="登录提示信息")
-    user: UserOut
+    password: str = Field(..., min_length=6)
