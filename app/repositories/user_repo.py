@@ -16,3 +16,9 @@ class UserRepository(Repository[User]):
         注意：传入的是“已哈希密码”。哈希工作放到 Service/路由层，Repository 保持“纯数据库写入”。
         """
         return self.create(email=email, hashed_password=hashed_password, is_admin=is_admin)
+    
+    def search(self, q: str | None, offset: int, limit: int):
+        stmt = select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)
+        if q:
+            stmt = select(User).where(User.email.ilike(f"%{q}%")).order_by(User.created_at.desc()).offset(offset).limit(limit)
+        return self.db.execute(stmt).scalars().all()

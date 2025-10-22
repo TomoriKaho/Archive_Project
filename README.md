@@ -95,7 +95,7 @@ curl http://localhost:8000/healthz
 
 ---
 
-## 资料管理相关
+## domains 相关
 
 ### 创建 domain
 
@@ -269,6 +269,51 @@ curl -X PATCH http://localhost:8000/chats/messages/1 \
 
 ```sh
 curl -X DELETE http://localhost:8000/chats/messages/1
+```
+
+---
+
+## 用户认证
+
+### 注册用户
+
+```sh
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "ChangeMe123"}'
+```
+
+### 用户登录
+
+```sh
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "ChangeMe123"}'
+```
+
+
+### 初始化管理员账号
+
+默认注册接口不会创建管理员账号，可在数据库中手动插入一条管理员记录：
+
+```sql
+INSERT INTO "user" (email, hashed_password, is_admin)
+VALUES ('admin@example.com', '$2b$12$REPLACE_WITH_HASH', true);
+```
+
+可以使用项目内的工具快速生成 bcrypt 哈希：
+
+```sh
+python - <<'PY'
+from app.core.security import hash_password
+print(hash_password("ChangeMe123"))
+PY
+```
+
+或使用脚本生成管理员账号：
+
+```sh
+python -m app.scripts.seed_admin --email admin@example.com --password password
 ```
 
 ---
