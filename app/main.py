@@ -5,6 +5,8 @@ from fastapi import FastAPI  # 导入FastAPI主体
 
 from app.api import domains, chats  # 导入既有路由
 from app.api import documents  # 新增文档路由
+from app.db.schema_compat import ensure_document_uuid_column  # 旧库兼容补丁
+from app.db.session import engine  # 提供数据库连接引擎
 
 logging.basicConfig(level=logging.INFO)  # 简单配置日志等级方便调试
 
@@ -14,6 +16,12 @@ app.router.redirect_slashes = True  # 启用斜杠自动兼容，满足/domains�
 app.include_router(domains.router)  # 注册domain相关接口
 app.include_router(chats.router)  # 注册聊天相关接口
 app.include_router(documents.router)  # 注册文档及chunk相关接口
+
+
+@app.on_event("startup")
+def _ensure_schema_compatibility() -> None:
+    """在服务启动时自动修补旧版本数据库缺失的列。"""
+    ensure_document_uuid_column(engine)
 
 
 @app.get("/healthz")
