@@ -1,381 +1,245 @@
-chunk存实际的文档chunk内容，向量数据库里只存id+向量，检索到向量后，再从postgresql里的chunk表里取string，domain就是指不同来源，方便做带有filter的检索
-提供用户登录注册的api（需要区分admin权限，用一个字段标记admin，初始admin用sql强制写入就行）
-api可能不好想齐全，那么可以让AI帮忙设计界面后，再反过来想需要什么样的api去满足界面交互
+# Archive Project
 
-# 环境配置与服务启动
+基于 FastAPI 的文档管理与对话服务，提供 domain、document、chunk、chat、message 等核心资源的 REST 接口。
 
-## 1. 克隆项目并进入目录
+## 环境准备与服务启动
 
-```sh
-git clone git@github.com:TomoriKaho/Archive_Project.git
-cd Archive_Project
-```
+1. 克隆仓库并进入目录
+   ```bash
+   git clone git@github.com:TomoriKaho/Archive_Project.git
+   cd Archive_Project
+   ```
+2. 创建并激活虚拟环境
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+3. 安装依赖
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. 配置环境变量（示例）
+   ```bash
+   cat > .env <<'ENV'
+   DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/mydb
+   QDRANT_URL=http://localhost:6333
+   ENV
+   export $(cat .env | xargs)
+   ```
+5. 启动 PostgreSQL（可使用已有容器或服务）
+   ```bash
+   docker run --name rag-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres
+   # docker start rag-pg
+   ```
+6. （可选）启动 Qdrant
+   ```bash
+   docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+   # docker start qdrant
+   ```
+7. 初始化数据库
+   ```bash
+   alembic upgrade head
+   ```
+8. 启动开发服务器
+   ```bash
+   uvicorn app.main:app --reload
+   ```
 
-## 2. 创建并激活 Python 虚拟环境
-
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-## 3. 安装依赖
-
-```sh
-pip install -r requirements.txt
-```
-
-## 4. 配置环境变量
-
-编辑 `.env` 文件，内容示例：
-
-```
-DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/mydb
-QDRANT_URL=http://localhost:6333
-```
-
-加载环境变量：
-
-```sh
-export $(cat .env | xargs)
-```
-
-## 5. 使用 Docker 启动 PostgreSQL
-
-```sh
-docker run --name rag-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres
-```
-或使用已有容器：
-```sh
-docker start rag-pg
-```
-
-## 6. （可选）启动 Qdrant
-
-> 当前“无向量库模式”无需启动向量服务，可跳过本步骤；若后续接入向量检索，可按需启动。
-
-```sh
-docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
-```
-或使用已有容器：
-```sh
-docker start qdrant
-```
-
-## 7. 初始化数据库
-
-```sh
-alembic upgrade head
-```
-
-## 8. 启动后端服务
-
-```sh
-uvicorn app.main:app --reload
-```
-
-## 9. 健康检查
-
-```sh
-curl http://localhost:8000/healthz
-```
-
----
-
-# API curl 示例
-
-假设服务运行在 `http://localhost:8000`，如有 `/api` 前缀请自行加上。
-
----
-
-## 通用
+## API 路由参考
+以下内容按资源分组，所有路径均以 `http://localhost:8000` 为基准，实际部署时请替换主机名。
 
 ### 健康检查
-
-```sh
-curl http://localhost:8000/healthz
-```
-
----
-
-## 资料管理相关
-
-### 创建 domain
-
-```sh
-curl -X POST http://localhost:8000/domains \
-  -H "Content-Type: application/json" \
-  -d '{"name":"PKU-Archive","description":"test"}'
-```
-
-### 获取 domain 列表
-
-```sh
-curl http://localhost:8000/domains
-```
-
-### 获取指定 domain
-
-```sh
-curl http://localhost:8000/domains/{domain_id}
-```
-
-### 更新 domain
-
-```sh
-curl -X PATCH http://localhost:8000/domains/{domain_id} \
-  -H "Content-Type: application/json" \
-  -d '{"name":"NewName","description":"new desc"}'
-```
-
-### 删除 domain
-
-```sh
-curl -X DELETE http://localhost:8000/domains/{domain_id}
-```
-
----
-
-## documents 相关
-
-### 在 domain 下创建 document
-
-```sh
-curl -X POST http://localhost:8000/domains/{domain_id}/documents \
-  -H "Content-Type: application/json" \
-  -d '{"title":"doc1", "doc_metadata": {"field1": "test"}}'
-```
-
-### 获取 domain 下所有 documents
-
-```sh
-curl http://localhost:8000/domains/{domain_id}/documents
-```
-
-### 获取指定 document
-
-```sh
-curl http://localhost:8000/domains/{domain_id}/documents/{doc_id}
-```
-
-### 更新 document
-
-```sh
-curl -X PATCH http://localhost:8000/domains/{domain_id}/documents/{doc_id} \
-  -H "Content-Type: application/json" \
-  -d '{"name":"newdoc","description":"newdesc"}'
-```
-
-### 删除 document
-
-```sh
-curl -X DELETE http://localhost:8000/domains/{domain_id}/documents/{doc_id}
-```
-
----
-
-## 无向量库模式验收指南
-
-以下命令覆盖本次提交新增能力，均默认服务运行在 `http://localhost:8000`。
-
-1. **斜杠兼容性**（`/domains` 与 `/domains/` 等价）：
-
-   ```sh
-   curl -i http://localhost:8000/domains
-   curl -i http://localhost:8000/domains/
-   ```
-
-   预期：两次响应均为 `200 OK`，body 列表内容一致。
-
-2. **创建结构化文档并自动分片**：
-
-   ```sh
-   curl -X POST http://localhost:8000/domains/1/documents \
-     -H 'Content-Type: application/json' \
-     -d '{
-       "title":"Books",
-       "content":"{\"entities\":[{\"entity\":\"Book\",\"data\":{\"title\":\"A\",\"author\":\"B\",\"year\":\"2020\",\"isbn\":\"X\",\"publisher\":\"Y\"}}]}",
-       "doc_metadata":{"type":"structured"}
-     }'
-   ```
-
-   预期：返回体包含 `"uuid": "..."` 字段。
-
-   ```sh
-   curl http://localhost:8000/documents/by-uuid/<UUID>
-   curl http://localhost:8000/domains/1/documents/<DOC_ID>/chunks
-   ```
-
-   预期：chunks 列表包含 `Book:title:A,author:B,year:2020,isbn:X,publisher:Y` 字符串，且每段长度 < 250。
-
-3. **创建非结构化文档并自动滑窗分片**：
-
-   ```sh
-   curl -X POST http://localhost:8000/domains/1/documents \
-     -H 'Content-Type: application/json' \
-     -d '{
-       "title":"LongText",
-       "content":"<构造超过350字符的文本>",
-       "doc_metadata":{}
-     }'
-   curl http://localhost:8000/domains/1/documents/<DOC_ID>/chunks
-   ```
-
-   预期：相邻 chunk 存在 50 字符重叠，可通过截取首尾片段人工核对。
-
-4. **按 UUID 删除文档并依赖级联清理 chunks**：
-
-   ```sh
-   curl -i -X DELETE http://localhost:8000/documents/by-uuid/<UUID>
-   curl http://localhost:8000/domains/1/documents/<DOC_ID>/chunks
-   curl -i -X DELETE http://localhost:8000/documents/by-uuid/<UUID>
-   ```
-
-   预期：首次删除返回 `204 No Content`，随后查询 chunk 为空或 404；重复删除仍返回 `204 No Content`。
-
----
-
-## 分页与排序参数说明
-
-- `limit`：默认 20，最大 100，用于控制单页数据量，避免一次性扫描整表。
-- `offset`：默认 0，支持从任意位置翻页，需为非负整数。
-- `sort_by`：可选 `created_at` 或 `title`，默认按创建时间排序。
-- `order`：可选 `asc` 或 `desc`，默认降序。
-
-示例：
-
-```sh
-curl "http://localhost:8000/documents?limit=5&offset=0&sort_by=created_at&order=desc"
-curl "http://localhost:8000/documents?limit=5&offset=5&sort_by=title&order=asc"
-```
-
-预期：响应格式为 `{"items":[...],"total":N,"limit":5,"offset":X,"sort_by":"...","order":"..."}`；不同排序方式应导致 items 顺序变化而 `total` 不变。
-
-参数校验示例：
-
-```sh
-curl -i "http://localhost:8000/documents?limit=1000"
-curl -i "http://localhost:8000/documents?order=sideways"
-```
-
-预期：均返回 `422 Unprocessable Entity`，body 中说明允许的取值范围。
-
----
-
-## 多路由等价约定
-
-- 推荐使用 `/documents/{doc_id}/chunks` 或 `/documents/by-uuid/{uuid}/chunks` 获取切片数据，保留 `/domains/{domain_id}/documents/{doc_id}/chunks` 作为兼容入口。
-- 三条路由底层共享统一服务逻辑，返回的 JSON 内容完全一致。
-
-示例：
-
-```sh
-curl http://localhost:8000/documents/10/chunks
-curl http://localhost:8000/documents/by-uuid/<UUID>/chunks
-curl http://localhost:8000/domains/1/documents/10/chunks
-```
-
-预期：三次响应的数组长度、 `chunk.content` 与 `ordinal` 均相同。
-
----
-
-## chunks 相关
-
-### 在 document 下创建 chunk
-（实际使用中，由于chunk会根据document自动生成，一般不会使用）
-```sh
-curl -X POST http://localhost:8000/domains/{domain_id}/documents/{doc_id}/chunks \
-  -H "Content-Type: application/json" \
-  -d '{"ordinal":1, "content":"chunk content"}'
-```
-
-### 获取 document 下所有 chunks
-
-```sh
-curl http://localhost:8000/domains/{domain_id}/documents/{doc_id}/chunks
-```
-
-### 获取指定 chunk
-
-```sh
-curl http://localhost:8000/domains/{domain_id}/documents/{doc_id}/chunks/{chunk_id}
-```
-
-### 更新 chunk
-
-```sh
-curl -X PATCH http://localhost:8000/{domain_id}/documents/{doc_id}/chunks/{chunk_id} \
-  -H "Content-Type: application/json" \
-  -d '{"content":"new chunk content"}'
-```
-
-### 删除 chunk
-
-```sh
-curl -X DELETE http://localhost:8000/{domain_id}/documents/{doc_id}/chunks/{chunk_id}
-```
-
----
-
-## chats 相关
-
-### 创建 chat
-
-```sh
-curl -X POST http://localhost:8000/chats/ \
-  -H "Content-Type: application/json" \
-  -d '{"user_id":1,"title":"chat1"}'
-```
-
-### 获取 chat 列表
-
-```sh
-curl "http://localhost:8000/chats/?user_id=1"
-```
-
-### 更新 chat
-
-```sh
-curl -X PATCH http://localhost:8000/chats/1 \
-  -H "Content-Type: application/json" \
-  -d '{"title":"new title"}'
-```
-
-### 删除 chat
-
-```sh
-curl -X DELETE http://localhost:8000/chats/1
-```
-
----
-
-## messages 相关
-
-### 为 chat 添加 message
-
-```sh
-curl -X POST http://localhost:8000/chats/1/messages \
-  -H "Content-Type: application/json" \
-  -d '{"content":"hello"}'
-```
-
-### 获取 chat 下所有 messages
-
-```sh
-curl http://localhost:8000/chats/1/messages
-```
-
-### 更新 message
-
-```sh
-curl -X PATCH http://localhost:8000/chats/messages/1 \
-  -H "Content-Type: application/json" \
-  -d '{"content":"new content"}'
-```
-
-### 删除 message
-
-```sh
-curl -X DELETE http://localhost:8000/chats/messages/1
-```
-
----
+#### GET /healthz
+- **说明**：返回服务运行状态。
+- **成功响应**：`200 OK`，`{"ok": true}`。
+
+### 域（domains）
+#### POST /domains
+- **说明**：创建新的 domain。
+- **请求体**：`DomainCreate`
+  ```json
+  {
+    "name": "string",
+    "description": "string | null"
+  }
+  ```
+- **成功响应**：`201 Created`，返回 `DomainOut`（`id`, `name`, `description`, `created_at`, `updated_at`）。
+- **错误**：`400 Bad Request`（名称重复）。
+
+#### GET /domains
+- **说明**：分页列出 domain。
+- **查询参数**：
+  - `offset`（int，默认 0）
+  - `limit`（int，默认 100，最大 200）
+- **成功响应**：`200 OK`，数组形式的 `DomainOut`。
+
+#### GET /domains/{domain_id}
+- **说明**：按 ID 获取 domain。
+- **路径参数**：`domain_id`（int）。
+- **成功响应**：`200 OK`，`DomainOut`。
+- **错误**：`404 Not Found`（不存在）。
+
+#### PATCH /domains/{domain_id}
+- **说明**：部分更新 domain，仅修改请求体中出现的字段。
+- **请求体**：`DomainUpdate`（`name`, `description` 均可为空表示不修改）。
+- **成功响应**：`200 OK`，更新后的 `DomainOut`。
+- **错误**：`404 Not Found`（不存在）。
+
+#### DELETE /domains/{domain_id}
+- **说明**：删除 domain，并级联清理关联 documents/chunks。
+- **成功响应**：`204 No Content`。
+- **错误**：`404 Not Found`（不存在）。
+
+### 文档（documents）
+#### GET /documents
+- **说明**：分页检索文档，可按 domain 过滤并指定排序。
+- **查询参数**：
+  - `domain_id`（int，可选）
+  - `limit`（int，默认 20，范围 1-100）
+  - `offset`（int，默认 0，≥0）
+  - `sort_by`（`created_at` | `title`，默认 `created_at`）
+  - `order`（`asc` | `desc`，默认 `desc`）
+- **成功响应**：`200 OK`，`DocumentListResponse`
+  ```json
+  {
+    "items": [DocumentOut, ...],
+    "total": 0,
+    "limit": 0,
+    "offset": 0,
+    "sort_by": "created_at",
+    "order": "desc"
+  }
+  ```
+
+#### GET /documents/by-uuid/{doc_uuid}
+- **说明**：按文档 UUID 获取详情。
+- **路径参数**：`doc_uuid`（UUID）。
+- **成功响应**：`200 OK`，`DocumentOut`。
+- **错误**：`404 Not Found`。
+
+#### DELETE /documents/by-uuid/{doc_uuid}
+- **说明**：按 UUID 删除文档，未命中时亦返回成功以保证幂等。
+- **成功响应**：`204 No Content`。
+
+#### POST /domains/{domain_id}/documents
+- **说明**：在指定 domain 下创建文档并自动生成 chunks。
+- **路径参数**：`domain_id`（int）。
+- **请求体**：`DocumentCreate`
+  ```json
+  {
+    "title": "string",
+    "content": "string",
+    "doc_metadata": {}
+  }
+  ```
+- **成功响应**：`201 Created`，`DocumentOut`。
+- **错误**：`404 Not Found`（domain 不存在）。
+
+#### GET /domains/{domain_id}/documents
+- **说明**：列出某个 domain 下最近创建的文档（限制 50 条）。
+- **路径参数**：`domain_id`（int）。
+- **成功响应**：`200 OK`，`DocumentOut` 数组。
+- **错误**：`404 Not Found`（domain 不存在）。
+
+#### GET /domains/{domain_id}/documents/{doc_id}
+- **说明**：在 domain 上下文中读取文档，确保归属关系一致。
+- **路径参数**：`domain_id`、`doc_id`（int）。
+- **成功响应**：`200 OK`，`DocumentOut`。
+- **错误**：`404 Not Found`（domain 或 document 不存在 / 不匹配）。
+
+#### PATCH /domains/{domain_id}/documents/{doc_id}
+- **说明**：更新文档标题或元数据，不重新生成 chunks。
+- **请求体**：`DocumentUpdate`。
+- **成功响应**：`200 OK`，`DocumentOut`。
+- **错误**：`404 Not Found`。
+
+#### DELETE /domains/{domain_id}/documents/{doc_id}
+- **说明**：删除指定文档并级联清理 chunks。
+- **成功响应**：`204 No Content`。
+- **错误**：`404 Not Found`。
+
+### 文档块（chunks）
+#### GET /domains/{domain_id}/documents/{doc_id}/chunks
+- **说明**：按 domain 与文档 ID 获取 chunk 列表（Deprecated，保留兼容）。
+- **成功响应**：`200 OK`，`ChunkOut` 数组。
+- **错误**：`404 Not Found`（domain 或 document 不存在 / 不匹配）。
+
+#### GET /documents/{doc_id}/chunks
+- **说明**：通过文档 ID 获取 chunk 列表。
+- **成功响应**：`200 OK`，`ChunkOut` 数组。
+- **错误**：`404 Not Found`（document 不存在）。
+
+#### GET /documents/by-uuid/{doc_uuid}/chunks
+- **说明**：通过文档 UUID 获取 chunk 列表。
+- **成功响应**：`200 OK`，`ChunkOut` 数组。
+- **错误**：`404 Not Found`（document 不存在）。
+
+#### POST /domains/{domain_id}/documents/{doc_id}/chunks
+- **说明**：禁止手动创建 chunk，接口固定返回 405。
+- **响应**：`405 Method Not Allowed`，`{"detail": "chunk are generated automatically and cannot be created manually"}`。
+
+#### PATCH /domains/{domain_id}/documents/{doc_id}/chunks/{chunk_id}
+- **说明**：禁止修改 chunk 内容，接口固定返回 405。
+- **响应**：`405 Method Not Allowed`，`{"detail": "chunk modification is disabled to keep consistency with source content"}`。
+
+### 对话（chats）
+#### POST /chats/
+- **说明**：创建 chat 会话。
+- **请求体**：`ChatCreate`
+  ```json
+  {
+    "user_id": 0,
+    "title": "string | null"
+  }
+  ```
+- **成功响应**：`201 Created`，`ChatOut`。
+
+#### GET /chats/
+- **说明**：按用户列出 chat。
+- **查询参数**：
+  - `user_id`（int，必填）
+  - `offset`（int，默认 0）
+  - `limit`（int，默认 50，最大 200）
+- **成功响应**：`200 OK`，`ChatOut` 数组。
+
+#### PATCH /chats/{chat_id}
+- **说明**：更新 chat 标题。
+- **请求体**：`ChatUpdate`。
+- **成功响应**：`200 OK`，`ChatOut`。
+- **错误**：`404 Not Found`。
+
+#### DELETE /chats/{chat_id}
+- **说明**：删除 chat 及其关联消息。
+- **成功响应**：`204 No Content`。
+- **错误**：`404 Not Found`。
+
+### 消息（messages）
+#### POST /chats/{chat_id}/messages
+- **说明**：在指定 chat 下新增消息，路径中的 `chat_id` 会覆盖请求体中的同名字段。
+- **请求体**：`MessageCreate`
+  ```json
+  {
+    "chat_id": 0,
+    "role": "user | assistant | system",
+    "content": "string"
+  }
+  ```
+- **成功响应**：`201 Created`，`MessageOut`。
+
+#### GET /chats/{chat_id}/messages
+- **说明**：分页列出 chat 下的消息。
+- **查询参数**：
+  - `offset`（int，默认 0）
+  - `limit`（int，默认 200，最大 500）
+- **成功响应**：`200 OK`，`MessageOut` 数组。
+
+#### PATCH /chats/messages/{msg_id}
+- **说明**：更新消息内容。
+- **请求体**：`MessageUpdate`。
+- **成功响应**：`200 OK`，`MessageOut`。
+- **错误**：`404 Not Found`。
+
+#### DELETE /chats/messages/{msg_id}
+- **说明**：删除指定消息。
+- **成功响应**：`204 No Content`。
+- **错误**：`404 Not Found`。
