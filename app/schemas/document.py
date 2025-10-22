@@ -1,20 +1,46 @@
-from datetime import datetime
-from typing import Any, Dict
-from pydantic import Field
-from .base import ORMModel
+"""文档相关Pydantic模型，负责请求与响应的结构校验。"""
+from datetime import datetime  # 导入datetime用于序列化时间戳字段
+from typing import Any, Dict, List  # 引入List以描述列表字段
+from uuid import UUID  # 导入UUID类型与数据库字段保持一致
+
+from pydantic import Field  # 使用Field提供更丰富的校验与描述
+
+from .base import ORMModel  # 引入项目自定义的ORMModel基类
+
 
 class DocumentCreate(ORMModel):
-    title: str = Field(..., description="Document title, required")
-    doc_metadata : Dict[str, Any] = {}
+    """创建文档时使用的请求体模型。"""
+    title: str = Field(..., description="文档标题，必填")  # 标题为必填项用于区分文档
+    content: str = Field(..., description="原始文档内容字符串，用于切分")  # 内容用于切分chunk并不直接入库
+    doc_metadata: Dict[str, Any] = Field(default_factory=dict, description="文档附加元数据")  # 使用默认工厂避免可变默认值复用
+    # 设计说明：创建模型明确区分文档原文与元数据，方便同步切分并保留结构化标记。
+
 
 class DocumentUpdate(ORMModel):
-    title: str | None = None
-    doc_metadata: Dict[str, Any] | None = None
+    """更新文档时使用的模型，仅支持局部更新。"""
+    title: str | None = Field(default=None, description="可选的新标题")  # 标题允许按需修改
+    doc_metadata: Dict[str, Any] | None = Field(default=None, description="可选的新元数据")  # 允许覆盖元数据信息
+    # 设计说明：更新模型保持可选字段以支撑PATCH语义，避免误清空。
+
 
 class DocumentOut(ORMModel):
-    id: int
-    domain_id: int
-    title: str
-    doc_metadata: Dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
+    """文档对外输出的响应模型。"""
+    id: int  # 返回数据库自增主键便于内部调试
+    uuid: UUID  # 暴露无序UUID供外部系统引用
+    domain_id: int  # 告知文档所属的数据域
+    title: str  # 返回标题供界面展示
+    doc_metadata: Dict[str, Any]  # 保留元数据便于前端判断结构化类型
+    created_at: datetime  # 展示创建时间便于排序
+    updated_at: datetime  # 展示更新时间便于排查差异
+    # 设计说明：输出模型同时提供内部id与外部uuid，兼顾兼容性与安全性。
+
+
+class DocumentListResponse(ORMModel):
+    """文档分页列表响应模型。"""
+    items: List[DocumentOut]  # 实际文档数据列表
+    total: int  # 总记录数用于前端分页
+    limit: int  # 本次查询的限制条数
+    offset: int  # 本次查询的偏移量
+    sort_by: str  # 当前排序字段
+    order: str  # 当前排序方向
+    # 设计说明：统一返回结构让前端在不同筛选下共享分页逻辑。

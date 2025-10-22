@@ -49,7 +49,9 @@ docker run --name rag-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres
 docker start rag-pg
 ```
 
-## 6. 启动 Qdrant
+## 6. （可选）启动 Qdrant
+
+> 当前“无向量库模式”无需启动向量服务，可跳过本步骤；若后续接入向量检索，可按需启动。
 
 ```sh
 docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
@@ -168,6 +170,111 @@ curl -X PATCH http://localhost:8000/domains/{domain_id}/documents/{doc_id} \
 ```sh
 curl -X DELETE http://localhost:8000/domains/{domain_id}/documents/{doc_id}
 ```
+
+---
+
+## 无向量库模式验收指南
+
+以下命令覆盖本次提交新增能力，均默认服务运行在 `http://localhost:8000`。
+
+1. **斜杠兼容性**（`/domains` 与 `/domains/` 等价）：
+
+   ```sh
+   curl -i http://localhost:8000/domains
+   curl -i http://localhost:8000/domains/
+   ```
+
+   预期：两次响应均为 `200 OK`，body 列表内容一致。
+
+2. **创建结构化文档并自动分片**：
+
+   ```sh
+   curl -X POST http://localhost:8000/domains/1/documents \
+     -H 'Content-Type: application/json' \
+     -d '{
+       "title":"Books",
+       "content":"{\"entities\":[{\"entity\":\"Book\",\"data\":{\"title\":\"A\",\"author\":\"B\",\"year\":\"2020\",\"isbn\":\"X\",\"publisher\":\"Y\"}}]}",
+       "doc_metadata":{"type":"structured"}
+     }'
+   ```
+
+   预期：返回体包含 `"uuid": "..."` 字段。
+
+   ```sh
+   curl http://localhost:8000/documents/by-uuid/<UUID>
+   curl http://localhost:8000/domains/1/documents/<DOC_ID>/chunks
+   ```
+
+   预期：chunks 列表包含 `Book:title:A,author:B,year:2020,isbn:X,publisher:Y` 字符串，且每段长度 < 250。
+
+3. **创建非结构化文档并自动滑窗分片**：
+
+   ```sh
+   curl -X POST http://localhost:8000/domains/1/documents \
+     -H 'Content-Type: application/json' \
+     -d '{
+       "title":"LongText",
+       "content":"<构造超过350字符的文本>",
+       "doc_metadata":{}
+     }'
+   curl http://localhost:8000/domains/1/documents/<DOC_ID>/chunks
+   ```
+
+   预期：相邻 chunk 存在 50 字符重叠，可通过截取首尾片段人工核对。
+
+4. **按 UUID 删除文档并依赖级联清理 chunks**：
+
+   ```sh
+   curl -i -X DELETE http://localhost:8000/documents/by-uuid/<UUID>
+   curl http://localhost:8000/domains/1/documents/<DOC_ID>/chunks
+   curl -i -X DELETE http://localhost:8000/documents/by-uuid/<UUID>
+   ```
+
+   预期：首次删除返回 `204 No Content`，随后查询 chunk 为空或 404；重复删除仍返回 `204 No Content`。
+
+---
+
+## 分页与排序参数说明
+
+- `limit`：默认 20，最大 100，用于控制单页数据量，避免一次性扫描整表。
+- `offset`：默认 0，支持从任意位置翻页，需为非负整数。
+- `sort_by`：可选 `created_at` 或 `title`，默认按创建时间排序。
+- `order`：可选 `asc` 或 `desc`，默认降序。
+
+示例：
+
+```sh
+curl "http://localhost:8000/documents?limit=5&offset=0&sort_by=created_at&order=desc"
+curl "http://localhost:8000/documents?limit=5&offset=5&sort_by=title&order=asc"
+```
+
+预期：响应格式为 `{"items":[...],"total":N,"limit":5,"offset":X,"sort_by":"...","order":"..."}`；不同排序方式应导致 items 顺序变化而 `total` 不变。
+
+参数校验示例：
+
+```sh
+curl -i "http://localhost:8000/documents?limit=1000"
+curl -i "http://localhost:8000/documents?order=sideways"
+```
+
+预期：均返回 `422 Unprocessable Entity`，body 中说明允许的取值范围。
+
+---
+
+## 多路由等价约定
+
+- 推荐使用 `/documents/{doc_id}/chunks` 或 `/documents/by-uuid/{uuid}/chunks` 获取切片数据，保留 `/domains/{domain_id}/documents/{doc_id}/chunks` 作为兼容入口。
+- 三条路由底层共享统一服务逻辑，返回的 JSON 内容完全一致。
+
+示例：
+
+```sh
+curl http://localhost:8000/documents/10/chunks
+curl http://localhost:8000/documents/by-uuid/<UUID>/chunks
+curl http://localhost:8000/domains/1/documents/10/chunks
+```
+
+预期：三次响应的数组长度、 `chunk.content` 与 `ordinal` 均相同。
 
 ---
 

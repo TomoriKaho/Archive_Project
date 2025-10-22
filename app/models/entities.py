@@ -1,3 +1,5 @@
+from __future__ import annotations  # 推迟类型注解解析，避免SQLAlchemy模型初始化冲突
+
 import uuid
 from typing import List, Optional
 
@@ -5,6 +7,7 @@ from sqlalchemy import (
     BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index,
     JSON, String, Text, UniqueConstraint, func
 )
+from sqlalchemy.dialects.postgresql import UUID  # 引入PostgreSQL专用UUID类型确保数据库层面原生支持
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -99,6 +102,14 @@ class Document(Base):
     __tablename__: str = "documents"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id", ondelete="CASCADE"), nullable=False)
+    # 为Document新增uuid字段用于对外无序标识，避免暴露自增id
+    uuid: Mapped[uuid.UUID] = mapped_column(  # 使用UUID确保全局唯一性并便于幂等操作
+        UUID(as_uuid=True),  # 使用原生UUID类型保持数据库与Python一致的类型语义
+        nullable=False,  # 禁止空值避免后续查询歧义
+        default=uuid.uuid4,  # 默认使用uuid4生成随机标识，减少猜测风险
+        unique=True,  # 建立唯一约束确保任何重复写入被阻止
+        index=True  # 建立索引用于高频按uuid查询
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     doc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -108,6 +119,7 @@ class Document(Base):
     __table_args__ = (
         Index("ix_documents_domain_id_created_at", "domain_id", "created_at"),
     )
+    # 设计说明：通过为文档增加uuid并建立索引，我们可以安全地对外暴露无序标识并获得高效查询能力。
     
 class Chunk(Base):
     """文档块实体类，对应数据库中的chunks表。
@@ -121,7 +133,9 @@ class Chunk(Base):
     - updated_at: 记录文档块最后更新时间，默认为当前时间，更新时自动修改为当前时间。
     - document: 与文档块相关的文档，通过relationship属性与Document实体类建立多对一关系。
     - 复合唯一约束：确保同一文档中的ordinal唯一。
-    - 索引：在document_id和ordinal字段上创建索引以优化查询性能。"""
+    - 索引：在document_id和ordinal字段上创建索引以优化查询性能。
+    """
+    # 说明：chunk严格来源于原文内容，仅允许按需删除，禁止人工更新以保持索引与原文一致性。
     __tablename__: str = "chunks"   
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
