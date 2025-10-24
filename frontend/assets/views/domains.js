@@ -197,7 +197,7 @@ function openForm(domain, refresh) { // 打开创建或编辑对话框
       loading.remove(); // 移除加载动画
     }
   }); // 提交事件结束
-  dialog.appendChild(actions); // 添加操作区域
+  form.appendChild(actions); // 将操作区域添加到表单内，确保提交按钮触发表单提交
   document.body.appendChild(backdrop); // 将对话框挂载到页面
   submitBtn.focus(); // 自动聚焦提交按钮
 }
