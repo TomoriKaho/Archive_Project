@@ -14,6 +14,7 @@ from app.schemas.user import (  # 引入所需的Pydantic模型
     UserCreate,
     UserOut,
 )
+from app.services.password_guard import is_password_compromised  # 密码安全检测
 
 logger = logging.getLogger(__name__)  # 获取模块日志记录器
 
@@ -34,6 +35,9 @@ async def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOu
     if repo.get_by_email(payload.email):  # 检查邮箱是否已存在
         logger.info("注册失败：邮箱重复", extra={"email": payload.email})  # 记录失败日志
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="邮箱已存在")  # 抛出400错误
+    if is_password_compromised(payload.password):  # 检查密码是否安全
+        logger.warning("注册失败：密码已被泄露", extra={"email": payload.email})  # 记录安全事件
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码存在泄露风险，请更换更安全的密码")  # 提示用户
     hashed = hash_password(payload.password)  # 对明文密码进行Argon2哈希，避免明文存储
     user = repo.create_user(  # 创建用户记录
         email=payload.email,
