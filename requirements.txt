@@ -23,3 +23,7 @@ starlette==0.48.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.37.0
+# Argon2 密码哈希实现（通过 Passlib 提供统一接口）
+passlib[argon2]==1.7.4
+# JWT 编解码依赖（使用 python-jose 结合 OpenSSL 加密实现）
+python-jose[cryptography]==3.3.0
