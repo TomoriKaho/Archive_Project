@@ -2,6 +2,7 @@
 import logging  # 提前配置日志模块
 
 from fastapi import FastAPI  # 导入FastAPI主体
+from fastapi.middleware.cors import CORSMiddleware  # 引入CORS中间件处理跨域预检请求
 
 from app.api import domains, chats  # 导入既有路由
 from app.api import documents  # 新增文档路由
@@ -13,6 +14,15 @@ logging.basicConfig(level=logging.INFO)  # 简单配置日志等级方便调试
 
 app = FastAPI(title="RAG Backend")  # 初始化应用实例
 app.router.redirect_slashes = True  # 启用斜杠自动兼容，满足/domains与/domains/一致
+
+# CORS配置允许浏览器发送OPTIONS预检请求，避免前端出现405错误
+app.add_middleware(
+    CORSMiddleware,  # 使用Starlette提供的中间件
+    allow_origins=["*"],  # 允许任意来源访问，前后端分离调试更方便
+    allow_credentials=True,  # 允许携带Cookie或认证头，配合JWT使用
+    allow_methods=["*"],  # 允许所有HTTP方法，确保POST/DELETE等均可跨域
+    allow_headers=["*"]  # 允许所有自定义请求头，满足Authorization等需求
+)
 
 app.include_router(domains.router)  # 注册domain相关接口
 app.include_router(chats.router)  # 注册聊天相关接口
