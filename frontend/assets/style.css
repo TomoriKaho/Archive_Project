@@ -1,0 +1,595 @@
+/* 设置通用盒模型，避免内外边距影响尺寸计算 */
+* {
+  /* 使用 border-box 让 padding/border 包含在 width/height 内 */
+  box-sizing: border-box;
+}
+
+/* 定义基础字体与背景色，提供良好可读性 */
+body {
+  /* 设定无衬线字体适合后台界面 */
+  font-family: 'Segoe UI', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  /* 背景色浅灰减少视觉疲劳 */
+  background-color: #f5f6fa;
+  /* 默认文字颜色深灰增强对比 */
+  color: #1f2a37;
+  /* 取消默认 margin 便于自定义布局 */
+  margin: 0;
+}
+
+/* 布局根容器采用水平排列 */
+.app-shell {
+  /* 使用 flex 横向排列侧栏和主内容 */
+  display: flex;
+  /* 设置最小高度占满视口 */
+  min-height: 100vh;
+}
+
+/* 左侧导航样式 */
+.sidebar {
+  /* 固定宽度满足导航展示 */
+  width: 240px;
+  /* 背景使用深蓝提升层级感 */
+  background-color: #1f2937;
+  /* 文字使用白色增强对比 */
+  color: #ffffff;
+  /* 垂直布局元素 */
+  display: flex;
+  /* 垂直方向排列 Logo 与菜单 */
+  flex-direction: column;
+  /* 阴影增强分割感 */
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 品牌区域样式 */
+.sidebar__brand {
+  /* 增加内边距提供留白 */
+  padding: 24px;
+  /* 加粗字体突出品牌 */
+  font-weight: 600;
+  /* 字号稍大以吸引注意 */
+  font-size: 18px;
+  /* 添加下边框区分菜单 */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 菜单列表基础样式 */
+.sidebar__menu {
+  /* 去掉默认列表样式 */
+  list-style: none;
+  /* 清除默认 margin */
+  margin: 0;
+  /* 清除默认 padding */
+  padding: 12px 0;
+  /* 允许菜单占据剩余空间 */
+  flex: 1;
+  /* 使用滚动处理超出内容 */
+  overflow-y: auto;
+}
+
+/* 每个菜单项的外层元素 */
+.sidebar__menu-item {
+  /* 设置垂直间距使阅读更舒适 */
+  margin: 4px 12px;
+}
+
+/* 菜单按钮具体样式 */
+.sidebar__menu-button {
+  /* 使用 block 让按钮占满宽度 */
+  display: block;
+  /* 圆角处理视觉柔和 */
+  border-radius: 8px;
+  /* 去掉默认边框 */
+  border: none;
+  /* 设定内边距增加可点击面积 */
+  padding: 10px 14px;
+  /* 背景透明保持一致性 */
+  background: transparent;
+  /* 字体颜色继承侧栏白色 */
+  color: inherit;
+  /* 文本左对齐保持导航习惯 */
+  text-align: left;
+  /* 鼠标指针显示可点击 */
+  cursor: pointer;
+  /* 平滑过渡 hover 效果 */
+  transition: background-color 0.2s ease;
+  /* 设置无默认外边距 */
+  margin: 0;
+  /* 使用宽度 100% 填满父容器 */
+  width: 100%;
+}
+
+/* hover 与 focus 状态强调 */
+.sidebar__menu-button:hover,
+.sidebar__menu-button:focus {
+  /* 改变背景色提示交互 */
+  background-color: rgba(255, 255, 255, 0.12);
+  /* 移除 outline 改用 box-shadow 高亮 */
+  outline: none;
+  /* 增加阴影模拟聚焦 */
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+/* 当前路由高亮状态 */
+.sidebar__menu-button--active {
+  /* 使用更亮背景表示选中 */
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 主内容区域布局 */
+.main {
+  /* 使用 flex 垂直布局包含顶部和内容 */
+  display: flex;
+  /* 垂直方向排列 */
+  flex-direction: column;
+  /* 占据剩余空间 */
+  flex: 1;
+}
+
+/* 顶部工具栏样式 */
+.topbar {
+  /* 背景白色与侧栏形成对比 */
+  background-color: #ffffff;
+  /* 水平排列标题与操作按钮 */
+  display: flex;
+  /* 垂直居中内容 */
+  align-items: center;
+  /* 左右空间分布 */
+  justify-content: space-between;
+  /* 添加内边距提升触控体验 */
+  padding: 16px 24px;
+  /* 添加底部阴影与内容分隔 */
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+  /* 设置最小高度保证触控区域 */
+  min-height: 64px;
+}
+
+/* 顶部标题样式 */
+.topbar__title {
+  /* 加粗字重强调页面标题 */
+  font-weight: 600;
+  /* 提升字号便于识别 */
+  font-size: 20px;
+}
+
+/* 顶部操作区域样式 */
+.topbar__actions {
+  /* 使用 flex 水平排列 */
+  display: flex;
+  /* 垂直居中内容 */
+  align-items: center;
+  /* 设置按钮之间的间距 */
+  gap: 12px;
+}
+
+/* 主内容区域样式 */
+.content {
+  /* 允许内容区域滚动 */
+  flex: 1;
+  /* 设置内边距提供留白 */
+  padding: 24px;
+  /* 使用相对定位方便放置 loading */
+  position: relative;
+}
+
+/* 初始加载提示样式 */
+.loading-placeholder {
+  /* 居中对齐文本 */
+  text-align: center;
+  /* 使用浅灰颜色减少干扰 */
+  color: #6b7280;
+  /* 设置顶部外边距使内容偏下 */
+  margin-top: 40px;
+}
+
+/* 通用按钮样式 */
+.button {
+  /* 设置背景主色调 */
+  background-color: #2563eb;
+  /* 文字白色提升对比 */
+  color: #ffffff;
+  /* 去除默认边框 */
+  border: none;
+  /* 圆角处理更现代 */
+  border-radius: 6px;
+  /* 设定内边距增强可点击性 */
+  padding: 8px 16px;
+  /* 鼠标指针表示可点击 */
+  cursor: pointer;
+  /* 字体加粗提升易读性 */
+  font-weight: 500;
+  /* 添加过渡效果提升交互感 */
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 按钮悬停与聚焦状态 */
+.button:hover,
+.button:focus {
+  /* 颜色加深表达互动 */
+  background-color: #1d4ed8;
+  /* 移除默认轮廓使用阴影突出 */
+  outline: none;
+  /* 增加阴影表示聚焦 */
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+/* 按钮禁用状态 */
+.button:disabled {
+  /* 使用浅灰背景提示不可用 */
+  background-color: #9ca3af;
+  /* 鼠标改为不可点击 */
+  cursor: not-allowed;
+  /* 移除阴影 */
+  box-shadow: none;
+}
+
+/* 次级按钮样式 */
+.button--ghost {
+  /* 使用透明背景表达次级操作 */
+  background-color: transparent;
+  /* 添加描边区分主次 */
+  border: 1px solid #d1d5db;
+  /* 文字颜色改为主色 */
+  color: #1f2937;
+}
+
+/* 输入框样式 */
+.input {
+  /* 设置宽度占满容器 */
+  width: 100%;
+  /* 内边距保证输入舒适 */
+  padding: 8px 12px;
+  /* 圆角统一风格 */
+  border-radius: 6px;
+  /* 边框浅灰 */
+  border: 1px solid #d1d5db;
+  /* 背景白色 */
+  background-color: #ffffff;
+  /* 文字颜色继承主色 */
+  color: #111827;
+  /* 添加过渡增强交互感 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 输入框聚焦状态 */
+.input:focus {
+  /* 聚焦时边框改为主色 */
+  border-color: #2563eb;
+  /* 添加外部阴影提示 */
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  /* 移除默认 outline */
+  outline: none;
+}
+
+/* 表单标签样式 */
+.label {
+  /* 设置字体加粗提升可读性 */
+  font-weight: 500;
+  /* 添加底部间距分隔控件 */
+  margin-bottom: 4px;
+  /* 设置显示为块级元素 */
+  display: block;
+}
+
+/* 表单组容器 */
+.form-group {
+  /* 设置垂直布局 */
+  display: flex;
+  /* 改为列方向 */
+  flex-direction: column;
+  /* 添加底部间距区分组 */
+  margin-bottom: 16px;
+}
+
+/* 表格容器 */
+.table-wrapper {
+  /* 使用白色背景突出数据 */
+  background-color: #ffffff;
+  /* 添加内边距提升可读性 */
+  padding: 16px;
+  /* 圆角柔化边缘 */
+  border-radius: 10px;
+  /* 添加阴影区分背景 */
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+  /* 允许横向滚动避免溢出 */
+  overflow-x: auto;
+}
+
+/* 表格基础样式 */
+table {
+  /* 表格占满容器宽度 */
+  width: 100%;
+  /* 采用 border-collapse 合并边框 */
+  border-collapse: collapse;
+}
+
+/* 表头与单元格样式 */
+th,
+td {
+  /* 添加边框保持网格感 */
+  border-bottom: 1px solid #e5e7eb;
+  /* 设置内边距提升可读性 */
+  padding: 12px;
+  /* 文本左对齐保持一致 */
+  text-align: left;
+  /* 设置字体大小适中 */
+  font-size: 14px;
+}
+
+/* 表头额外样式 */
+th {
+  /* 使用背景浅灰区分表头 */
+  background-color: #f3f4f6;
+  /* 字体加粗强调标题 */
+  font-weight: 600;
+}
+
+/* 徽章样式 */
+.badge {
+  /* 使用 inline-flex 方便居中 */
+  display: inline-flex;
+  /* 垂直水平居中文本 */
+  align-items: center;
+  justify-content: center;
+  /* 设置高度与内边距 */
+  padding: 2px 8px;
+  /* 圆角胶囊形状 */
+  border-radius: 9999px;
+  /* 默认背景浅蓝 */
+  background-color: #dbeafe;
+  /* 默认文字主色 */
+  color: #1d4ed8;
+  /* 字号较小以适配标签 */
+  font-size: 12px;
+  /* 字体加粗提高识别度 */
+  font-weight: 600;
+}
+
+/* Toast 容器定位 */
+.toast-container {
+  /* 固定定位于右上角 */
+  position: fixed;
+  /* 距离顶部的距离 */
+  top: 20px;
+  /* 距离右侧的距离 */
+  right: 20px;
+  /* 垂直堆叠多个 toast */
+  display: flex;
+  /* 列方向排列 */
+  flex-direction: column;
+  /* 设置间距 */
+  gap: 10px;
+  /* 设置较高层级避免被遮挡 */
+  z-index: 2000;
+}
+
+/* 单个 toast 样式 */
+.toast {
+  /* 背景白色保持一致 */
+  background-color: #ffffff;
+  /* 添加阴影浮起效果 */
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  /* 圆角柔化 */
+  border-radius: 8px;
+  /* 内边距提升可读性 */
+  padding: 12px 16px;
+  /* 最小宽度避免太窄 */
+  min-width: 240px;
+  /* 最大宽度防止过长 */
+  max-width: 320px;
+  /* 设置过渡用于出现动画 */
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  /* 初始完全不透明 */
+  opacity: 1;
+}
+
+/* Toast 类型信息色彩 */
+.toast--info {
+  /* 左侧边框使用蓝色强调信息 */
+  border-left: 4px solid #2563eb;
+}
+
+/* Toast 成功状态 */
+.toast--success {
+  /* 左侧边框绿色表示成功 */
+  border-left: 4px solid #16a34a;
+}
+
+/* Toast 错误状态 */
+.toast--error {
+  /* 左侧边框红色表示错误 */
+  border-left: 4px solid #dc2626;
+}
+
+/* 加载指示器容器 */
+.spinner {
+  /* 设置宽高形成圆形 */
+  width: 16px;
+  height: 16px;
+  /* 使用边框实现旋转效果 */
+  border: 2px solid rgba(37, 99, 235, 0.2);
+  /* 顶部边框使用主色形成转动感 */
+  border-top-color: #2563eb;
+  /* 圆形边角 */
+  border-radius: 50%;
+  /* 应用旋转动画 */
+  animation: spin 0.8s linear infinite;
+}
+
+/* 旋转动画定义 */
+@keyframes spin {
+  /* 起始角度 */
+  from {
+    transform: rotate(0deg);
+  }
+  /* 结束角度 */
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 对话框遮罩层 */
+.dialog-backdrop {
+  /* 固定覆盖整个视口 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  /* 半透明黑色背景 */
+  background-color: rgba(15, 23, 42, 0.45);
+  /* 使用 flex 居中对话框 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 高层级确保覆盖 */
+  z-index: 3000;
+}
+
+/* 对话框面板样式 */
+.dialog {
+  /* 白色背景与遮罩对比 */
+  background-color: #ffffff;
+  /* 圆角柔化边缘 */
+  border-radius: 10px;
+  /* 内边距设置内容留白 */
+  padding: 24px;
+  /* 设置最小宽度 */
+  min-width: 320px;
+  /* 最大宽度防止过大 */
+  max-width: 480px;
+  /* 阴影增加层次感 */
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+}
+
+/* 对话框按钮容器 */
+.dialog__actions {
+  /* 使用 flex 布局水平排列按钮 */
+  display: flex;
+  /* 设置间距 */
+  gap: 12px;
+  /* 内容靠右排列 */
+  justify-content: flex-end;
+  /* 上方留出间距 */
+  margin-top: 20px;
+}
+
+/* 分页容器样式 */
+.pagination {
+  /* 使用 flex 水平排列按钮 */
+  display: flex;
+  /* 居中分页控件 */
+  justify-content: center;
+  /* 设置间距 */
+  gap: 8px;
+  /* 添加顶部外边距与表格分隔 */
+  margin-top: 16px;
+}
+
+/* 由于不能直接使用 @apply，这里为分页按钮单独定义 */
+.pagination__button {
+  /* 背景使用浅色凸显次要性 */
+  background-color: #e5e7eb;
+  /* 边框与主按钮保持一致 */
+  border: none;
+  /* 圆角统一风格 */
+  border-radius: 6px;
+  /* 内边距适配分页尺寸 */
+  padding: 6px 12px;
+  /* 文字颜色深灰 */
+  color: #1f2937;
+  /* 鼠标指针表示可点击 */
+  cursor: pointer;
+  /* 字体加粗易于阅读 */
+  font-weight: 500;
+  /* 过渡提升体验 */
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 分页按钮 hover 状态 */
+.pagination__button:hover,
+.pagination__button:focus {
+  /* 背景略微加深 */
+  background-color: #d1d5db;
+  /* 添加阴影提示聚焦 */
+  box-shadow: 0 0 0 2px rgba(209, 213, 219, 0.8);
+  /* 移除默认轮廓 */
+  outline: none;
+}
+
+/* 分页按钮禁用状态 */
+.pagination__button:disabled {
+  /* 背景更浅提示不可操作 */
+  background-color: #f3f4f6;
+  /* 文字颜色变淡 */
+  color: #9ca3af;
+  /* 鼠标禁止样式 */
+  cursor: not-allowed;
+  /* 移除阴影 */
+  box-shadow: none;
+}
+
+/* 表格中的操作按钮容器 */
+.table-actions {
+  /* 使用 flex 使按钮横向排列 */
+  display: flex;
+  /* 设置按钮间距 */
+  gap: 8px;
+}
+
+/* 表格空状态样式 */
+.table-empty {
+  /* 使用浅灰文字表达空状态 */
+  color: #6b7280;
+  /* 居中文本 */
+  text-align: center;
+  /* 设置上下边距 */
+  margin: 16px 0;
+}
+
+/* 布局在窄屏下自适应 */
+@media (max-width: 960px) {
+  /* 侧栏在小屏幕上缩窄 */
+  .sidebar {
+    width: 200px;
+  }
+  /* 内容区域 padding 调整 */
+  .content {
+    padding: 16px;
+  }
+}
+
+/* 极窄屏幕下侧栏折叠为顶部导航 */
+@media (max-width: 720px) {
+  /* 根容器改为垂直排列 */
+  .app-shell {
+    flex-direction: column;
+  }
+  /* 侧栏使用水平布局 */
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 16px;
+  }
+  /* 品牌放在左侧 */
+  .sidebar__brand {
+    border-bottom: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 16px 16px 16px 0;
+    margin-right: 16px;
+  }
+  /* 菜单水平滚动 */
+  .sidebar__menu {
+    flex-direction: row;
+    display: flex;
+    overflow-x: auto;
+  }
+  /* 菜单项改为水平排列 */
+  .sidebar__menu-item {
+    margin: 8px;
+  }
+  /* 主区域增加顶部间距 */
+  .main {
+    margin-top: 0;
+  }
+}
