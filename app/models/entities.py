@@ -1,160 +1,160 @@
-from __future__ import annotations  # 推迟类型注解解析，避免SQLAlchemy模型初始化冲突
+"""系统中的所有SQLAlchemy实体定义。"""  # 模块级注释，说明此处集中定义ORM模型
+from __future__ import annotations  # 允许在类型注解中引用尚未定义的类，避免循环引用问题
 
-import uuid
-from typing import List, Optional
+import uuid  # 提供UUID生成功能用于文档与切片标识
+from typing import List, Optional  # 引入类型注解以提升代码可读性
 
-from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index,
-    JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import (  # 导入SQLAlchemy核心字段类型与工具函数
+    BigInteger,  # 使用大整型作为主键以兼容高增长数据量
+    Boolean,  # 布尔型用于管理员标志
+    CheckConstraint,  # 约束消息角色取值范围
+    DateTime,  # 日期时间类型用于审计字段
+    ForeignKey,  # 外键定义确保实体之间的引用一致
+    Index,  # 显式索引定义提高查询性能
+    JSON,  # JSON字段存储文档元数据
+    String,  # 可变长度字符串类型
+    Text,  # 长文本类型存储消息与文档内容
+    UniqueConstraint,  # 复合唯一约束保证业务唯一性
+    func,  # SQL函数工具用于服务器默认值
 )
-from sqlalchemy.dialects.postgresql import UUID  # 引入PostgreSQL专用UUID类型确保数据库层面原生支持
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import UUID as PGUUID  # 使用PostgreSQL专有UUID类型确保数据库端原生支持
+from sqlalchemy.orm import Mapped, mapped_column, relationship  # SQLAlchemy2.0风格映射API
 
-from .base import Base
+from .base import Base  # 所有模型继承自自定义的Base，提供统一表名策略
 
-class User(Base):
-    """用户实体类，对应数据库中的user表。
-    包含的字段有：
-    - id: 用户的唯一标识符，主键，自增。
-    - email: 用户的电子邮件地址，唯一且不能为空。
-    - hashed_password: 用户的密码哈希值，不能为空。
-    - is_admin: 布尔值，表示用户是否为管理员，默认为False，不能为空。
-    - created_at: 记录用户创建时间，默认为当前时间。
-    - updated_at: 记录用户信息最后更新时间，默认为当前时间，更新时自动修改为当前时间。
-    - chats: 与用户相关的聊天记录，通过relationship属性与Chat实体类建立一对多关系。
-    """
-    __tablename__: str = "user"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    email: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False) # 存储哈希后的密码
-    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    chats: Mapped[List["Chat"]] = relationship("Chat", back_populates="user", cascade="all, delete-orphan")
-    
-class Chat(Base):
-    """聊天实体类，对应数据库中的chats表。
-    包含的字段有：
-    - id: 聊天的唯一标识符，主键，自增。
-    - user_id: 外键，关联到user表的id字段，不能为空。
-    - title: 聊天的标题，可为空。
-    - created_at: 记录聊天创建时间，默认为当前时间。
-    - updated_at: 记录聊天最后更新时间，默认为当前时间，更新时自动修改为当前时间。
-    - user: 与聊天相关的用户，通过relationship属性与User实体类建立多对一关系。
-    - messages: 与聊天相关的消息记录，通过relationship属性与Message实体类建立一对多关系。
-    """
-    __tablename__: str = "chats"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), nullable=False)
-    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    user: Mapped["User"] = relationship("User", back_populates="chats", passive_deletes=True)
-    messages: Mapped[List["Message"]] = relationship("Message", back_populates="chat", cascade="all, delete-orphan")
-    
-class Message(Base):
-    """ 消息实体类，对应数据库中的messages表。
-    包含的字段有：
-    - id: 消息的唯一标识符，主键，自增。
-    - chat_id: 外键，关联到chats表的id字段，不能为空。
-    - role: 消息的角色（如用户、系统等），不能为空。
-    - content: 消息的内容，不能为空。
-    - created_at: 记录消息创建时间，默认为当前时间。
-    - updated_at: 记录消息最后更新时间，默认为当前时间，更新时自动修改为当前时间。
-    - chat: 与消息相关的聊天，通过relationship属性与Chat实体类建立多对一关系。
-    - 复合唯一约束：确保同一聊天中的消息内容唯一。
-    - 索引：在chat_id和created_at字段上创建索引以优化查询性能。
-    """
-    __tablename__: str = "messages"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)
-    role: Mapped[str] = mapped_column(String(50), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    chat: Mapped["Chat"] = relationship("Chat", back_populates="messages", passive_deletes=True)
-    
-    __table_args__ = (
-        CheckConstraint("role IN ('user', 'system', 'assistant')", name="chk_message_role"),
-        Index("ix_messages_chat_id_created_at", "chat_id", "created_at"),
-    )   
-    
-class Domain(Base):
-    """数据来源实体类，对应数据库中的domains表。
-    包含的字段有：
-    - id: 来源的唯一标识符，主键，自增。
-    - name: 来源的名称，唯一且不能为空。
-    - description: 来源的描述，可为空。
-    - created_at: 记录来源创建时间，默认为当前时间。
-    - updated_at: 记录来源最后更新时间，默认为当前时间，更新时自动修改为当前时间。
-    - documents: 与来源相关的文档，通过relationship属性与Document实体类建立一对多关系。
-    """
-    __tablename__: str = "domains"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    documents: Mapped[List["Document"]] = relationship("Document", back_populates="domain", cascade="all, delete-orphan")
-    
-    
-class Document(Base):
-    __tablename__: str = "documents"
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id", ondelete="CASCADE"), nullable=False)
-    # 为Document新增uuid字段用于对外无序标识，避免暴露自增id
-    uuid: Mapped[uuid.UUID] = mapped_column(  # 使用UUID确保全局唯一性并便于幂等操作
-        UUID(as_uuid=True),  # 使用原生UUID类型保持数据库与Python一致的类型语义
-        nullable=False,  # 禁止空值避免后续查询歧义
-        default=uuid.uuid4,  # 默认使用uuid4生成随机标识，减少猜测风险
-        unique=True,  # 建立唯一约束确保任何重复写入被阻止
-        index=True  # 建立索引用于高频按uuid查询
+
+class User(Base):  # 定义用户实体，对应用户表
+    """用户表，负责存储账号信息与权限。"""  # 类文档简述用途
+    __tablename__ = "user"  # 显式指定表名与历史数据库保持一致
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 主键自增，满足唯一标识需求
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # 邮箱作为登录名并加唯一约束防止重复注册
+    hashed_password: Mapped[str] = mapped_column(String(512), nullable=False)  # 存储哈希后的密码，绝不保存明文
+    full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # 可选的用户全名字段，用于展示
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")  # 管理员标志默认关闭以防权限滥用
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间自动填充当前时刻
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间在每次写入时刷新
+    chats: Mapped[List["Chat"]] = relationship(  # 建立与聊天的关系以方便级联访问
+        "Chat",  # 关联的目标模型
+        back_populates="user",  # 与Chat.user字段互相指向
+        cascade="all, delete-orphan",  # 删除用户时一并删除其聊天，避免孤儿记录
+        passive_deletes=True,  # 配合数据库ON DELETE CASCADE减少额外SQL
+    )  # 设计说明见下面的注释
+
+    __table_args__ = (  # 定义额外的表级配置
+        Index("ix_user_email", "email", unique=True),  # 为邮箱创建唯一索引，提升登录查询速度并保证唯一性
+    )  # 表参数结束
+
+    # 设计说明：用户表记录账号基础信息，邮箱唯一索引便于快速查找，同时关系级联可确保删除账号时聊天记录同步清理。
+
+
+class Chat(Base):  # 定义聊天会话实体
+    """聊天会话表，记录用户开启的每个对话。"""  # 类文档说明职责
+    __tablename__ = "chats"  # 对应数据库中的chats表
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 聊天主键
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), nullable=False)  # 外键指向用户，删除用户时级联删除聊天保持一致性
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # 聊天标题可为空，便于前端自定义
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间自动填充
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间自动更新
+    user: Mapped["User"] = relationship("User", back_populates="chats", passive_deletes=True)  # 反向关系方便从聊天访问所属用户
+    messages: Mapped[List["Message"]] = relationship(  # 建立聊天与消息的一对多关系
+        "Message",  # 关联消息模型
+        back_populates="chat",  # 与Message.chat互相引用
+        cascade="all, delete-orphan",  # 删除聊天时级联删除消息，避免消息孤立
+        passive_deletes=True,  # 交给数据库执行ON DELETE CASCADE减少显式删除
     )
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    doc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-    domain: Mapped["Domain"] = relationship("Domain", back_populates="documents", passive_deletes=True)
-    chunks: Mapped[List["Chunk"]] = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")  
-    __table_args__ = (
-        Index("ix_documents_domain_id_created_at", "domain_id", "created_at"),
+
+    # 设计说明：聊天记录紧跟用户生命周期，通过级联删除避免无主聊天与消息残留，保证数据一致性。
+
+
+class Message(Base):  # 定义消息实体
+    """消息表，存储对话过程中的每条消息。"""  # 类文档说明用途
+    __tablename__ = "messages"  # 对应数据库messages表
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 消息主键
+    chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)  # 外键指向聊天，聊天删除时级联删除消息
+    role: Mapped[str] = mapped_column(String(50), nullable=False)  # 消息角色限定为user/system/assistant
+    content: Mapped[str] = mapped_column(Text, nullable=False)  # 消息正文内容
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间自动填充
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间自动刷新
+    chat: Mapped["Chat"] = relationship("Chat", back_populates="messages", passive_deletes=True)  # 反向关系，便于从消息获取聊天
+
+    __table_args__ = (  # 消息表级约束
+        CheckConstraint("role IN ('user', 'system', 'assistant')", name="chk_message_role"),  # 限制角色取值范围防止脏数据
+        Index("ix_messages_chat_id_created_at", "chat_id", "created_at"),  # 复合索引提升按时间查询性能
     )
-    # 设计说明：通过为文档增加uuid并建立索引，我们可以安全地对外暴露无序标识并获得高效查询能力。
-    
-class Chunk(Base):
-    """文档块实体类，对应数据库中的chunks表。
-    包含的字段有：
-    - id: 文档块的唯一标识符，主键，自增。
-    - document_id: 外键，关联到documents表的id字段，不能为空。
-    - external_id: 文档块的外部唯一标识符，使用UUID生成，为向量库提供，库里只存(external_id, embedding)对，不能为空且唯一。
-    - ordinal: 文档块在文档中的顺序，不能为空，默认为0。
-    - content: 文档块的内容，不能为空。
-    - created_at: 记录文档块创建时间，默认为当前时间。
-    - updated_at: 记录文档块最后更新时间，默认为当前时间，更新时自动修改为当前时间。
-    - document: 与文档块相关的文档，通过relationship属性与Document实体类建立多对一关系。
-    - 复合唯一约束：确保同一文档中的ordinal唯一。
-    - 索引：在document_id和ordinal字段上创建索引以优化查询性能。
-    """
-    # 说明：chunk严格来源于原文内容，仅允许按需删除，禁止人工更新以保持索引与原文一致性。
-    __tablename__: str = "chunks"   
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
-    external_id: Mapped[str] = mapped_column(
-        String(36),
-        nullable=False,
-        unique=True,
-        default=lambda: str(uuid.uuid4()) 
+
+    # 设计说明：通过角色约束与索引保证消息查询效率，同时级联删除确保聊天删除后不会残留消息。
+
+
+class Domain(Base):  # 定义数据来源实体
+    """Domain 表示知识来源，用于对文档分组。"""  # 类文档说明
+    __tablename__ = "domains"  # 数据库表名
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 主键
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # 名称唯一防止重复录入
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 可选描述信息
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间
+    documents: Mapped[List["Document"]] = relationship(  # 领域与文档一对多关系
+        "Document",  # 关联文档模型
+        back_populates="domain",  # 反向引用
+        cascade="all, delete-orphan",  # 删除domain时级联清理文档，保持数据一致
+        passive_deletes=True,  # 启用数据库级联
     )
-    ordinal: Mapped[int] = mapped_column(nullable=False, default=0)
 
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # 设计说明：领域删除后需要同步删除文档，避免文档失去归属造成脏数据。
 
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True),nullable=False, server_default=func.now())
-    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())   
 
-    document: Mapped["Document"] = relationship(back_populates="chunks", passive_deletes=True)
+class Document(Base):  # 定义文档实体
+    """Document 存储原始文档内容及元数据。"""  # 类文档说明
+    __tablename__ = "documents"  # 对应数据库表
 
-    __table_args__ = (
-        UniqueConstraint("document_id", "ordinal", name="uq_chunk_doc_ordinal"),
-        Index("ix_chunks_document_ordinal", "document_id", "ordinal"),
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 文档主键
+    domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id", ondelete="CASCADE"), nullable=False)  # 外键指向domain，删除domain时级联
+    uuid: Mapped[uuid.UUID] = mapped_column(  # 文档对外暴露的无序标识
+        PGUUID(as_uuid=True),  # 使用PostgreSQL原生UUID类型
+        nullable=False,  # 禁止空值确保每个文档均有标识
+        default=uuid.uuid4,  # 默认生成uuid4避免可预测
+        unique=True,  # 保证对外标识唯一
+        index=True,  # 建索引方便按uuid查询
     )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)  # 文档标题
+    doc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)  # 元数据存储结构化信息
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间
+    domain: Mapped["Domain"] = relationship("Domain", back_populates="documents", passive_deletes=True)  # 反向关系
+    chunks: Mapped[List["Chunk"]] = relationship(  # 文档与切片一对多关系
+        "Chunk",  # 关联模型
+        back_populates="document",  # 反向指针
+        cascade="all, delete-orphan",  # 文档删除时清理切片，保持一致
+        passive_deletes=True,  # 交由数据库执行级联
+    )
+
+    __table_args__ = (  # 文档附加索引
+        Index("ix_documents_domain_id_created_at", "domain_id", "created_at"),  # 提升按领域和时间排序的查询效率
+    )
+
+    # 设计说明：文档的UUID和索引确保对外接口安全且查询高效，同时级联清理保护数据完整性。
+
+
+class Chunk(Base):  # 定义文档切片实体
+    """Chunk 表示拆分后的文档片段。"""  # 类文档说明
+    __tablename__ = "chunks"  # 数据库表名
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 主键
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)  # 外键指向文档并建立索引
+    external_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, default=lambda: str(uuid.uuid4()))  # 对接外部存储的唯一标识
+    ordinal: Mapped[int] = mapped_column(nullable=False, default=0)  # 在文档中的顺序位置
+    content: Mapped[str] = mapped_column(Text, nullable=False)  # 切片内容正文
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间
+    document: Mapped["Document"] = relationship("Document", back_populates="chunks", passive_deletes=True)  # 反向关系便于加载
+
+    __table_args__ = (  # 附加约束
+        UniqueConstraint("document_id", "ordinal", name="uq_chunk_doc_ordinal"),  # 同一文档内ordinal唯一，保证顺序稳定
+        Index("ix_chunks_document_ordinal", "document_id", "ordinal"),  # 索引加速按顺序查询
+    )
+
+    # 设计说明：切片依赖文档生命周期，通过唯一约束维护顺序，级联策略避免孤立数据。
