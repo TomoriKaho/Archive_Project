@@ -27,7 +27,7 @@ export async function request(path, { method = 'GET', auth = true, headers = {},
       const error = new Error(data?.detail || data?.message || '请求失败'); // 构造错误对象
       error.status = response.status; // 标记 HTTP 状态码
       error.payload = data; // 附带原始响应数据
-      if (response.status === 401) { // 针对未授权的特殊处理
+      if (response.status === 401 && auth) { // 针对需要鉴权的请求统一处理未授权
         error.code = 'UNAUTHORIZED'; // 标记错误码
         window.dispatchEvent(new CustomEvent('app:unauthorized', { detail: { message: error.message } })); // 派发全局事件方便统一处理
       }
