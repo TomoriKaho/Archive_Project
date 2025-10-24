@@ -5,6 +5,7 @@ from fastapi import FastAPI  # 导入FastAPI主体
 
 from app.api import domains, chats  # 导入既有路由
 from app.api import documents  # 新增文档路由
+from app.api import auth, users  # 导入新增的认证与用户管理路由
 from app.db.schema_compat import ensure_document_uuid_column  # 旧库兼容补丁
 from app.db.session import engine  # 提供数据库连接引擎
 
@@ -16,6 +17,8 @@ app.router.redirect_slashes = True  # 启用斜杠自动兼容，满足/domains�
 app.include_router(domains.router)  # 注册domain相关接口
 app.include_router(chats.router)  # 注册聊天相关接口
 app.include_router(documents.router)  # 注册文档及chunk相关接口
+app.include_router(auth.router)  # 注册认证相关接口，提供登录注册能力
+app.include_router(users.router)  # 注册用户管理接口，管理员可做CRUD
 
 
 @app.on_event("startup")

@@ -243,3 +243,31 @@
 - **说明**：删除指定消息。
 - **成功响应**：`204 No Content`。
 - **错误**：`404 Not Found`。
+
+## Auth 使用说明
+- 在 `.env` 中新增 `JWT_SECRET_KEY`、`JWT_ALGORITHM`（默认 `HS256`）与 `ACCESS_TOKEN_EXPIRE_MINUTES`（默认 `60`）。
+- 调用 `POST /auth/register` 可匿名注册普通用户，或由管理员调用 `POST /users` 创建并指定 `is_admin`。
+- 登录接口 `POST /auth/login` 需提交邮箱和密码，成功后返回 `{"access_token": "<JWT>", "token_type": "bearer"}`。
+- 后续请求在 `Authorization` 请求头中附带 `Bearer <token>` 即可访问需要鉴权的接口。
+
+## 管理员初始账号与密码修改建议
+- 数据迁移会自动创建 `admin@example.com`，默认密码 `ChangeMe123`（或环境变量 `ADMIN_INIT_PASSWORD`）。
+- 该密码仅用于首次登陆，请在登录后立刻调用 `PATCH /users/{id}` 更新密码，或直接修改数据库。
+- 若不再需要该账号，可由另一位管理员登录后删除，系统将同步清理其聊天与消息。
+
+## User API 权限矩阵
+| 操作 | 匿名 | 登录用户 | 管理员 |
+| --- | --- | --- | --- |
+| 注册 /auth/register | ✅ | ✅ | ✅ |
+| 登录 /auth/login | ✅ | ✅ | ✅ |
+| 我是谁 /auth/me | ❌ | ✅ | ✅ |
+| 列表 /users | ❌ | ❌ | ✅ |
+| 查看 /users/{id} | ❌ | 仅本人 | ✅ |
+| 创建 /users | ❌ | ❌ | ✅ |
+| 更新 /users/{id} | ❌ | 仅本人（不可改 is_admin） | ✅（可改 is_admin） |
+| 删除 /users/{id} | ❌ | ❌ | ✅ |
+
+## 级联删除的影响与数据备份提醒
+- 删除用户会自动触发其聊天与消息的级联删除，确保系统不留下孤儿记录。
+- 若某些历史对话需要保留，建议在删除前进行备份，或考虑改为软删除策略。
+- 同样地，删除聊天或文档也会同步清理其下属消息与文档块，避免数据不一致。
