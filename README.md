@@ -244,6 +244,100 @@
 - **成功响应**：`204 No Content`。
 - **错误**：`404 Not Found`。
 
+### 认证（auth）
+#### POST /auth/register
+- **说明**：匿名注册普通用户，`is_admin` 固定为 `false`。
+- **请求体**：`UserCreate`
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "StrongPass1",
+    "full_name": "string | null"
+  }
+  ```
+- **成功响应**：`201 Created`，返回注册用户的 `UserOut`（不含 `hashed_password`）。
+- **错误**：`400 Bad Request`（邮箱重复）。
+
+#### POST /auth/login
+- **说明**：凭邮箱与密码换取访问令牌。
+- **请求体**
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "StrongPass1"
+  }
+  ```
+- **成功响应**：`200 OK`，`{"access_token": "<JWT>", "token_type": "bearer"}`。
+- **错误**：`401 Unauthorized`（邮箱或密码错误）。
+
+#### GET /auth/me
+- **说明**：需携带 Bearer Token，返回当前用户信息。
+- **请求头**：`Authorization: Bearer <token>`。
+- **成功响应**：`200 OK`，`UserOut`。
+- **错误**：`401 Unauthorized`（缺少/过期/无效 token）。
+
+### 用户（users）
+#### POST /users
+- **说明**：仅管理员可创建用户，可设定 `is_admin`。
+- **请求头**：`Authorization: Bearer <admin_token>`。
+- **请求体**：`UserCreate`（管理员扩展 `is_admin` 字段）
+  ```json
+  {
+    "email": "alice@example.com",
+    "password": "AlicePass1",
+    "full_name": "Alice",
+    "is_admin": false
+  }
+  ```
+- **成功响应**：`201 Created`，`UserOut`。
+- **错误**：`400 Bad Request`（邮箱重复），`403 Forbidden`（非管理员）。
+
+#### GET /users
+- **说明**：仅管理员可分页列出用户，可按邮箱/姓名模糊查询。
+- **请求头**：`Authorization: Bearer <admin_token>`。
+- **查询参数**：
+  - `limit`（int，默认 20，最大 100）
+  - `offset`（int，默认 0，≥0）
+  - `q`（string，可选，搜索关键词）
+- **成功响应**：`200 OK`，`UserListResponse`
+  ```json
+  {
+    "items": [UserOut, ...],
+    "total": 0,
+    "limit": 20,
+    "offset": 0
+  }
+  ```
+- **错误**：`403 Forbidden`（非管理员）。
+
+#### GET /users/{user_id}
+- **说明**：管理员或本人可查看用户详情。
+- **请求头**：`Authorization: Bearer <token>`。
+- **路径参数**：`user_id`（int）。
+- **成功响应**：`200 OK`，`UserOut`。
+- **错误**：`403 Forbidden`（非本人且非管理员），`404 Not Found`（用户不存在）。
+
+#### PATCH /users/{user_id}
+- **说明**：管理员或本人可更新资料，仅管理员能修改 `is_admin`。
+- **请求头**：`Authorization: Bearer <token>`。
+- **请求体**：`UserUpdate`
+  ```json
+  {
+    "full_name": "Alice L.",
+    "password": "NewPass#2",
+    "is_admin": true
+  }
+  ```
+- **成功响应**：`200 OK`，`UserOut`。
+- **错误**：`403 Forbidden`（越权操作），`404 Not Found`。
+
+#### DELETE /users/{user_id}
+- **说明**：仅管理员可删除用户，并级联删除其 chats/messages。
+- **请求头**：`Authorization: Bearer <admin_token>`。
+- **路径参数**：`user_id`（int）。
+- **成功响应**：`204 No Content`。
+- **错误**：`403 Forbidden`（非管理员），`404 Not Found`（用户不存在或已删除）。
+
 ## Auth 使用说明
 - 在 `.env` 中新增 `JWT_SECRET_KEY`、`JWT_ALGORITHM`（默认 `HS256`）与 `ACCESS_TOKEN_EXPIRE_MINUTES`（默认 `60`）。
 - 调用 `POST /auth/register` 可匿名注册普通用户，或由管理员调用 `POST /users` 创建并指定 `is_admin`。
