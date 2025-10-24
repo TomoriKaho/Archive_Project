@@ -8,7 +8,8 @@ from app.api import domains, chats  # 导入既有路由
 from app.api import documents  # 新增文档路由
 from app.api import auth, users  # 导入新增的认证与用户管理路由
 from app.db.schema_compat import ensure_document_uuid_column  # 旧库兼容补丁
-from app.db.session import engine  # 提供数据库连接引擎
+from app.db.session import SessionLocal, engine  # 提供数据库连接引擎
+from app.services.initial_admin import ensure_initial_admin  # 启动时确保初始管理员存在
 
 logging.basicConfig(level=logging.INFO)  # 简单配置日志等级方便调试
 
@@ -35,6 +36,20 @@ app.include_router(users.router)  # 注册用户管理接口，管理员可做CR
 def _ensure_schema_compatibility() -> None:
     """在服务启动时自动修补旧版本数据库缺失的列。"""
     ensure_document_uuid_column(engine)
+
+
+@app.on_event("startup")
+def _ensure_initial_admin() -> None:
+    """服务启动时自动注入初始管理员账号（若不存在）。"""
+    session = SessionLocal()
+    try:
+        ensure_initial_admin(session)
+        session.commit()
+    except Exception:  # pragma: no cover - 保留完整回滚流程
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 @app.get("/healthz")
