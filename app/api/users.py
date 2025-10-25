@@ -18,7 +18,10 @@ from app.schemas.user import (  # 用户相关Schema
     UserOut,
     UserUpdate,
 )
-from app.services.password_guard import is_password_compromised  # 密码泄露检测
+from app.services.password_guard import (  # 密码复杂度检测
+    PASSWORD_POLICY_MESSAGE,
+    is_password_compromised,
+)
 
 logger = logging.getLogger(__name__)  # 模块日志记录器
 
@@ -43,8 +46,8 @@ async def create_user(payload: AdminUserCreate, db: Session = Depends(get_db)) -
         logger.info("创建用户失败：邮箱重复", extra={"email": payload.email})  # 记录失败日志
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="邮箱已存在")  # 抛出400
     if is_password_compromised(payload.password):  # 检查密码是否在泄露名单
-        logger.warning("创建用户失败：密码已被泄露", extra={"email": payload.email})  # 记录安全事件
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码存在泄露风险，请更换更安全的密码")  # 拒绝使用
+        logger.warning("创建用户失败：密码不符合复杂度要求", extra={"email": payload.email})  # 记录安全事件
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=PASSWORD_POLICY_MESSAGE)  # 拒绝使用
     hashed = hash_password(payload.password)  # 将明文密码哈希化
     user = repo.create_user(  # 写入数据库
         email=payload.email,
@@ -129,8 +132,8 @@ async def update_user(
         update_data["full_name"] = payload.full_name  # 写入
     if payload.password is not None:  # 提供新密码
         if is_password_compromised(payload.password):  # 校验密码安全性
-            logger.warning("拒绝使用泄露密码更新账号", extra={"user_id": user_id})  # 记录安全日志
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码存在泄露风险，请更换更安全的密码")  # 拒绝
+            logger.warning("拒绝使用不符合复杂度的密码更新账号", extra={"user_id": user_id})  # 记录安全日志
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=PASSWORD_POLICY_MESSAGE)  # 拒绝
         update_data["hashed_password"] = hash_password(payload.password)  # 哈希后更新
     if current_user.is_admin and payload.is_admin is not None:  # 仅管理员可改权限
         update_data["is_admin"] = payload.is_admin  # 设置权限

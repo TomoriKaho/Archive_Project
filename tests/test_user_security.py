@@ -12,6 +12,7 @@ from app.api import auth as auth_api
 from app.api import users as users_api
 from app.core.config import INITIAL_ADMIN_EMAIL
 from app.schemas.user import UserCreate
+from app.services.password_guard import PASSWORD_POLICY_MESSAGE
 
 
 class DummyRepo:
@@ -43,7 +44,7 @@ def test_register_rejects_compromised_password(monkeypatch):
         asyncio.run(auth_api.register(payload, db=None))
 
     assert excinfo.value.status_code == 400
-    assert '密码存在泄露风险' in excinfo.value.detail
+    assert excinfo.value.detail == PASSWORD_POLICY_MESSAGE
 
 
 def test_delete_user_blocks_admin_removal_without_initial_privilege(monkeypatch):
