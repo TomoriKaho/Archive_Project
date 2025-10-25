@@ -12,9 +12,13 @@ export async function request(path, { method = 'GET', auth = true, headers = {},
       finalHeaders.Authorization = `Bearer ${token}`; // 在请求头中写入 Authorization
     }
   }
+  if (!finalHeaders['Cache-Control']) { // 默认禁用缓存以避免读到旧数据
+    finalHeaders['Cache-Control'] = 'no-cache'; // 让浏览器不要使用缓存副本
+  }
   const payload = body && !(body instanceof FormData) ? JSON.stringify(body) : body; // 根据请求体类型决定是否序列化
+  const fetchOptions = { method, headers: finalHeaders, body: payload, cache: 'no-store' }; // 强制每次都向服务器请求最新数据
   try { // 捕获网络异常
-    const response = await fetch(url, { method, headers: finalHeaders, body: payload }); // 发起实际的 fetch 请求
+    const response = await fetch(url, fetchOptions); // 发起实际的 fetch 请求
     if (response.status === 204) { // 对 204 空响应直接返回 null
       return null; // 无内容时返回空值
     }
@@ -27,7 +31,7 @@ export async function request(path, { method = 'GET', auth = true, headers = {},
       const error = new Error(data?.detail || data?.message || '请求失败'); // 构造错误对象
       error.status = response.status; // 标记 HTTP 状态码
       error.payload = data; // 附带原始响应数据
-      if (response.status === 401) { // 针对未授权的特殊处理
+      if (response.status === 401 && auth) { // 针对需要鉴权的请求统一处理未授权
         error.code = 'UNAUTHORIZED'; // 标记错误码
         window.dispatchEvent(new CustomEvent('app:unauthorized', { detail: { message: error.message } })); // 派发全局事件方便统一处理
       }

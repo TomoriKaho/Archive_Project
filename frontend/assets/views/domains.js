@@ -66,7 +66,7 @@ export default { // 导出域管理视图
                   try { // 捕获异常
                     await deleteDomain(domain.id); // 调用删除接口
                     toast('已删除域', 'success'); // 提示成功
-                    refresh(); // 刷新列表
+                    await refresh(); // 刷新列表
                   } catch (error) { // 捕获错误
                     toast(error.message || '删除失败', 'error'); // 提示错误
                   }
@@ -188,7 +188,7 @@ function openForm(domain, refresh) { // 打开创建或编辑对话框
       }
       backdrop.remove(); // 关闭对话框
       if (typeof refresh === 'function') { // 若存在刷新回调
-        refresh(); // 刷新列表
+        await refresh(); // 刷新列表
       }
     } catch (error) { // 捕获异常
       toast(error.message || '保存失败', 'error'); // 提示错误
@@ -197,7 +197,7 @@ function openForm(domain, refresh) { // 打开创建或编辑对话框
       loading.remove(); // 移除加载动画
     }
   }); // 提交事件结束
-  dialog.appendChild(actions); // 添加操作区域
+  form.appendChild(actions); // 将操作区域添加到表单内，确保提交按钮触发表单提交
   document.body.appendChild(backdrop); // 将对话框挂载到页面
   submitBtn.focus(); // 自动聚焦提交按钮
 }
