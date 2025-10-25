@@ -348,6 +348,7 @@
 - 数据迁移会自动创建 `admin@example.com`，默认密码 `ChangeMe123`（或环境变量 `ADMIN_INIT_PASSWORD`）。
 - 该密码仅用于首次登陆，请在登录后立刻调用 `PATCH /users/{id}` 更新密码，或直接修改数据库。
 - 若不再需要该账号，可由另一位管理员登录后删除，系统将同步清理其聊天与消息。
+- 如果误删了初始管理员，重启后端服务即可自动重新注入；也可以手动执行 `python -m app.scripts.bootstrap_admin` 立即恢复。
 
 ## User API 权限矩阵
 | 操作 | 匿名 | 登录用户 | 管理员 |
