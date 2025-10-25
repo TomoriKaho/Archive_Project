@@ -243,3 +243,134 @@
 - **说明**：删除指定消息。
 - **成功响应**：`204 No Content`。
 - **错误**：`404 Not Found`。
+
+### 认证（auth）
+#### POST /auth/register
+- **说明**：匿名注册普通用户，`is_admin` 固定为 `false`。
+- **请求体**：`UserCreate`
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "StrongPass1",
+    "full_name": "string | null"
+  }
+  ```
+- **成功响应**：`201 Created`，返回注册用户的 `UserOut`（不含 `hashed_password`）。
+- **错误**：`400 Bad Request`（邮箱重复）。
+
+#### POST /auth/login
+- **说明**：凭邮箱与密码换取访问令牌。
+- **请求体**
+  ```json
+  {
+    "email": "user@example.com",
+    "password": "StrongPass1"
+  }
+  ```
+- **成功响应**：`200 OK`，`{"access_token": "<JWT>", "token_type": "bearer"}`。
+- **错误**：`401 Unauthorized`（邮箱或密码错误）。
+
+#### GET /auth/me
+- **说明**：需携带 Bearer Token，返回当前用户信息。
+- **请求头**：`Authorization: Bearer <token>`。
+- **成功响应**：`200 OK`，`UserOut`。
+- **错误**：`401 Unauthorized`（缺少/过期/无效 token）。
+
+### 用户（users）
+#### POST /users
+- **说明**：仅管理员可创建用户，可设定 `is_admin`。
+- **请求头**：`Authorization: Bearer <admin_token>`。
+- **请求体**：`UserCreate`（管理员扩展 `is_admin` 字段）
+  ```json
+  {
+    "email": "alice@example.com",
+    "password": "AlicePass1",
+    "full_name": "Alice",
+    "is_admin": false
+  }
+  ```
+- **成功响应**：`201 Created`，`UserOut`。
+- **错误**：`400 Bad Request`（邮箱重复），`403 Forbidden`（非管理员）。
+
+#### GET /users
+- **说明**：仅管理员可分页列出用户，可按邮箱/姓名模糊查询。
+- **请求头**：`Authorization: Bearer <admin_token>`。
+- **查询参数**：
+  - `limit`（int，默认 20，最大 100）
+  - `offset`（int，默认 0，≥0）
+  - `q`（string，可选，搜索关键词）
+- **成功响应**：`200 OK`，`UserListResponse`
+  ```json
+  {
+    "items": [UserOut, ...],
+    "total": 0,
+    "limit": 20,
+    "offset": 0
+  }
+  ```
+- **错误**：`403 Forbidden`（非管理员）。
+
+#### GET /users/{user_id}
+- **说明**：管理员或本人可查看用户详情。
+- **请求头**：`Authorization: Bearer <token>`。
+- **路径参数**：`user_id`（int）。
+- **成功响应**：`200 OK`，`UserOut`。
+- **错误**：`403 Forbidden`（非本人且非管理员），`404 Not Found`（用户不存在）。
+
+#### PATCH /users/{user_id}
+- **说明**：管理员或本人可更新资料，仅管理员能修改 `is_admin`。
+- **请求头**：`Authorization: Bearer <token>`。
+- **请求体**：`UserUpdate`
+  ```json
+  {
+    "full_name": "Alice L.",
+    "password": "NewPass#2",
+    "is_admin": true
+  }
+  ```
+- **成功响应**：`200 OK`，`UserOut`。
+- **错误**：`403 Forbidden`（越权操作），`404 Not Found`。
+
+#### DELETE /users/{user_id}
+- **说明**：仅管理员可删除用户，并级联删除其 chats/messages。
+- **请求头**：`Authorization: Bearer <admin_token>`。
+- **路径参数**：`user_id`（int）。
+- **成功响应**：`204 No Content`。
+- **错误**：`403 Forbidden`（非管理员），`404 Not Found`（用户不存在或已删除）。
+
+## Auth 使用说明
+- 在 `.env` 中新增 `JWT_SECRET_KEY`、`JWT_ALGORITHM`（默认 `HS256`）与 `ACCESS_TOKEN_EXPIRE_MINUTES`（默认 `60`）。
+- 调用 `POST /auth/register` 可匿名注册普通用户，或由管理员调用 `POST /users` 创建并指定 `is_admin`。
+- 登录接口 `POST /auth/login` 需提交邮箱和密码，成功后返回 `{"access_token": "<JWT>", "token_type": "bearer"}`。
+- 后续请求在 `Authorization` 请求头中附带 `Bearer <token>` 即可访问需要鉴权的接口。
+
+## 管理员初始账号与密码修改建议
+- 数据迁移会自动创建 `admin@example.com`，默认密码 `ChangeMe123`（或环境变量 `ADMIN_INIT_PASSWORD`）。
+- 该密码仅用于首次登陆，请在登录后立刻调用 `PATCH /users/{id}` 更新密码，或直接修改数据库。
+- 若不再需要该账号，可由另一位管理员登录后删除，系统将同步清理其聊天与消息。
+
+## User API 权限矩阵
+| 操作 | 匿名 | 登录用户 | 管理员 |
+| --- | --- | --- | --- |
+| 注册 /auth/register | ✅ | ✅ | ✅ |
+| 登录 /auth/login | ✅ | ✅ | ✅ |
+| 我是谁 /auth/me | ❌ | ✅ | ✅ |
+| 列表 /users | ❌ | ❌ | ✅ |
+| 查看 /users/{id} | ❌ | 仅本人 | ✅ |
+| 创建 /users | ❌ | ❌ | ✅ |
+| 更新 /users/{id} | ❌ | 仅本人（不可改 is_admin） | ✅（可改 is_admin） |
+| 删除 /users/{id} | ❌ | ❌ | ✅ |
+
+## 级联删除的影响与数据备份提醒
+- 删除用户会自动触发其聊天与消息的级联删除，确保系统不留下孤儿记录。
+- 若某些历史对话需要保留，建议在删除前进行备份，或考虑改为软删除策略。
+- 同样地，删除聊天或文档也会同步清理其下属消息与文档块，避免数据不一致。
+
+## 前端自测剧本
+1. 启动后端服务并确保已有管理员账号（admin@example.com / ChangeMe123），在终端运行 `cd frontend && python -m http.server 8080` 启动静态前端。  
+2. 使用浏览器访问 `http://localhost:8080`，确认默认跳转至登录页，输入管理员账号密码登录后进入仪表盘，看到 Admin 徽章与文档统计。  
+3. 进入 “用户管理” 页创建普通用户 `alice@example.com`，搜索关键字 `alice` 可以看到新用户，然后使用新账号重新登录，访问 `#/users` 时收到权限不足的 toast。  
+4. 进入 “域管理” 页创建、编辑并删除一条域记录，观察列表实时刷新。  
+5. 打开 “文档列表” 页，在不同域间切换筛选，创建一篇普通文本文档和一篇结构化 JSON 文档，进入详情页查看 Chunks 标签与原始内容，再删除文档并确认列表为空。  
+6. （可选）进入 “聊天记录” 页，新建会话、发送消息、编辑消息并删除会话，验证消息区会随会话切换刷新。  
+7. 点击右上角 “登出” 按钮，确认返回登录页面。
