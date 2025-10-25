@@ -172,16 +172,17 @@ async function loadChats(user) { // 加载会话列表
       renameBtn.className = 'button button--ghost'; // 次级样式
       renameBtn.type = 'button'; // 指定类型
       renameBtn.textContent = '改名'; // 按钮文本
-      renameBtn.addEventListener('click', (event) => { // 绑定改名逻辑
+      renameBtn.addEventListener('click', async (event) => { // 绑定改名逻辑
         event.stopPropagation(); // 阻止冒泡
         const newTitle = window.prompt('请输入新的会话标题', chat.title || ''); // 弹出输入框
         if (newTitle === null) return; // 用户取消时结束
-        updateChat(chat.id, { title: newTitle }).then(() => { // 更新标题
+        try {
+          await updateChat(chat.id, { title: newTitle }); // 更新标题
           toast('标题已更新', 'success'); // 提示成功
-          loadChats(user); // 重新加载会话
-        }).catch((error) => { // 捕获错误
+          await loadChats(user); // 重新加载会话
+        } catch (error) {
           toast(error.message || '更新失败', 'error'); // 提示错误
-        });
+        }
       });
       actions.appendChild(renameBtn); // 添加改名按钮
       const deleteBtn = document.createElement('button'); // 创建删除按钮
@@ -198,7 +199,7 @@ async function loadChats(user) { // 加载会话列表
               currentChatId = null; // 清空当前会话
               clearMessages(); // 清空消息列表
             }
-            loadChats(user); // 重新加载会话
+            await loadChats(user); // 重新加载会话
           } catch (error) { // 捕获错误
             toast(error.message || '删除失败', 'error'); // 提示错误
           }
@@ -249,15 +250,16 @@ async function loadMessages(chatId) { // 加载消息列表
       editBtn.className = 'button button--ghost'; // 次级样式
       editBtn.type = 'button'; // 指定类型
       editBtn.textContent = '编辑'; // 按钮文本
-      editBtn.addEventListener('click', () => { // 绑定编辑逻辑
+      editBtn.addEventListener('click', async () => { // 绑定编辑逻辑
         const newContent = window.prompt('修改消息内容', msg.content || ''); // 弹出输入框
         if (newContent === null) return; // 取消时退出
-        updateMessage(msg.id, { content: newContent }).then(() => { // 更新消息
+        try {
+          await updateMessage(msg.id, { content: newContent }); // 更新消息
           toast('消息已更新', 'success'); // 提示成功
-          loadMessages(chatId); // 重新加载消息
-        }).catch((error) => { // 捕获错误
+          await loadMessages(chatId); // 重新加载消息
+        } catch (error) {
           toast(error.message || '更新失败', 'error'); // 提示错误
-        });
+        }
       });
       actions.appendChild(editBtn); // 添加编辑按钮
       const deleteBtn = document.createElement('button'); // 创建删除按钮
@@ -269,7 +271,7 @@ async function loadMessages(chatId) { // 加载消息列表
           try { // 捕获异常
             await deleteMessage(msg.id); // 调用删除接口
             toast('消息已删除', 'success'); // 提示成功
-            loadMessages(chatId); // 重新加载消息
+            await loadMessages(chatId); // 重新加载消息
           } catch (error) { // 捕获错误
             toast(error.message || '删除失败', 'error'); // 提示错误
           }
@@ -285,15 +287,16 @@ async function loadMessages(chatId) { // 加载消息列表
   }
 }
 
-function openCreateChat(user) { // 创建会话
+async function openCreateChat(user) { // 创建会话
   const title = window.prompt('请输入会话标题', '新会话'); // 弹出输入框
   if (title === null) return; // 用户取消时退出
-  createChat({ user_id: user?.id, title }).then(() => { // 调用创建接口
+  try {
+    await createChat({ user_id: user?.id, title }); // 调用创建接口
     toast('会话已创建', 'success'); // 提示成功
-    loadChats(user); // 重新加载会话
-  }).catch((error) => { // 捕获错误
+    await loadChats(user); // 重新加载会话
+  } catch (error) {
     toast(error.message || '创建会话失败', 'error'); // 提示错误
-  });
+  }
 }
 
 function clearMessages() { // 清空消息列表
