@@ -358,7 +358,7 @@ function openCreateDialog(refresh) { // 打开创建文档对话框
       loading.remove(); // 移除加载指示器
     }
   }); // 提交事件结束
-  dialog.appendChild(actions); // 渲染按钮容器
+  form.appendChild(actions); // 渲染按钮容器
   document.body.appendChild(backdrop); // 将对话框挂载到页面
   submitBtn.focus(); // 聚焦提交按钮
 }
