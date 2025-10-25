@@ -86,7 +86,7 @@ export default { // 导出用户管理视图
                   try { // 捕获删除错误
                     await deleteUser(user.id); // 调用删除接口
                     toast('用户已删除', 'success'); // 提示成功
-                    refresh(); // 刷新列表
+                    await refresh(); // 刷新列表
                   } catch (error) { // 捕获错误
                     toast(error.message || '删除失败', 'error'); // 提示失败
                   }
@@ -266,7 +266,7 @@ function openForm(mode, user, refresh) { // 打开创建或编辑对话框
       }
       backdrop.remove(); // 关闭对话框
       if (typeof refresh === 'function') { // 若存在刷新回调
-        refresh(); // 重新加载列表
+        await refresh(); // 重新加载列表
       }
     } catch (error) { // 捕获异常
       toast(error.message || '保存失败，请检查输入', 'error'); // 提示错误

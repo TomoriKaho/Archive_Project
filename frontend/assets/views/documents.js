@@ -129,7 +129,7 @@ export default { // 导出文档列表视图
                   try { // 捕获异常
                     await deleteDocumentByUUID(doc.uuid); // 调用删除接口
                     toast('文档已删除', 'success'); // 提示成功
-                    refresh(); // 刷新列表
+                    await refresh(); // 刷新列表
                   } catch (error) { // 捕获错误
                     toast(error.message || '删除失败', 'error'); // 提示失败
                   }
@@ -350,7 +350,7 @@ function openCreateDialog(refresh) { // 打开创建文档对话框
       await createDocument(domain_id, { title: titleValue, content: payloadContent, doc_metadata: metadata }); // 调用创建接口
       toast('文档创建成功', 'success'); // 提示成功
       backdrop.remove(); // 关闭对话框
-      if (typeof refresh === 'function') refresh(); // 刷新列表
+      if (typeof refresh === 'function') await refresh(); // 刷新列表
     } catch (error) { // 捕获异常
       toast(error.message || '创建失败', 'error'); // 提示错误
     } finally { // 收尾处理
