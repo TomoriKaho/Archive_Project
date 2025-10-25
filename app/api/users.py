@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status  
 from sqlalchemy.orm import Session  # SQLAlchemy 会话类型
 
 from app.api.deps import get_current_admin, get_current_user, get_db  # 导入认证与数据库依赖
+from app.core.config import INITIAL_ADMIN_EMAIL  # 初始管理员配置
 from app.core.security import hash_password  # 密码哈希工具
 from app.models.entities import User  # 引入实体类型用于类型提示
 from app.repositories.chat_repo import ChatRepository  # 聊天仓储用于列出聊天
@@ -16,6 +17,10 @@ from app.schemas.user import (  # 用户相关Schema
     UserListResponse,
     UserOut,
     UserUpdate,
+)
+from app.services.password_guard import (  # 密码复杂度检测
+    PASSWORD_POLICY_MESSAGE,
+    is_password_compromised,
 )
 
 logger = logging.getLogger(__name__)  # 模块日志记录器
@@ -40,6 +45,9 @@ async def create_user(payload: AdminUserCreate, db: Session = Depends(get_db)) -
     if repo.get_by_email(payload.email):  # 检查邮箱是否存在
         logger.info("创建用户失败：邮箱重复", extra={"email": payload.email})  # 记录失败日志
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="邮箱已存在")  # 抛出400
+    if is_password_compromised(payload.password):  # 检查密码是否在泄露名单
+        logger.warning("创建用户失败：密码不符合复杂度要求", extra={"email": payload.email})  # 记录安全事件
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=PASSWORD_POLICY_MESSAGE)  # 拒绝使用
     hashed = hash_password(payload.password)  # 将明文密码哈希化
     user = repo.create_user(  # 写入数据库
         email=payload.email,
@@ -123,6 +131,9 @@ async def update_user(
     if payload.full_name is not None:  # 提供新姓名
         update_data["full_name"] = payload.full_name  # 写入
     if payload.password is not None:  # 提供新密码
+        if is_password_compromised(payload.password):  # 校验密码安全性
+            logger.warning("拒绝使用不符合复杂度的密码更新账号", extra={"user_id": user_id})  # 记录安全日志
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=PASSWORD_POLICY_MESSAGE)  # 拒绝
         update_data["hashed_password"] = hash_password(payload.password)  # 哈希后更新
     if current_user.is_admin and payload.is_admin is not None:  # 仅管理员可改权限
         update_data["is_admin"] = payload.is_admin  # 设置权限
@@ -136,19 +147,33 @@ async def update_user(
 @router.delete(
     "/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(get_current_admin)],
     responses={
         401: {"description": "未认证", "content": {"application/json": {"example": {"detail": "无效的认证凭证"}}}},
         403: {"description": "权限不足", "content": {"application/json": {"example": {"detail": "需要管理员权限"}}}},
         404: {"description": "用户不存在", "content": {"application/json": {"example": {"detail": "用户不存在"}}}},
     },
 )
-async def delete_user(user_id: int, db: Session = Depends(get_db)) -> Response:  # 定义删除用户接口
+async def delete_user(
+    user_id: int,
+    current_admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+) -> Response:  # 定义删除用户接口
     """管理员删除用户，触发级联清理聊天与消息。"""  # 接口说明
     repo = UserRepository(db)  # 仓储实例
     user = repo.get(user_id)  # 查询用户
     if not user:  # 未找到
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")  # 返回404保证幂等语义
+    if user.is_admin:  # 删除管理员需要额外限制
+        if user.email == INITIAL_ADMIN_EMAIL:  # 初始管理员不允许删除
+            logger.warning(
+                "尝试删除初始管理员账号被拒绝", extra={"requester": current_admin.id, "target": user_id}
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="初始管理员账号不允许删除")
+        if current_admin.email != INITIAL_ADMIN_EMAIL:  # 非初始管理员删除管理员账号
+            logger.warning(
+                "非初始管理员尝试删除管理员账号", extra={"requester": current_admin.id, "target": user_id}
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅初始管理员可以删除管理员账号")
     repo.delete(user_id)  # 删除用户，依赖数据库ON DELETE CASCADE清理聊天和消息
     logger.info("管理员删除用户", extra={"user_id": user_id})  # 记录日志
     return Response(status_code=status.HTTP_204_NO_CONTENT)  # 返回空响应
