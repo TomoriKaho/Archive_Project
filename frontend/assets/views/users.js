@@ -275,7 +275,7 @@ function openForm(mode, user, refresh) { // 打开创建或编辑对话框
       loading.remove(); // 移除加载动画
     }
   }); // 提交事件结束
-  dialog.appendChild(actions); // 将操作按钮加入对话框
+  form.appendChild(actions); // 将操作按钮放入表单内部以保证提交生效
   document.body.appendChild(backdrop); // 将对话框挂载到页面
   submitBtn.focus(); // 自动聚焦提交按钮
 }
