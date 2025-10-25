@@ -27,7 +27,7 @@ export default { // 导出文档详情视图
       renderHeader(container, docData); // 渲染头部信息
       loading.remove(); // 移除加载动画
       await loadChunks(docData); // 加载 chunk 列表
-      renderTabs(container, docData); // 渲染标签页
+      renderTabs(container); // 渲染标签页
     } catch (error) { // 请求失败
       loading.remove(); // 移除加载动画
       container.innerHTML = ''; // 清空内容
@@ -103,18 +103,18 @@ async function loadChunks(doc) { // 加载 chunk 数据
   chunksCache = []; // 重置缓存
   try { // 优先尝试通过文档 ID 获取
     const res = await getChunksByDocId(doc.id); // 请求 chunk 列表
-    chunksCache = res || []; // 缓存结果
+    chunksCache = normalizeChunks(res); // 归一化字段
   } catch (error) { // 若失败则尝试 UUID
     try { // 备用方案
       const fallback = await getChunksByUUID(doc.uuid); // 使用 UUID 请求
-      chunksCache = fallback || []; // 缓存结果
+      chunksCache = normalizeChunks(fallback); // 缓存归一化结果
     } catch (innerError) { // 仍失败
       toast('无法加载 chunks', 'error'); // 提示错误
     }
   }
 }
 
-function renderTabs(container, doc) { // 渲染标签页
+function renderTabs(container) { // 渲染标签页
   const tabBar = document.createElement('div'); // 创建标签栏
   tabBar.style.display = 'flex'; // 设置水平布局
   tabBar.style.gap = '12px'; // 设置间距
@@ -135,7 +135,7 @@ function renderTabs(container, doc) { // 渲染标签页
   container.appendChild(contentArea); // 渲染内容区域
   chunksContainer = document.createElement('div'); // 创建 chunk 容器
   rawContainer = document.createElement('pre'); // 创建原始内容容器
-  rawContainer.textContent = doc.content?.slice(0, 500) || '无内容'; // 显示前 500 字符
+  rawContainer.textContent = getRawContentPreview(); // 显示聚合的原文预览
   rawContainer.style.whiteSpace = 'pre-wrap'; // 保留换行
   rawContainer.style.wordBreak = 'break-word'; // 防止溢出
   const filterGroup = document.createElement('div'); // 创建过滤输入容器
@@ -166,6 +166,7 @@ function renderTabs(container, doc) { // 渲染标签页
     chunksBtn.className = 'button button--ghost'; // 取消 chunk 按钮高亮
     rawBtn.className = 'button'; // 高亮原始内容按钮
     contentArea.innerHTML = ''; // 清空内容区域
+    rawContainer.textContent = getRawContentPreview(); // 切换前刷新原始内容
     contentArea.appendChild(rawContainer); // 显示原始内容
   }; // showRaw 结束
   chunksBtn.addEventListener('click', showChunks); // 绑定 chunk 标签点击
@@ -181,7 +182,7 @@ function renderChunksList() { // 渲染 chunk 列表
   const keyword = filterInput?.value?.toLowerCase() || ''; // 获取过滤关键词
   const filtered = chunksCache.filter((chunk) => { // 过滤 chunk
     if (!keyword) return true; // 无关键词时不过滤
-    return String(chunk.text || '').toLowerCase().includes(keyword); // 按内容匹配
+    return String(chunk.content || '').toLowerCase().includes(keyword); // 按内容匹配
   });
   if (filtered.length === 0) { // 若无匹配项
     const empty = document.createElement('p'); // 创建空状态文本
@@ -190,16 +191,103 @@ function renderChunksList() { // 渲染 chunk 列表
     list.appendChild(empty); // 渲染空状态
     return; // 结束函数
   }
-  filtered.forEach((chunk) => { // 遍历过滤后的 chunk
-    const item = document.createElement('div'); // 创建卡片
-    item.className = 'table-wrapper'; // 应用样式
-    item.style.marginBottom = '12px'; // 设置间距
-    const header = document.createElement('div'); // 创建头部文本
-    header.textContent = `序号：${chunk.seq ?? '-'} / ID：${chunk.id ?? '-'}`; // 显示 chunk 信息
-    item.appendChild(header); // 添加头部
-    const content = document.createElement('p'); // 创建内容段落
-    content.textContent = chunk.text || ''; // 显示文本
-    item.appendChild(content); // 添加内容
-    list.appendChild(item); // 渲染 chunk 项
+  filtered
+    .slice()
+    .sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0))
+    .forEach((chunk) => { // 遍历过滤后的 chunk
+      const wrapper = document.createElement('div'); // 创建卡片容器
+      wrapper.className = 'table-wrapper'; // 应用样式
+      wrapper.style.marginBottom = '12px'; // 设置间距
+
+      const details = document.createElement('details'); // 创建可展开区域
+      details.className = 'chunk-details'; // 添加自定义类
+
+      const summary = document.createElement('summary'); // 创建摘要
+      summary.textContent = buildChunkSummary(chunk); // 填充摘要信息
+      details.appendChild(summary); // 添加摘要
+
+      const body = document.createElement('pre'); // 展开内容
+      body.textContent = (chunk.content && chunk.content.trim()) ? chunk.content : '（无内容）'; // 显示 chunk 文本
+      body.style.whiteSpace = 'pre-wrap'; // 保留换行
+      body.style.wordBreak = 'break-word'; // 防止溢出
+      body.style.marginTop = '12px'; // 与摘要保持间距
+      details.appendChild(body); // 添加内容
+
+      wrapper.appendChild(details); // 将 details 放入卡片
+      list.appendChild(wrapper); // 渲染 chunk 项
   });
+}
+
+function buildChunkSummary(chunk) { // 构造 chunk 摘要文本
+  const ordinalLabel = chunk.ordinal ?? '-'; // 取序号
+  const idLabel = chunk.id ?? '-'; // 取ID
+  const lengthLabel = chunk.content ? chunk.content.length : 0; // 计算长度
+  const snippet = (chunk.content || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80); // 截取前80字符作为预览
+  const snippetLabel = snippet ? ` - ${snippet}${snippet.length === 80 ? '…' : ''}` : ''; // 组合预览
+  return `序号：${ordinalLabel} / ID：${idLabel}（${lengthLabel} 字符）${snippetLabel}`; // 返回摘要
+}
+
+function getRawContentPreview() { // 聚合原始内容
+  if (!chunksCache.length) {
+    return '无内容';
+  }
+  const joined = chunksCache
+    .slice()
+    .sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0))
+    .map((chunk) => chunk.content || '')
+    .join('\n');
+  const preview = joined.trim();
+  return preview ? preview : '无内容';
+}
+
+function normalizeChunks(items) { // 将不同字段命名的chunk归一化
+  if (!Array.isArray(items)) return []; // 容错处理
+  return items.map((chunk, index) => {
+    const normalized = { ...chunk }; // 拷贝一份避免修改原对象
+    normalized.content = resolveChunkContent(chunk); // 统一内容字段
+    const ordinal = resolveChunkOrdinal(chunk); // 获取序号
+    normalized.ordinal = Number.isFinite(ordinal) ? ordinal : index; // 默认使用索引
+    if (normalized.id === undefined || normalized.id === null) { // 兜底ID
+      normalized.id = chunk.chunk_id ?? chunk.uuid ?? chunk.external_id ?? index;
+    }
+    if (normalized.external_id === undefined && chunk.externalId !== undefined) { // 兼容不同命名
+      normalized.external_id = chunk.externalId;
+    }
+    return normalized;
+  });
+}
+
+function resolveChunkContent(chunk) { // 优先返回有效的chunk文本
+  const candidates = [
+    chunk?.content,
+    chunk?.text,
+    chunk?.chunk,
+    chunk?.chunk_text,
+    chunk?.body,
+  ];
+  for (const value of candidates) {
+    if (value !== undefined && value !== null) {
+      return String(value);
+    }
+  }
+  return '';
+}
+
+function resolveChunkOrdinal(chunk) { // 兼容不同字段命名
+  const candidates = [
+    chunk?.ordinal,
+    chunk?.seq,
+    chunk?.order,
+    chunk?.position,
+    chunk?.index,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return null;
 }

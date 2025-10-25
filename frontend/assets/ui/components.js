@@ -48,10 +48,20 @@ export function confirmDialog(message, onConfirm) { // 简易确认对话框
   confirmBtn.className = 'button'; // 主按钮样式
   confirmBtn.type = 'button'; // 指定类型
   confirmBtn.textContent = '确认'; // 按钮文案
-  confirmBtn.addEventListener('click', () => { // 绑定确认逻辑
-    backdrop.remove(); // 先关闭对话框
-    if (typeof onConfirm === 'function') { // 判断回调是否存在
-      onConfirm(); // 执行确认回调
+  confirmBtn.addEventListener('click', async () => { // 绑定确认逻辑
+    if (typeof onConfirm !== 'function') { // 若无回调
+      backdrop.remove(); // 直接关闭对话框
+      return; // 结束处理
+    }
+    const maybeSpinner = spinner(); // 创建加载指示器
+    confirmBtn.disabled = true; // 禁用确认按钮防止重复点击
+    confirmBtn.appendChild(maybeSpinner); // 显示加载状态
+    try {
+      await onConfirm(); // 执行确认回调，支持异步
+    } finally {
+      confirmBtn.disabled = false; // 恢复按钮
+      maybeSpinner.remove(); // 移除加载指示器
+      backdrop.remove(); // 关闭对话框
     }
   });
   actions.appendChild(confirmBtn); // 添加按钮
