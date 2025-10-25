@@ -103,11 +103,11 @@ async function loadChunks(doc) { // 加载 chunk 数据
   chunksCache = []; // 重置缓存
   try { // 优先尝试通过文档 ID 获取
     const res = await getChunksByDocId(doc.id); // 请求 chunk 列表
-    chunksCache = res || []; // 缓存结果
+    chunksCache = normalizeChunks(res); // 归一化字段
   } catch (error) { // 若失败则尝试 UUID
     try { // 备用方案
       const fallback = await getChunksByUUID(doc.uuid); // 使用 UUID 请求
-      chunksCache = fallback || []; // 缓存结果
+      chunksCache = normalizeChunks(fallback); // 缓存归一化结果
     } catch (innerError) { // 仍失败
       toast('无法加载 chunks', 'error'); // 提示错误
     }
@@ -207,7 +207,7 @@ function renderChunksList() { // 渲染 chunk 列表
       details.appendChild(summary); // 添加摘要
 
       const body = document.createElement('pre'); // 展开内容
-      body.textContent = chunk.content || '（无内容）'; // 显示 chunk 文本
+      body.textContent = (chunk.content && chunk.content.trim()) ? chunk.content : '（无内容）'; // 显示 chunk 文本
       body.style.whiteSpace = 'pre-wrap'; // 保留换行
       body.style.wordBreak = 'break-word'; // 防止溢出
       body.style.marginTop = '12px'; // 与摘要保持间距
@@ -241,4 +241,53 @@ function getRawContentPreview() { // 聚合原始内容
     .join('\n');
   const preview = joined.trim();
   return preview ? preview : '无内容';
+}
+
+function normalizeChunks(items) { // 将不同字段命名的chunk归一化
+  if (!Array.isArray(items)) return []; // 容错处理
+  return items.map((chunk, index) => {
+    const normalized = { ...chunk }; // 拷贝一份避免修改原对象
+    normalized.content = resolveChunkContent(chunk); // 统一内容字段
+    const ordinal = resolveChunkOrdinal(chunk); // 获取序号
+    normalized.ordinal = Number.isFinite(ordinal) ? ordinal : index; // 默认使用索引
+    if (normalized.id === undefined || normalized.id === null) { // 兜底ID
+      normalized.id = chunk.chunk_id ?? chunk.uuid ?? chunk.external_id ?? index;
+    }
+    if (normalized.external_id === undefined && chunk.externalId !== undefined) { // 兼容不同命名
+      normalized.external_id = chunk.externalId;
+    }
+    return normalized;
+  });
+}
+
+function resolveChunkContent(chunk) { // 优先返回有效的chunk文本
+  const candidates = [
+    chunk?.content,
+    chunk?.text,
+    chunk?.chunk,
+    chunk?.chunk_text,
+    chunk?.body,
+  ];
+  for (const value of candidates) {
+    if (value !== undefined && value !== null) {
+      return String(value);
+    }
+  }
+  return '';
+}
+
+function resolveChunkOrdinal(chunk) { // 兼容不同字段命名
+  const candidates = [
+    chunk?.ordinal,
+    chunk?.seq,
+    chunk?.order,
+    chunk?.position,
+    chunk?.index,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return null;
 }
