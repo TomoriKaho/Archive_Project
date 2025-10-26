@@ -1,8 +1,8 @@
-"""安全相关的工具函数集合。"""  # 中文说明模块作用
 from __future__ import annotations  # 启用未来注解特性以便在类型注释中引用后定义的类型
 
 import logging  # 提供日志记录功能用于输出安全相关的提示
 import os  # 读取环境变量以获得密钥和配置
+from dotenv import load_dotenv, find_dotenv  # 用于加载环境变量
 from datetime import datetime, timedelta, timezone  # 处理token过期时间所需的时间工具
 from typing import Any, Dict  # 声明函数入参和返回值的类型提示
 
@@ -10,16 +10,16 @@ from jose import JWTError, jwt  # 引入JWT库以实现令牌的编码与解码
 from passlib.context import CryptContext  # 使用Passlib统一管理密码哈希算法
 
 logger = logging.getLogger(__name__)  # 获取当前模块的日志记录器
-
+load_dotenv(find_dotenv())  # 加载环境变量文件中的配置
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")  # 配置密码哈希上下文，选择Argon2算法并自动管理版本
 
 JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me")  # 从环境变量读取JWT密钥，默认值仅用于开发提示应尽快替换
+
 if JWT_SECRET_KEY == "change-me":  # 检查是否仍使用默认密钥
     logger.warning("JWT_SECRET_KEY 使用默认值，正式环境务必修改以防止令牌被伪造")  # 给出日志警示确保部署后调整
 
 JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")  # 读取JWT签名算法，默认使用HS256对称加密
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))  # 读取访问令牌有效期并保持60分钟默认值
-# 说明：题目要求默认有效期为60分钟，此处通过环境变量提供覆盖能力
 
 
 def hash_password(password: str) -> str:  # 定义密码哈希函数
@@ -51,6 +51,3 @@ def decode_access_token(token: str) -> Dict[str, Any]:  # 定义JWT解析函数
         return payload  # 解析成功后返回payload供上层业务使用
     except JWTError as exc:  # 捕获所有JWT异常
         raise ValueError("invalid token") from exc  # 统一转化为ValueError便于调用方处理认证失败
-
-
-# 设计说明：统一的安全模块集中管理密码哈希与JWT逻辑，既便于替换算法又避免在业务代码中散落安全细节。

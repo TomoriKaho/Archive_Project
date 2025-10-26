@@ -4,9 +4,7 @@ import logging  # 提前配置日志模块
 from fastapi import FastAPI  # 导入FastAPI主体
 from fastapi.middleware.cors import CORSMiddleware  # 引入CORS中间件处理跨域预检请求
 
-from app.api import domains, chats  # 导入既有路由
-from app.api import documents  # 新增文档路由
-from app.api import auth, users  # 导入新增的认证与用户管理路由
+from app.api import domains, chats, documents, auth, users  # 导入各功能路由模块
 from app.db.schema_compat import ensure_document_uuid_column  # 旧库兼容补丁
 from app.db.session import SessionLocal, engine  # 提供数据库连接引擎
 from app.services.initial_admin import ensure_initial_admin  # 启动时确保初始管理员存在
@@ -25,11 +23,11 @@ app.add_middleware(
     allow_headers=["*"]  # 允许所有自定义请求头，满足Authorization等需求
 )
 
-app.include_router(domains.router)  # 注册domain相关接口
-app.include_router(chats.router)  # 注册聊天相关接口
-app.include_router(documents.router)  # 注册文档及chunk相关接口
-app.include_router(auth.router)  # 注册认证相关接口，提供登录注册能力
-app.include_router(users.router)  # 注册用户管理接口，管理员可做CRUD
+app.include_router(domains.router)
+app.include_router(chats.router)
+app.include_router(documents.router)
+app.include_router(auth.router)
+app.include_router(users.router)
 
 
 @app.on_event("startup")
@@ -56,4 +54,3 @@ def _ensure_initial_admin() -> None:
 def healthz():
     """健康检查端点。"""
     return {"ok": True}  # 简单返回ok字段
-    # 设计说明：健康检查用于k8s探活，保持实现极简。

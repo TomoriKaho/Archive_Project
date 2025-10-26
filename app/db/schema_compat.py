@@ -31,7 +31,7 @@ def _table_exists(inspector, table_name: str) -> bool:
 def _get_column_names(inspector, table_name: str) -> set[str]:
     """Fetch the column names for the given table."""
     columns: Iterable[dict[str, object]] = inspector.get_columns(table_name)
-    return {col["name"] for col in columns}
+    return {str(col["name"]) for col in columns}
 
 
 def ensure_document_uuid_column(engine: Engine) -> bool:

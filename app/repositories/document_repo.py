@@ -24,7 +24,7 @@ class DocumentRepository(Repository[Document]):
 
     def list_by_domain(self, domain_id: int, offset: int = 0, limit: int = 50) -> Sequence[Document]:
         """按domain筛选文档列表。"""
-        stmt: Select[Document] = (  # 构建select语句
+        stmt: Select[tuple[Document]] = (  # 构建select语句
             select(Document)  # 查询Document表
             .where(Document.domain_id == domain_id)  # 按domain过滤
             .order_by(Document.created_at.desc())  # 按创建时间倒序展示最新文档
@@ -50,7 +50,7 @@ class DocumentRepository(Repository[Document]):
         domain_id: int | None = None,
     ) -> Sequence[Document]:
         """支持分页与排序的通用查询。"""
-        stmt: Select[Document] = select(Document)  # 基础查询
+        stmt = select(Document)  # 基础查询
         if domain_id is not None:
             stmt = stmt.where(Document.domain_id == domain_id)  # 按domain过滤
         sort_column = Document.created_at if sort_by == "created_at" else Document.title  # 选择排序字段
@@ -71,7 +71,7 @@ class DocumentRepository(Repository[Document]):
 
     def get_by_uuid(self, doc_uuid: UUID) -> Document | None:
         """按UUID查询单条文档。"""
-        stmt: Select[Document] = select(Document).where(Document.uuid == doc_uuid)  # 构造uuid过滤条件
+        stmt = select(Document).where(Document.uuid == doc_uuid)  # 构造uuid过滤条件
         logger.info("get_by_uuid uuid=%s", doc_uuid)  # 打印查询参数
         return self.db.execute(stmt).scalar_one_or_none()  # 返回匹配的文档或None
         # 设计说明：uuid查询用于外部接口，实现幂等删除等需求。

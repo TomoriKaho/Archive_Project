@@ -3,29 +3,15 @@ from __future__ import annotations
 
 import logging
 import os
-
+from dotenv import load_dotenv, find_dotenv  # 用于加载环境变量
 from sqlalchemy.orm import Session
-
-from app.core.config import INITIAL_ADMIN_EMAIL
 from app.core.security import hash_password
 from app.repositories.user_repo import UserRepository
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_ADMIN_PASSWORD = "ChangeMe123"
-
-
-def _load_initial_password() -> str:
-    """Fetch the password used when seeding the initial administrator."""
-
-    password = os.getenv("ADMIN_INIT_PASSWORD")
-    if password:
-        return password
-    logger.warning(
-        "环境变量 ADMIN_INIT_PASSWORD 未设置，将使用默认密码 %s，请尽快修改。",
-        DEFAULT_ADMIN_PASSWORD,
-    )
-    return DEFAULT_ADMIN_PASSWORD
+load_dotenv(find_dotenv())
+INITIAL_ADMIN_EMAIL: str = os.getenv("INITIAL_ADMIN_EMAIL", "admin@example.com")
+ADMIN_INIT_PASSWORD: str = os.getenv("ADMIN_INIT_PASSWORD", "ChangeMe123")
 
 
 def ensure_initial_admin(db: Session) -> None:
@@ -35,7 +21,7 @@ def ensure_initial_admin(db: Session) -> None:
     admin = repo.get_by_email(INITIAL_ADMIN_EMAIL)
 
     if admin is None:
-        password = _load_initial_password()
+        password = ADMIN_INIT_PASSWORD
         hashed_password = hash_password(password)
         repo.create_user(
             email=INITIAL_ADMIN_EMAIL,

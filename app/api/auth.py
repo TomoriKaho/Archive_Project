@@ -70,7 +70,6 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Token: 
     logger.info("登录成功", extra={"user_id": user.id})  # 记录成功日志
     return Token(access_token=token, token_type="bearer")  # 返回标准格式的令牌
 
-
 @router.get(
     "/me",
     response_model=UserOut,
@@ -81,6 +80,3 @@ async def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Token: 
 async def read_current_user(current_user=Depends(get_current_user)) -> UserOut:  # 定义获取当前用户接口
     """返回当前登录用户的信息。"""  # 接口说明
     return UserOut.model_validate(current_user)  # 直接返回Pydantic模型
-
-
-# 设计说明：认证路由集中处理注册与登录，统一使用Argon2哈希与JWT令牌，既满足安全要求又方便前端集成。

@@ -2,7 +2,7 @@
 from __future__ import annotations  # 允许在类型注解中引用尚未定义的类，避免循环引用问题
 
 import uuid  # 提供UUID生成功能用于文档与切片标识
-from typing import List, Optional  # 引入类型注解以提升代码可读性
+from typing import List, Optional, ClassVar  # 引入类型注解以提升代码可读性
 
 from sqlalchemy import (  # 导入SQLAlchemy核心字段类型与工具函数
     BigInteger,  # 使用大整型作为主键以兼容高增长数据量
@@ -25,7 +25,7 @@ from .base import Base  # 所有模型继承自自定义的Base，提供统一�
 
 class User(Base):  # 定义用户实体，对应用户表
     """用户表，负责存储账号信息与权限。"""  # 类文档简述用途
-    __tablename__ = "user"  # 显式指定表名与历史数据库保持一致
+    __tablename__: ClassVar[str] = "user"  # 显式指定表名与历史数据库保持一致
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 主键自增，满足唯一标识需求
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # 邮箱作为登录名并加唯一约束防止重复注册
@@ -45,12 +45,10 @@ class User(Base):  # 定义用户实体，对应用户表
         Index("ix_user_email", "email", unique=True),  # 为邮箱创建唯一索引，提升登录查询速度并保证唯一性
     )  # 表参数结束
 
-    # 设计说明：用户表记录账号基础信息，邮箱唯一索引便于快速查找，同时关系级联可确保删除账号时聊天记录同步清理。
-
 
 class Chat(Base):  # 定义聊天会话实体
     """聊天会话表，记录用户开启的每个对话。"""  # 类文档说明职责
-    __tablename__ = "chats"  # 对应数据库中的chats表
+    __tablename__: ClassVar[str] = "chats"  # 对应数据库中的chats表
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 聊天主键
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), nullable=False)  # 外键指向用户，删除用户时级联删除聊天保持一致性
@@ -65,12 +63,10 @@ class Chat(Base):  # 定义聊天会话实体
         passive_deletes=True,  # 交给数据库执行ON DELETE CASCADE减少显式删除
     )
 
-    # 设计说明：聊天记录紧跟用户生命周期，通过级联删除避免无主聊天与消息残留，保证数据一致性。
-
 
 class Message(Base):  # 定义消息实体
     """消息表，存储对话过程中的每条消息。"""  # 类文档说明用途
-    __tablename__ = "messages"  # 对应数据库messages表
+    __tablename__: ClassVar[str] = "messages"  # 对应数据库messages表
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 消息主键
     chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)  # 外键指向聊天，聊天删除时级联删除消息
@@ -85,12 +81,10 @@ class Message(Base):  # 定义消息实体
         Index("ix_messages_chat_id_created_at", "chat_id", "created_at"),  # 复合索引提升按时间查询性能
     )
 
-    # 设计说明：通过角色约束与索引保证消息查询效率，同时级联删除确保聊天删除后不会残留消息。
-
 
 class Domain(Base):  # 定义数据来源实体
     """Domain 表示知识来源，用于对文档分组。"""  # 类文档说明
-    __tablename__ = "domains"  # 数据库表名
+    __tablename__: ClassVar[str] = "domains"  # 数据库表名
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 主键
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # 名称唯一防止重复录入
@@ -104,12 +98,10 @@ class Domain(Base):  # 定义数据来源实体
         passive_deletes=True,  # 启用数据库级联
     )
 
-    # 设计说明：领域删除后需要同步删除文档，避免文档失去归属造成脏数据。
-
 
 class Document(Base):  # 定义文档实体
     """Document 存储原始文档内容及元数据。"""  # 类文档说明
-    __tablename__ = "documents"  # 对应数据库表
+    __tablename__: ClassVar[str] = "documents"  # 对应数据库表
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 文档主键
     domain_id: Mapped[int] = mapped_column(ForeignKey("domains.id", ondelete="CASCADE"), nullable=False)  # 外键指向domain，删除domain时级联
@@ -136,12 +128,11 @@ class Document(Base):  # 定义文档实体
         Index("ix_documents_domain_id_created_at", "domain_id", "created_at"),  # 提升按领域和时间排序的查询效率
     )
 
-    # 设计说明：文档的UUID和索引确保对外接口安全且查询高效，同时级联清理保护数据完整性。
 
 
 class Chunk(Base):  # 定义文档切片实体
     """Chunk 表示拆分后的文档片段。"""  # 类文档说明
-    __tablename__ = "chunks"  # 数据库表名
+    __tablename__: ClassVar[str] = "chunks"  # 数据库表名
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 主键
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)  # 外键指向文档并建立索引
@@ -156,5 +147,3 @@ class Chunk(Base):  # 定义文档切片实体
         UniqueConstraint("document_id", "ordinal", name="uq_chunk_doc_ordinal"),  # 同一文档内ordinal唯一，保证顺序稳定
         Index("ix_chunks_document_ordinal", "document_id", "ordinal"),  # 索引加速按顺序查询
     )
-
-    # 设计说明：切片依赖文档生命周期，通过唯一约束维护顺序，级联策略避免孤立数据。

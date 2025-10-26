@@ -2,11 +2,12 @@
 from __future__ import annotations  # 支持前向引用
 
 import logging  # 引入日志方便记录安全敏感操作
+import os  # 用于读取环境变量
+from dotenv import load_dotenv, find_dotenv  # 用于加载环境变量
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status  # FastAPI 路由与异常
 from sqlalchemy.orm import Session  # SQLAlchemy 会话类型
 
 from app.api.deps import get_current_admin, get_current_user, get_db  # 导入认证与数据库依赖
-from app.core.config import INITIAL_ADMIN_EMAIL  # 初始管理员配置
 from app.core.security import hash_password  # 密码哈希工具
 from app.models.entities import User  # 引入实体类型用于类型提示
 from app.repositories.chat_repo import ChatRepository  # 聊天仓储用于列出聊天
@@ -24,7 +25,8 @@ from app.services.password_guard import (  # 密码复杂度检测
 )
 
 logger = logging.getLogger(__name__)  # 模块日志记录器
-
+load_dotenv(find_dotenv())
+INITIAL_ADMIN_EMAIL: str = os.getenv("INITIAL_ADMIN_EMAIL", "admin@example.com")
 router = APIRouter(prefix="/users", tags=["users"])  # 定义用户路由分组
 
 
@@ -200,5 +202,3 @@ async def list_user_chats(
     chats = ChatRepository(db).list_by_user(user_id=user_id, offset=offset, limit=limit)  # 查询聊天
     return [ChatOut.model_validate(chat) for chat in chats]  # 转换为响应模型
 
-
-# 设计说明：用户路由严格区分管理员与普通用户操作范围，删除时依赖级联策略保持数据一致，同时提供分页能力满足管理后台需求。

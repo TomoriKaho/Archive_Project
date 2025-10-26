@@ -20,11 +20,9 @@
    ```
 4. 配置环境变量（示例）
    ```bash
-   cat > .env <<'ENV'
-   DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/mydb
-   QDRANT_URL=http://localhost:6333
-   ENV
-   export $(cat .env | xargs)
+   set -a
+   source .env
+   set +a
    ```
 5. 启动 PostgreSQL（可使用已有容器或服务）
    ```bash

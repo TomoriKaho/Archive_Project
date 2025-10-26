@@ -1,4 +1,3 @@
-"""FastAPI 依赖定义，提供数据库会话与身份校验。"""  # 模块注释概述职责
 from __future__ import annotations  # 启用未来注解以支持类型前向引用
 
 import logging  # 引入日志模块便于记录认证相关操作
@@ -56,6 +55,3 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:  
         logger.warning("非管理员访问受限接口被拒绝")  # 记录权限拒绝事件
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")  # 抛出403禁止访问
     return current_user  # 返回管理员用户供路由继续使用
-
-
-# 设计说明：通过依赖拆分数据库和认证逻辑，既复用Session管理又集中处理权限控制，保持路由层代码简洁可测。

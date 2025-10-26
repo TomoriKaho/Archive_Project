@@ -50,6 +50,4 @@ def delete_domain(domain_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "domain not found")
     DomainRepository(db).delete(domain_id)
 
-# 说明：文档与chunk的接口已迁移至app.api.documents，避免重复定义。
-
     

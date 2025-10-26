@@ -27,7 +27,7 @@ class UserRepository(Repository[User]):  # 用户仓储实现
         """按分页返回用户列表以及总条数，支持关键词搜索。"""  # 方法描述
         stmt = self._base_query(keyword).order_by(User.created_at.desc())  # 按创建时间倒序排列
         result = self.db.execute(stmt.offset(offset).limit(limit))  # 执行分页查询
-        items = result.scalars().all()  # 提取ORM对象列表
+        items = list(result.scalars().all())  # 显式转换为列表
         count_stmt = select(func.count()).select_from(self._base_query(keyword).subquery())  # 子查询统计总量
         total = self.db.execute(count_stmt).scalar_one()  # 获取总数
         return items, total  # 返回列表与总数
