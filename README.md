@@ -18,18 +18,37 @@
    ```bash
    pip install -r requirements.txt
    ```
-4. 配置环境变量（示例）
-   ```bash
-   set -a
-   source .env
-   set +a
-   ```
+4. 设置环境变量
+    本项目使用`.env`文件来管理环境变量。请按照以下步骤设置和配置你的`.env`文件。
+    确保在`.env`文件中设置以下环境变量：
+    ```plaintext
+    DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/mydb
+    QDRANT_URL=http://localhost:6333
+    JWT_SECRET_KEY=change-me
+    JWT_ALGORITHM=HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES=60
+    INITIAL_ADMIN_EMAIL=admin@example.com
+    ADMIN_INIT_PASSWORD=ChangeMe123
+    ```
+   **环境变量配置示例**
+    你可以使用以下命令来配置你的环境变量：
+    ```bash
+    set -a
+    source .env
+    set +a
+    ```
+    **注意事项:**
+
+    - 安全性: 不要将真实的敏感信息提交到版本控制系统中。
+
+    - 配置检查: 在启动项目之前，请确保.env文件中的所有环境变量已正确配置。
+    <br>
 5. 启动 PostgreSQL（可使用已有容器或服务）
    ```bash
    docker run --name rag-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres
    # docker start rag-pg
    ```
-6. （可选）启动 Qdrant
+6. 启动 Qdrant
    ```bash
    docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
    # docker start qdrant
