@@ -76,16 +76,16 @@ class DocumentRepository(Repository[Document]):
         return self.db.execute(stmt).scalar_one_or_none()  # 返回匹配的文档或None
         # 设计说明：uuid查询用于外部接口，实现幂等删除等需求。
 
-    def delete_by_uuid(self, doc_uuid: UUID) -> bool:
-        """按UUID删除文档，返回是否真的删除。"""
+    def delete_by_uuid(self, doc_uuid: UUID) -> Document | None:
+        """按UUID删除文档，返回被删除的文档对象。"""
         doc = self.get_by_uuid(doc_uuid)  # 先查再删避免盲删
         if not doc:
             logger.info("delete_by_uuid miss uuid=%s", doc_uuid)  # 记录未命中便于幂等说明
-            return False  # 未找到返回False供上层决定响应
+            return None  # 未找到返回None供上层决定响应
         self.db.delete(doc)  # 删除记录
         self.db.flush()  # 立即同步到事务缓冲
         logger.info("delete_by_uuid success uuid=%s", doc_uuid)  # 记录删除成功
-        return True  # 返回删除成功
+        return doc  # 返回删除的文档
         # 设计说明：通过先查后删我们可复用SQLAlchemy级联能力并统一幂等处理。
 
     def count_all(self) -> int:

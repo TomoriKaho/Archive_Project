@@ -24,6 +24,11 @@
     ```plaintext
     DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/mydb
     QDRANT_URL=http://localhost:6333
+    QDRANT_COLLECTION=document_chunks
+    QDRANT_VECTOR_SIZE=4096
+    OLLAMA_BASE_URL=http://localhost:11434
+    OLLAMA_EMBED_MODEL=llama2
+    OLLAMA_CHAT_MODEL=llama2
     JWT_SECRET_KEY=change-me
     JWT_ALGORITHM=HS256
     ACCESS_TOKEN_EXPIRE_MINUTES=60
@@ -53,14 +58,43 @@
    docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
    # docker start qdrant
    ```
-7. 初始化数据库
+7. 启动 Ollama 并拉取所需模型
+   ```bash
+   # 安装 ollama 后执行
+   ollama serve
+   ollama pull llama2
+   ```
+   > 如果使用自定义嵌入模型，请同步更新 `.env` 中的 `OLLAMA_EMBED_MODEL` 并设置匹配的 `QDRANT_VECTOR_SIZE`。
+
+8. 初始化数据库
    ```bash
    alembic upgrade head
    ```
-8. 启动开发服务器
+9. 启动开发服务器
    ```bash
    uvicorn app.main:app --reload
    ```
+
+## 向量数据库与 RAG 工作流
+
+1. **嵌入索引**：上传文档时，后端会自动将切分后的 chunk 内容发送至 Ollama 的 `embeddings` 接口，生成长度为 `QDRANT_VECTOR_SIZE` 的向量，并写入 Qdrant 的 `document_chunks` 集合。
+2. **提问流程**：在聊天页面以 `user` 角色发送消息时，系统会：
+   - 对问题进行嵌入；
+   - 在 Qdrant 中执行 Top-K 相似度搜索获取相关 chunk；
+   - 将检索结果组装成上下文并请求 Ollama 的 `/api/chat` 生成回答；
+   - 返回的助手消息会携带引用元数据，前端会展示引用列表并可跳转到原文档。
+3. **清理策略**：删除文档时会同步删除 Qdrant 中的对应向量，避免残留数据。
+
+## 测试与验证
+
+1. 运行后端单元测试：
+   ```bash
+   pytest
+   ```
+2. 验证端到端流程：
+   - 创建 domain 并上传文档；
+   - 在聊天页面选择 `user` 角色提问；
+   - 确认助手回复包含引用且可跳转至文档详情。
 
 ## API 路由参考
 以下内容按资源分组，所有路径均以 `http://localhost:8000` 为基准，实际部署时请替换主机名。

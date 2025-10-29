@@ -1,6 +1,6 @@
 import { getChats, createChat, updateChat, deleteChat, getMessages, createMessage, updateMessage, deleteMessage } from '../api.js'; // 导入聊天与消息接口
 import { toast, spinner, confirmDialog } from '../ui/components.js'; // 引入提示、加载与确认组件
-import { getCurrentUser } from '../app.js'; // 引入当前用户信息
+import { getCurrentUser, navigate } from '../app.js'; // 引入当前用户信息与导航能力
 
 let containerRef = null; // 保存容器引用
 let chatsContainer = null; // 缓存会话列表容器
@@ -106,8 +106,9 @@ export default { // 导出聊天视图
       const loading = spinner(); // 创建加载指示器
       sendBtn.appendChild(loading); // 显示加载
       try { // 捕获异常
-        await createMessage(currentChatId, { role, content }); // 调用发送接口
-        toast('消息已发送', 'success'); // 提示成功
+        const result = await createMessage(currentChatId, { role, content }); // 调用发送接口
+        const hasAssistantReply = result && typeof result === 'object' && 'answer' in result; // 判断是否触发RAG
+        toast(hasAssistantReply ? '助手已生成回答' : '消息已发送', 'success'); // 提示成功
         formData.set('content', ''); // 清空内容
         contentInput.value = ''; // 清空输入框
         await loadMessages(currentChatId); // 刷新消息列表
@@ -243,6 +244,7 @@ async function loadMessages(chatId) { // 加载消息列表
       const content = document.createElement('p'); // 创建内容文本
       content.textContent = msg.content || ''; // 显示消息内容
       item.appendChild(content); // 渲染内容
+      appendSources(item, msg.message_metadata); // 渲染引用信息
       const actions = document.createElement('div'); // 创建操作区域
       actions.style.display = 'flex'; // 使用弹性布局
       actions.style.gap = '8px'; // 设置间距
@@ -303,4 +305,49 @@ function clearMessages() { // 清空消息列表
   if (!messagesContainer) return; // 若容器不存在则退出
   const list = messagesContainer.querySelector('#message-list'); // 查找消息列表
   if (list) list.innerHTML = ''; // 清空列表内容
+}
+
+function appendSources(container, messageMetadata) { // 渲染引用信息
+  const sources = messageMetadata && Array.isArray(messageMetadata.sources) ? messageMetadata.sources : []; // 读取引用列表
+  if (sources.length === 0) return; // 无引用则不渲染
+  const block = document.createElement('div'); // 创建引用块容器
+  block.className = 'message-sources'; // 应用样式
+  const title = document.createElement('div'); // 创建标题
+  title.className = 'message-sources__title'; // 设置标题样式
+  title.textContent = '引用来源'; // 标题文本
+  block.appendChild(title); // 添加标题
+  const list = document.createElement('ul'); // 创建引用列表
+  list.className = 'message-sources__list'; // 应用列表样式
+  sources.forEach((source, index) => { // 遍历引用
+    const item = document.createElement('li'); // 创建列表项
+    item.className = 'message-sources__item'; // 应用样式
+    const link = document.createElement('a'); // 创建跳转链接
+    link.href = `#/documents/${source.document_uuid}`; // 指向文档详情
+    const displayIndex = index + 1; // 人类友好编号
+    const docTitle = source.document_title || '未命名文档'; // 文档标题
+    const ordinalValue = Number(source.chunk_ordinal); // 转换片段序号
+    const chunkOrdinal = Number.isFinite(ordinalValue) ? ordinalValue + 1 : 1; // 片段序号
+    link.textContent = `[${displayIndex}] ${docTitle} · 段落 ${chunkOrdinal}`; // 链接文本
+    link.addEventListener('click', (event) => { // 绑定导航
+      event.preventDefault(); // 阻止默认跳转
+      navigate(link.href); // 使用应用内导航
+    });
+    item.appendChild(link); // 添加链接
+    if (typeof source.score === 'number') { // 显示相似度
+      const score = document.createElement('span'); // 创建分值标签
+      score.className = 'message-sources__score'; // 应用样式
+      score.textContent = `相关度 ${source.score.toFixed(3)}`; // 格式化分值
+      item.appendChild(score); // 添加分值
+    }
+    if (source.content) { // 显示摘要
+      const snippet = document.createElement('div'); // 创建摘要块
+      snippet.className = 'message-sources__snippet'; // 应用样式
+      const text = String(source.content); // 转换为字符串
+      snippet.textContent = text.length > 160 ? `${text.slice(0, 160)}…` : text; // 截断摘要
+      item.appendChild(snippet); // 添加摘要
+    }
+    list.appendChild(item); // 加入列表
+  });
+  block.appendChild(list); // 添加列表
+  container.appendChild(block); // 将引用块加入消息
 }

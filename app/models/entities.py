@@ -72,6 +72,7 @@ class Message(Base):  # 定义消息实体
     chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)  # 外键指向聊天，聊天删除时级联删除消息
     role: Mapped[str] = mapped_column(String(50), nullable=False)  # 消息角色限定为user/system/assistant
     content: Mapped[str] = mapped_column(Text, nullable=False)  # 消息正文内容
+    message_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)  # 消息元数据，用于存储引用等信息
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间自动填充
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间自动刷新
     chat: Mapped["Chat"] = relationship("Chat", back_populates="messages", passive_deletes=True)  # 反向关系，便于从消息获取聊天

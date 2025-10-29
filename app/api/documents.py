@@ -83,10 +83,16 @@ def get_document_by_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
 @router.delete("/documents/by-uuid/{doc_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document_by_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
     """按UUID删除文档，同时依赖外键级联清理chunks。"""
-    deleted = DocumentRepository(db).delete_by_uuid(doc_uuid)  # 先删后看结果
-    if not deleted:
+    repo = DocumentRepository(db)
+    document = repo.delete_by_uuid(doc_uuid)  # 先删后看结果
+    if not document:
         logger.info("delete_document_by_uuid idempotent miss uuid=%s", doc_uuid)  # 记录幂等删除
     else:
+        try:
+            get_vector_store().delete_chunks_by_document_uuid(str(doc_uuid))
+        except Exception as exc:  # pragma: no cover - 网络/外部依赖异常
+            logger.exception("qdrant cleanup failed uuid=%s", doc_uuid)
+            raise HTTPException(status_code=500, detail="failed to remove document vectors") from exc
         logger.info("delete_document_by_uuid success uuid=%s", doc_uuid)  # 删除成功日志
     return Response(status_code=status.HTTP_204_NO_CONTENT)  # 幂等策略：无论是否存在都返回204
 
@@ -103,7 +109,13 @@ def create_document(domain_id: int, payload: DocumentCreate, db: Session = Depen
     data["domain_id"] = domain_id  # 写入所属domain
     document = doc_repo.create(**data)  # 创建文档记录
     chunk_texts = make_chunks(document, raw_content)  # 生成chunk文本列表
-    ChunkRepository(db).bulk_create_for_document(document.id, chunk_texts)  # 批量写入chunk表
+    chunk_repo = ChunkRepository(db)
+    chunks = chunk_repo.bulk_create_for_document(document.id, chunk_texts)  # 批量写入chunk表
+    try:
+        index_document_chunks(document, chunks)
+    except Exception as exc:  # pragma: no cover - 网络/外部依赖异常
+        logger.exception("index document chunks failed document_id=%s", document.id)
+        raise HTTPException(status_code=500, detail="failed to index document embeddings") from exc
     logger.info(
         "create_document domain=%s document_id=%s uuid=%s chunk_count=%s",
         domain_id,
@@ -175,6 +187,11 @@ def delete_document(domain_id: int, doc_id: int, db: Session = Depends(get_db)):
     doc = repo.get(doc_id)
     if not doc or doc.domain_id != domain_id:
         raise HTTPException(status_code=404, detail="document not found")
+    try:
+        get_vector_store().delete_chunks_by_document_uuid(str(doc.uuid))
+    except Exception as exc:  # pragma: no cover - 网络/外部依赖异常
+        logger.exception("qdrant cleanup failed doc_id=%s", doc_id)
+        raise HTTPException(status_code=500, detail="failed to remove document vectors") from exc
     repo.delete(doc_id)
     logger.info("delete_document domain=%s doc_id=%s", domain_id, doc_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

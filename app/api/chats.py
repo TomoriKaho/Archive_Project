@@ -1,10 +1,17 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.schemas.chat import ChatCreate, ChatUpdate, ChatOut
 from app.schemas.message import MessageCreate, MessageUpdate, MessageOut
+from app.schemas.rag import RagMessageResponse, RagSource
 from app.repositories.chat_repo import ChatRepository
 from app.repositories.message_repo import MessageRepository
+from app.rag.pipeline import RAGPipeline
+
+logger = logging.getLogger(__name__)
+
+pipeline = RAGPipeline()
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 # ---- chats ----
@@ -38,11 +45,36 @@ def delete_chat(chat_id: int, db: Session = Depends(get_db)):
 # ---- messages ----
 
 # Create a new message in a chat, chat_id from path parameter
-@router.post("/{chat_id}/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{chat_id}/messages",
+    response_model=MessageOut | RagMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_message(chat_id: int, payload: MessageCreate, db: Session = Depends(get_db)):
-    data = payload.model_dump()
+    data = payload.model_dump(exclude_none=True)
     data["chat_id"] = chat_id  # 路径参数优先生效
-    return MessageRepository(db).create(**data)
+    repo = MessageRepository(db)
+    message = repo.create(**data)
+    if payload.role != "user":
+        return message
+    try:
+        result = pipeline.run(payload.content)
+    except Exception as exc:  # pragma: no cover - 调用外部服务异常
+        logger.exception("rag pipeline execution failed chat_id=%s", chat_id)
+        raise HTTPException(status_code=500, detail="failed to generate assistant response") from exc
+    message_metadata = pipeline.build_metadata(result.sources)
+    assistant = repo.create(
+        chat_id=chat_id,
+        role="assistant",
+        content=result.answer,
+        message_metadata=message_metadata,
+    )
+    sources = [RagSource.model_validate(source.to_source_metadata()) for source in result.sources]
+    return RagMessageResponse(
+        question=MessageOut.model_validate(message),
+        answer=MessageOut.model_validate(assistant),
+        sources=sources,
+    )
 
 # List messages in a chat with pagination
 @router.get("/{chat_id}/messages", response_model=list[MessageOut])
