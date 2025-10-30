@@ -35,19 +35,24 @@ def index_chunks(chunks: Sequence[Chunk]) -> int:
 
     vectors: list[list[float]] = []
     ids: list[int] = []
+    payloads: list[dict[str, int]] = []
     for chunk in chunks:
         vector = embed(chunk.content)  # 调用 Ollama 生成向量
         if not vector:
             continue
         vectors.append(vector)
         ids.append(chunk.id)
+        payload: dict[str, int] = {"document_id": chunk.document_id}
+        if chunk.document and chunk.document.domain_id is not None:
+            payload["domain_id"] = chunk.document.domain_id
+        payloads.append(payload)
     if not ids:  # 文档可能尚未生成任何 chunk
         return 0
     dim = len(vectors[0])
     if any(len(vec) != dim for vec in vectors):  # 基本防御式校验，避免写入尺寸不一致的数据
         raise RuntimeError("inconsistent embedding dimensions detected")
     ensure_collection(dim)  # 首次写入时按首个向量推断维度
-    upsert_vectors(ids, vectors)  # 使用 chunk.id 作为向量库主键
+    upsert_vectors(ids, vectors, payloads)  # 使用 chunk.id 作为向量库主键
     return len(ids)
 
 
@@ -69,7 +74,9 @@ def retrieve_with_scores(
 
     limit = top_k or DEFAULT_TOP_K
     query_vec = embed(question)  # 将问题编码为向量
-    search_results = search_with_scores(query_vec, limit)  # 调用向量库获取候选
+    search_results = search_with_scores(
+        query_vec, limit, domain_ids=domain_ids
+    )  # 调用向量库获取候选
     if not search_results:
         return [], []
     chunk_ids = [chunk_id for chunk_id, _ in search_results]

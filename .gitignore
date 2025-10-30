@@ -1,6 +1,7 @@
 __pycache__/
 .env
 tests/
+!app/tests/
 qdrant_storage/
 data/
 .vscode/
