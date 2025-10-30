@@ -26,6 +26,7 @@ let sendBtn = null; // 发送按钮引用
 let domainHintText = null; // domain 选择提示
 let cachedDomains = []; // 缓存 domain 列表供多处复用
 const ragReferenceCache = new Map(); // 记录最近一次 ask 的引用结果
+const messageOptionsCache = new Map(); // 记录用户问题使用的 top_k 与 domain 选项
 
 export default { // 导出聊天视图
   async mount(container) { // 挂载逻辑
@@ -197,6 +198,13 @@ export default { // 导出聊天视图
         if (response?.assistant?.id && Array.isArray(response.references)) {
           ragReferenceCache.set(response.assistant.id, response.references); // 缓存引用
         }
+        if (response?.user?.id) {
+          const cachedOptions = {
+            top_k: Number.isFinite(topKValue) ? topKValue : undefined,
+            domain_ids: domainIds.length > 0 ? domainIds : undefined,
+          };
+          messageOptionsCache.set(response.user.id, cachedOptions);
+        }
         await loadMessages(currentChatId); // 刷新消息列表
       } catch (error) { // 捕获错误
         toast(error.message || '发送失败', 'error'); // 显示错误
@@ -222,6 +230,7 @@ export default { // 导出聊天视图
     domainHintText = null; // 清空提示文本
     cachedDomains = []; // 清空缓存的 domain 列表
     ragReferenceCache.clear(); // 清理引用缓存
+    messageOptionsCache.clear(); // 清空问题选项缓存
     currentChatId = null; // 清空选中会话
     paginationState = { limit: 50, offset: 0 }; // 重置分页状态
   }, // unmount 结束
@@ -342,12 +351,15 @@ async function loadMessages(chatId) { // 加载消息列表
       return; // 停止处理
     }
     const groups = groupMessages(messages);
+    const seenUserIds = new Set();
+    const seenAssistantIds = new Set();
     groups.forEach((group) => {
       const card = document.createElement('div');
       card.className = 'table-wrapper';
       card.style.marginBottom = '12px';
 
       if (group.user) {
+        seenUserIds.add(group.user.id);
         const userSection = document.createElement('div');
         userSection.style.display = 'flex';
         userSection.style.flexDirection = 'column';
@@ -369,12 +381,58 @@ async function loadMessages(chatId) { // 加载消息列表
         editBtn.addEventListener('click', async () => {
           const newContent = window.prompt('修改消息内容', group.user.content || '');
           if (newContent === null) return;
+          const trimmedContent = newContent.trim();
+          const originalContent = group.user.content || '';
+          if (!trimmedContent) {
+            toast('内容不能为空', 'error');
+            return;
+          }
+          if (trimmedContent === originalContent) {
+            toast('内容未发生变化', 'info');
+            return;
+          }
+          editBtn.disabled = true;
           try {
-            await updateMessage(group.user.id, { content: newContent });
-            toast('消息已更新', 'success');
-            await loadMessages(chatId);
+            await updateMessage(group.user.id, { content: trimmedContent });
+            toast('问题已更新', 'success');
+            const options = getOptionsForMessage(group.user.id);
+            messageOptionsCache.set(group.user.id, options);
+            const payload = buildAskPayload(trimmedContent, options);
+            let regenResponse = null;
+            try {
+              regenResponse = await createMessage(chatId, payload);
+            } catch (error) {
+              toast(error.message || '生成新回答失败', 'error');
+            }
+            if (regenResponse?.assistant) {
+              const references = Array.isArray(regenResponse.references)
+                ? regenResponse.references
+                : [];
+              if (group.assistant) {
+                try {
+                  await updateMessage(group.assistant.id, {
+                    content: regenResponse.assistant.content,
+                  });
+                  ragReferenceCache.set(group.assistant.id, references);
+                  toast('回答已更新', 'success');
+                } catch (error) {
+                  toast(error.message || '更新回答失败', 'error');
+                }
+                await safeDeleteMessage(regenResponse.user?.id);
+                await safeDeleteMessage(regenResponse.assistant?.id);
+              } else {
+                await safeDeleteMessage(regenResponse.user?.id);
+                if (regenResponse.assistant?.id) {
+                  ragReferenceCache.set(regenResponse.assistant.id, references);
+                  toast('已生成新的回答', 'success');
+                }
+              }
+            }
           } catch (error) {
             toast(error.message || '更新失败', 'error');
+          } finally {
+            editBtn.disabled = false;
+            await loadMessages(chatId);
           }
         });
         actions.appendChild(editBtn);
@@ -390,6 +448,7 @@ async function loadMessages(chatId) { // 加载消息列表
                 tasks.push(deleteMessage(group.assistant.id));
                 ragReferenceCache.delete(group.assistant.id);
               }
+              messageOptionsCache.delete(group.user.id);
               await Promise.all(tasks);
               toast('消息已删除', 'success');
               await loadMessages(chatId);
@@ -404,6 +463,7 @@ async function loadMessages(chatId) { // 加载消息列表
       }
 
       if (group.assistant) {
+        seenAssistantIds.add(group.assistant.id);
         const divider = document.createElement('hr');
         divider.style.margin = '12px 0';
         card.appendChild(divider);
@@ -443,48 +503,20 @@ async function loadMessages(chatId) { // 加载消息列表
           });
           assistantSection.appendChild(refList);
         }
-        const actions = document.createElement('div');
-        actions.style.display = 'flex';
-        actions.style.gap = '8px';
-        actions.style.marginTop = '8px';
-        const editBtn = document.createElement('button');
-        editBtn.className = 'button button--ghost';
-        editBtn.type = 'button';
-        editBtn.textContent = '编辑回答';
-        editBtn.addEventListener('click', async () => {
-          const newContent = window.prompt('修改消息内容', group.assistant.content || '');
-          if (newContent === null) return;
-          try {
-            await updateMessage(group.assistant.id, { content: newContent });
-            toast('消息已更新', 'success');
-            await loadMessages(chatId);
-          } catch (error) {
-            toast(error.message || '更新失败', 'error');
-          }
-        });
-        actions.appendChild(editBtn);
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'button button--ghost';
-        deleteBtn.type = 'button';
-        deleteBtn.textContent = '删除回答';
-        deleteBtn.addEventListener('click', () => {
-          confirmDialog('确定删除该回答吗？', async () => {
-            try {
-              await deleteMessage(group.assistant.id);
-              ragReferenceCache.delete(group.assistant.id);
-              toast('消息已删除', 'success');
-              await loadMessages(chatId);
-            } catch (error) {
-              toast(error.message || '删除失败', 'error');
-            }
-          });
-        });
-        actions.appendChild(deleteBtn);
-        assistantSection.appendChild(actions);
         card.appendChild(assistantSection);
       }
 
       list.appendChild(card);
+    });
+    messageOptionsCache.forEach((_, key) => {
+      if (!seenUserIds.has(key)) {
+        messageOptionsCache.delete(key);
+      }
+    });
+    ragReferenceCache.forEach((_, key) => {
+      if (!seenAssistantIds.has(key)) {
+        ragReferenceCache.delete(key);
+      }
     });
   } catch (error) { // 请求失败
     list.innerHTML = ''; // 清空列表
@@ -595,5 +627,58 @@ function updateChatHighlight(listContainer, activeId) {
   if (activeItem) {
     activeItem.classList.add('table-wrapper--active');
     activeItem.style.border = '2px solid #3b82f6';
+  }
+}
+
+function getOptionsForMessage(messageId) {
+  const cached = messageOptionsCache.get(messageId);
+  if (cached) {
+    const topK = typeof cached.top_k === 'number' && Number.isFinite(cached.top_k)
+      ? cached.top_k
+      : undefined;
+    const domainIds = Array.isArray(cached.domain_ids)
+      ? cached.domain_ids.filter((id) => Number.isFinite(id))
+      : undefined;
+    if (topK !== undefined || (domainIds && domainIds.length > 0)) {
+      return {
+        top_k: topK,
+        domain_ids: domainIds && domainIds.length > 0 ? [...domainIds] : undefined,
+      };
+    }
+  }
+  return collectCurrentQuestionOptions();
+}
+
+function collectCurrentQuestionOptions() {
+  const domainIds = domainSelect
+    ? Array.from(domainSelect.selectedOptions)
+        .map((option) => Number(option.value))
+        .filter((id) => Number.isFinite(id))
+    : [];
+  const topRaw = topKInput?.value?.trim();
+  const topK = topRaw ? Number(topRaw) : undefined;
+  return {
+    top_k: Number.isFinite(topK) ? topK : undefined,
+    domain_ids: domainIds.length > 0 ? domainIds : undefined,
+  };
+}
+
+function buildAskPayload(content, options) {
+  const payload = { role: 'user', content };
+  if (options?.top_k !== undefined) {
+    payload.top_k = options.top_k;
+  }
+  if (Array.isArray(options?.domain_ids) && options.domain_ids.length > 0) {
+    payload.domain_ids = options.domain_ids;
+  }
+  return payload;
+}
+
+async function safeDeleteMessage(messageId) {
+  if (typeof messageId !== 'number' || !Number.isFinite(messageId)) return;
+  try {
+    await deleteMessage(messageId);
+  } catch (error) {
+    console.warn('删除临时消息失败', messageId, error);
   }
 }
