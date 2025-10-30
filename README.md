@@ -50,7 +50,12 @@
    ```
 6. 启动 Qdrant
    ```bash
-   docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+   docker run -d --name qdrant \
+  -p 6333:6333 \
+  -v $(pwd)/qdrant_storage:/qdrant/storage \
+  -e QDRANT__SERVICE__USER__UID=$(id -u) \
+  -e QDRANT__SERVICE__USER__GID=$(id -g) \
+  qdrant/qdrant
    # docker start qdrant
    ```
 7. 初始化数据库
