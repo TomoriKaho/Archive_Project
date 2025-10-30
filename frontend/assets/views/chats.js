@@ -7,9 +7,8 @@ import {
   createMessage,
   updateMessage,
   deleteMessage,
-  previewRag,
   getDomains,
-} from '../api.js'; // 导入聊天、消息与 RAG 接口
+} from '../api.js'; // 导入聊天、消息接口
 import { toast, spinner, confirmDialog } from '../ui/components.js'; // 引入提示、加载与确认组件
 import { getCurrentUser } from '../app.js'; // 引入当前用户信息
 
@@ -25,13 +24,6 @@ let topKInput = null; // RAG top_k 输入框
 let domainSelect = null; // domain 多选框
 let sendBtn = null; // 发送按钮引用
 let domainHintText = null; // domain 选择提示
-let previewForm = null; // RAG 预览表单引用
-let previewSubmitHandler = null; // RAG 预览提交处理器
-let previewQuestionInput = null; // RAG 预览问题输入框
-let previewTopKInput = null; // RAG 预览 top_k 输入
-let previewDomainSelect = null; // RAG 预览 domain 下拉
-let previewSubmitBtn = null; // RAG 预览按钮
-let previewResultsContainer = null; // RAG 预览结果容器
 let cachedDomains = []; // 缓存 domain 列表供多处复用
 const ragReferenceCache = new Map(); // 记录最近一次 ask 的引用结果
 
@@ -167,89 +159,6 @@ export default { // 导出聊天视图
 
     messagesContainer.appendChild(messageForm); // 渲染问答表单
 
-    const previewCard = document.createElement('div'); // 创建 RAG 预览卡片
-    previewCard.className = 'table-wrapper'; // 使用卡片样式
-    previewCard.style.marginTop = '24px'; // 设置外边距
-    previewCard.style.padding = '16px'; // 设置内边距
-    const previewTitle = document.createElement('h2'); // 预览标题
-    previewTitle.textContent = 'RAG 预览'; // 设置标题
-    previewCard.appendChild(previewTitle); // 渲染标题
-    const previewDescription = document.createElement('p'); // 预览描述
-    previewDescription.textContent = '快速调试检索命中的 chunks（不会写入消息）。'; // 描述文案
-    previewDescription.style.margin = '4px 0 16px'; // 设置间距
-    previewDescription.style.color = '#555'; // 设置颜色
-    previewDescription.style.fontSize = '13px'; // 调整字号
-    previewCard.appendChild(previewDescription); // 渲染描述
-    previewForm = document.createElement('form'); // 创建预览表单
-    previewForm.style.display = 'grid'; // 使用网格布局
-    previewForm.style.gap = '12px'; // 设置间距
-    previewForm.setAttribute('aria-label', 'RAG 预览表单'); // 设置无障碍说明
-    previewCard.appendChild(previewForm); // 渲染表单
-    const previewQuestionGroup = document.createElement('div'); // 预览问题容器
-    previewQuestionGroup.className = 'form-group'; // 应用样式
-    const previewQuestionLabel = document.createElement('label'); // 预览问题标签
-    previewQuestionLabel.className = 'label'; // 标签样式
-    previewQuestionLabel.textContent = '问题'; // 标签文本
-    previewQuestionLabel.setAttribute('for', 'rag-preview-question'); // 关联输入
-    previewQuestionGroup.appendChild(previewQuestionLabel); // 渲染标签
-    previewQuestionInput = document.createElement('input'); // 预览问题输入
-    previewQuestionInput.className = 'input'; // 应用样式
-    previewQuestionInput.type = 'text'; // 文本输入
-    previewQuestionInput.id = 'rag-preview-question'; // 设置 ID
-    previewQuestionInput.name = 'q'; // 设置 name
-    previewQuestionInput.required = true; // 设置必填
-    previewQuestionInput.placeholder = '请输入需要调试的问题'; // 设置提示
-    previewQuestionGroup.appendChild(previewQuestionInput); // 渲染输入
-    previewForm.appendChild(previewQuestionGroup); // 添加问题容器
-    const previewTopkGroup = document.createElement('div'); // 预览 top_k 容器
-    previewTopkGroup.className = 'form-group'; // 应用样式
-    const previewTopkLabel = document.createElement('label'); // 预览 top_k 标签
-    previewTopkLabel.className = 'label'; // 标签样式
-    previewTopkLabel.textContent = 'Top K (可选)'; // 标签文本
-    previewTopkLabel.setAttribute('for', 'rag-preview-topk'); // 关联输入
-    previewTopkGroup.appendChild(previewTopkLabel); // 渲染标签
-    previewTopKInput = document.createElement('input'); // 预览 top_k 输入
-    previewTopKInput.className = 'input'; // 应用样式
-    previewTopKInput.type = 'number'; // 数字输入
-    previewTopKInput.min = '1'; // 最小值
-    previewTopKInput.max = '100'; // 最大值
-    previewTopKInput.id = 'rag-preview-topk'; // 设置 ID
-    previewTopKInput.placeholder = '留空则使用默认值'; // 设置提示
-    previewTopkGroup.appendChild(previewTopKInput); // 渲染输入
-    previewForm.appendChild(previewTopkGroup); // 添加 top_k 容器
-    const previewDomainGroup = document.createElement('div'); // 预览 domain 容器
-    previewDomainGroup.className = 'form-group'; // 应用样式
-    const previewDomainLabel = document.createElement('label'); // 预览 domain 标签
-    previewDomainLabel.className = 'label'; // 标签样式
-    previewDomainLabel.textContent = '限定 Domain (可选)'; // 标签文本
-    previewDomainLabel.setAttribute('for', 'rag-preview-domain'); // 关联选择器
-    previewDomainGroup.appendChild(previewDomainLabel); // 渲染标签
-    previewDomainSelect = document.createElement('select'); // 预览 domain 下拉
-    previewDomainSelect.className = 'input'; // 应用样式
-    previewDomainSelect.id = 'rag-preview-domain'; // 设置 ID
-    previewDomainSelect.name = 'domain_id'; // 设置 name
-    const defaultDomainOption = document.createElement('option'); // 默认选项
-    defaultDomainOption.value = ''; // 空值表示全部
-    defaultDomainOption.textContent = '全部 domain'; // 选项文案
-    previewDomainSelect.appendChild(defaultDomainOption); // 渲染默认项
-    previewDomainGroup.appendChild(previewDomainSelect); // 渲染下拉框
-    previewForm.appendChild(previewDomainGroup); // 添加 domain 容器
-    const previewActions = document.createElement('div'); // 预览按钮容器
-    previewActions.style.display = 'flex'; // 使用弹性布局
-    previewActions.style.justifyContent = 'flex-end'; // 右对齐
-    previewActions.style.gap = '12px'; // 设置间距
-    previewForm.appendChild(previewActions); // 渲染按钮容器
-    previewSubmitBtn = document.createElement('button'); // 预览提交按钮
-    previewSubmitBtn.className = 'button'; // 主按钮样式
-    previewSubmitBtn.type = 'submit'; // 提交表单
-    previewSubmitBtn.textContent = '运行检索'; // 按钮文本
-    previewActions.appendChild(previewSubmitBtn); // 渲染按钮
-    previewResultsContainer = document.createElement('div'); // 预览结果容器
-    previewResultsContainer.style.marginTop = '16px'; // 设置间距
-    previewResultsContainer.textContent = '提交问题后显示检索结果。'; // 初始提示
-    previewCard.appendChild(previewResultsContainer); // 渲染结果容器
-    container.appendChild(previewCard); // 将预览卡片加入页面
-
     const user = getCurrentUser(); // 获取当前用户
     await loadChats(user); // 加载会话列表
     await loadRagDomains(); // 加载 domain 列表
@@ -297,40 +206,9 @@ export default { // 导出聊天视图
       }
     }; // sendHandler 定义结束
     messageForm.addEventListener('submit', sendHandler); // 绑定提交事件
-    previewSubmitHandler = async (event) => { // 预览提交逻辑
-      event.preventDefault(); // 阻止默认提交
-      const question = previewQuestionInput?.value?.trim(); // 读取问题
-      if (!question) { // 问题为空
-        toast('请输入需要预览的问题', 'error'); // 提示错误
-        return; // 停止处理
-      }
-      const topkRaw = previewTopKInput?.value?.trim(); // 读取 top_k
-      const topKValue = topkRaw ? Number(topkRaw) : undefined; // 转为数字
-      const domainValue = previewDomainSelect?.value; // 读取 domain
-      const domainId = domainValue ? Number(domainValue) : undefined; // 转换为数字
-      previewSubmitBtn.disabled = true; // 禁用按钮
-      const loading = spinner(); // 创建加载指示器
-      previewSubmitBtn.appendChild(loading); // 显示加载
-      try {
-        const result = await previewRag({
-          q: question,
-          top_k: Number.isFinite(topKValue) ? topKValue : undefined,
-          domain_id: Number.isFinite(domainId) ? domainId : undefined,
-        }); // 调用预览接口
-        const items = Array.isArray(result) ? result : result?.items || []; // 解析数据
-        renderPreviewResults(items); // 渲染结果
-      } catch (error) {
-        toast(error.message || '预览失败', 'error'); // 提示错误
-      } finally {
-        previewSubmitBtn.disabled = false; // 恢复按钮
-        loading.remove(); // 移除加载动画
-      }
-    }; // previewSubmitHandler 结束
-    if (previewForm) previewForm.addEventListener('submit', previewSubmitHandler); // 绑定预览表单
   }, // mount 结束
   unmount() { // 卸载逻辑
     if (messageForm && sendHandler) messageForm.removeEventListener('submit', sendHandler); // 移除问答提交事件
-    if (previewForm && previewSubmitHandler) previewForm.removeEventListener('submit', previewSubmitHandler); // 移除预览事件
     if (containerRef) containerRef.innerHTML = ''; // 清空容器
     containerRef = null; // 释放容器引用
     chatsContainer = null; // 清空会话容器
@@ -342,13 +220,6 @@ export default { // 导出聊天视图
     domainSelect = null; // 清空 domain 多选
     sendBtn = null; // 清空按钮引用
     domainHintText = null; // 清空提示文本
-    previewForm = null; // 清空预览表单
-    previewSubmitHandler = null; // 清空预览处理器
-    previewQuestionInput = null; // 清空预览输入
-    previewTopKInput = null; // 清空预览 top_k 输入
-    previewDomainSelect = null; // 清空预览选择器
-    previewSubmitBtn = null; // 清空预览按钮
-    previewResultsContainer = null; // 清空预览结果容器
     cachedDomains = []; // 清空缓存的 domain 列表
     ragReferenceCache.clear(); // 清理引用缓存
     currentChatId = null; // 清空选中会话
@@ -374,14 +245,24 @@ async function loadChats(user) { // 加载会话列表
       list.appendChild(empty); // 渲染提示
       return; // 停止处理
     }
+    let shouldLoadMessages = false;
+    if (currentChatId && !chats.some((chat) => chat.id === currentChatId)) {
+      currentChatId = null;
+    }
+    if (!currentChatId && chats.length > 0) {
+      currentChatId = chats[0].id;
+      shouldLoadMessages = true;
+    }
     chats.forEach((chat) => { // 遍历会话
       const item = document.createElement('div'); // 创建会话卡片
       item.className = 'table-wrapper'; // 应用样式
       item.style.padding = '12px'; // 设置内边距
       item.style.marginBottom = '8px'; // 设置间距
       item.style.cursor = 'pointer'; // 显示可点击
+      item.dataset.chatId = String(chat.id);
       item.addEventListener('click', () => { // 点击卡片
         currentChatId = chat.id; // 记录当前会话
+        updateChatHighlight(list, currentChatId);
         loadMessages(chat.id); // 加载消息
       });
       const title = document.createElement('div'); // 创建标题节点
@@ -432,6 +313,10 @@ async function loadChats(user) { // 加载会话列表
       item.appendChild(actions); // 渲染操作区域
       list.appendChild(item); // 渲染会话项
     });
+    updateChatHighlight(list, currentChatId);
+    if (shouldLoadMessages && currentChatId) {
+      await loadMessages(currentChatId);
+    }
   } catch (error) { // 请求失败
     list.innerHTML = ''; // 清空列表
     toast(error.message || '加载会话失败', 'error'); // 提示错误
@@ -456,76 +341,150 @@ async function loadMessages(chatId) { // 加载消息列表
       list.appendChild(empty); // 渲染提示
       return; // 停止处理
     }
-    messages.forEach((msg) => { // 遍历消息
-      const item = document.createElement('div'); // 创建消息卡片
-      item.className = 'table-wrapper'; // 应用样式
-      item.style.marginBottom = '8px'; // 设置间距
-      const header = document.createElement('div'); // 创建头部文本
-      header.textContent = `${msg.role?.toUpperCase() || 'UNKNOWN'} · ID ${msg.id}`; // 显示角色与 ID
-      item.appendChild(header); // 渲染头部
-      const content = document.createElement('p'); // 创建内容文本
-      content.textContent = msg.content || ''; // 显示消息内容
-      item.appendChild(content); // 渲染内容
-      const references = Array.isArray(msg.references) && msg.references.length > 0
-        ? msg.references
-        : ragReferenceCache.get(msg.id); // 读取引用信息
-      if (msg.role === 'assistant' && references && references.length > 0) { // 对助手消息展示引用
-        const refTitle = document.createElement('div'); // 引用标题
-        refTitle.className = 'label'; // 使用标签样式
-        refTitle.textContent = '引用 chunks'; // 设置标题
-        refTitle.style.marginTop = '8px'; // 调整间距
-        item.appendChild(refTitle); // 渲染标题
-        const refList = document.createElement('ul'); // 创建引用列表
-        refList.style.margin = '4px 0 0'; // 设置外边距
-        refList.style.paddingLeft = '20px'; // 设置内边距
-        references.forEach((ref) => { // 遍历引用
-          const refItem = document.createElement('li'); // 列表项
-          const chunkId = typeof ref.chunk_id === 'number' ? ref.chunk_id : Number(ref.chunk_id);
-          const score = typeof ref.score === 'number' ? ref.score : Number(ref.score);
-          const scoreText = Number.isFinite(score) ? score.toFixed(4) : String(ref.score ?? ''); // 处理得分
-          refItem.textContent = `Chunk #${Number.isFinite(chunkId) ? chunkId : ref.chunk_id} · Score ${scoreText}`; // 文案
-          refList.appendChild(refItem); // 渲染引用项
-        });
-        item.appendChild(refList); // 渲染引用列表
-      }
-      const actions = document.createElement('div'); // 创建操作区域
-      actions.style.display = 'flex'; // 使用弹性布局
-      actions.style.gap = '8px'; // 设置间距
-      const editBtn = document.createElement('button'); // 创建编辑按钮
-      editBtn.className = 'button button--ghost'; // 次级样式
-      editBtn.type = 'button'; // 指定类型
-      editBtn.textContent = '编辑'; // 按钮文本
-      editBtn.addEventListener('click', async () => { // 绑定编辑逻辑
-        const newContent = window.prompt('修改消息内容', msg.content || ''); // 弹出输入框
-        if (newContent === null) return; // 取消时退出
-        try {
-          await updateMessage(msg.id, { content: newContent }); // 更新消息
-          toast('消息已更新', 'success'); // 提示成功
-          await loadMessages(chatId); // 重新加载消息
-        } catch (error) {
-          toast(error.message || '更新失败', 'error'); // 提示错误
-        }
-      });
-      actions.appendChild(editBtn); // 添加编辑按钮
-      const deleteBtn = document.createElement('button'); // 创建删除按钮
-      deleteBtn.className = 'button button--ghost'; // 次级样式
-      deleteBtn.type = 'button'; // 指定类型
-      deleteBtn.textContent = '删除'; // 按钮文本
-      deleteBtn.addEventListener('click', () => { // 绑定删除逻辑
-        confirmDialog('确定删除该消息吗？', async () => { // 弹出确认框
-          try { // 捕获异常
-            await deleteMessage(msg.id); // 调用删除接口
-            toast('消息已删除', 'success'); // 提示成功
-            ragReferenceCache.delete(msg.id); // 清理引用缓存
-            await loadMessages(chatId); // 重新加载消息
-          } catch (error) { // 捕获错误
-            toast(error.message || '删除失败', 'error'); // 提示错误
+    const groups = groupMessages(messages);
+    groups.forEach((group) => {
+      const card = document.createElement('div');
+      card.className = 'table-wrapper';
+      card.style.marginBottom = '12px';
+
+      if (group.user) {
+        const userSection = document.createElement('div');
+        userSection.style.display = 'flex';
+        userSection.style.flexDirection = 'column';
+        const header = document.createElement('div');
+        header.textContent = `USER · ID ${group.user.id}`;
+        header.style.fontWeight = '600';
+        userSection.appendChild(header);
+        const content = document.createElement('p');
+        content.textContent = group.user.content || '';
+        userSection.appendChild(content);
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.gap = '8px';
+        actions.style.marginTop = '8px';
+        const editBtn = document.createElement('button');
+        editBtn.className = 'button button--ghost';
+        editBtn.type = 'button';
+        editBtn.textContent = '编辑问题';
+        editBtn.addEventListener('click', async () => {
+          const newContent = window.prompt('修改消息内容', group.user.content || '');
+          if (newContent === null) return;
+          try {
+            await updateMessage(group.user.id, { content: newContent });
+            toast('消息已更新', 'success');
+            await loadMessages(chatId);
+          } catch (error) {
+            toast(error.message || '更新失败', 'error');
           }
         });
-      });
-      actions.appendChild(deleteBtn); // 添加删除按钮
-      item.appendChild(actions); // 渲染操作区域
-      list.appendChild(item); // 渲染消息项
+        actions.appendChild(editBtn);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'button button--ghost';
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = '删除问答';
+        deleteBtn.addEventListener('click', () => {
+          confirmDialog('确定删除该问题及其回答吗？', async () => {
+            try {
+              const tasks = [deleteMessage(group.user.id)];
+              if (group.assistant) {
+                tasks.push(deleteMessage(group.assistant.id));
+                ragReferenceCache.delete(group.assistant.id);
+              }
+              await Promise.all(tasks);
+              toast('消息已删除', 'success');
+              await loadMessages(chatId);
+            } catch (error) {
+              toast(error.message || '删除失败', 'error');
+            }
+          });
+        });
+        actions.appendChild(deleteBtn);
+        userSection.appendChild(actions);
+        card.appendChild(userSection);
+      }
+
+      if (group.assistant) {
+        const divider = document.createElement('hr');
+        divider.style.margin = '12px 0';
+        card.appendChild(divider);
+
+        const assistantSection = document.createElement('div');
+        assistantSection.style.display = 'flex';
+        assistantSection.style.flexDirection = 'column';
+        const header = document.createElement('div');
+        header.textContent = `ASSISTANT · ID ${group.assistant.id}`;
+        header.style.fontWeight = '600';
+        assistantSection.appendChild(header);
+        const content = document.createElement('p');
+        content.textContent = group.assistant.content || '';
+        assistantSection.appendChild(content);
+        if (Array.isArray(group.assistant.references) && group.assistant.references.length > 0) {
+          ragReferenceCache.set(group.assistant.id, group.assistant.references);
+        }
+        const references = Array.isArray(group.assistant.references) && group.assistant.references.length > 0
+          ? group.assistant.references
+          : ragReferenceCache.get(group.assistant.id);
+        if (references && references.length > 0) {
+          const refTitle = document.createElement('div');
+          refTitle.className = 'label';
+          refTitle.textContent = '引用 chunks';
+          refTitle.style.marginTop = '8px';
+          assistantSection.appendChild(refTitle);
+          const refList = document.createElement('ul');
+          refList.style.margin = '4px 0 0';
+          refList.style.paddingLeft = '20px';
+          references.forEach((ref) => {
+            const refItem = document.createElement('li');
+            const chunkId = typeof ref.chunk_id === 'number' ? ref.chunk_id : Number(ref.chunk_id);
+            const score = typeof ref.score === 'number' ? ref.score : Number(ref.score);
+            const scoreText = Number.isFinite(score) ? score.toFixed(4) : String(ref.score ?? '');
+            refItem.textContent = `Chunk #${Number.isFinite(chunkId) ? chunkId : ref.chunk_id} · Score ${scoreText}`;
+            refList.appendChild(refItem);
+          });
+          assistantSection.appendChild(refList);
+        }
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.gap = '8px';
+        actions.style.marginTop = '8px';
+        const editBtn = document.createElement('button');
+        editBtn.className = 'button button--ghost';
+        editBtn.type = 'button';
+        editBtn.textContent = '编辑回答';
+        editBtn.addEventListener('click', async () => {
+          const newContent = window.prompt('修改消息内容', group.assistant.content || '');
+          if (newContent === null) return;
+          try {
+            await updateMessage(group.assistant.id, { content: newContent });
+            toast('消息已更新', 'success');
+            await loadMessages(chatId);
+          } catch (error) {
+            toast(error.message || '更新失败', 'error');
+          }
+        });
+        actions.appendChild(editBtn);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'button button--ghost';
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = '删除回答';
+        deleteBtn.addEventListener('click', () => {
+          confirmDialog('确定删除该回答吗？', async () => {
+            try {
+              await deleteMessage(group.assistant.id);
+              ragReferenceCache.delete(group.assistant.id);
+              toast('消息已删除', 'success');
+              await loadMessages(chatId);
+            } catch (error) {
+              toast(error.message || '删除失败', 'error');
+            }
+          });
+        });
+        actions.appendChild(deleteBtn);
+        assistantSection.appendChild(actions);
+        card.appendChild(assistantSection);
+      }
+
+      list.appendChild(card);
     });
   } catch (error) { // 请求失败
     list.innerHTML = ''; // 清空列表
@@ -537,9 +496,15 @@ async function openCreateChat(user) { // 创建会话
   const title = window.prompt('请输入会话标题', '新会话'); // 弹出输入框
   if (title === null) return; // 用户取消时退出
   try {
-    await createChat({ user_id: user?.id, title }); // 调用创建接口
+    const created = await createChat({ user_id: user?.id, title }); // 调用创建接口
     toast('会话已创建', 'success'); // 提示成功
+    if (created?.id) {
+      currentChatId = created.id;
+    }
     await loadChats(user); // 重新加载会话
+    if (currentChatId) {
+      await loadMessages(currentChatId);
+    }
   } catch (error) {
     toast(error.message || '创建会话失败', 'error'); // 提示错误
   }
@@ -580,59 +545,6 @@ function populateDomainSelects(domains) { // 将 domain 渲染到选择器
       if (domainHintText) domainHintText.textContent = '按住 Ctrl/⌘ 可多选，留空表示在全部知识库中检索。'; // 还原提示
     }
   }
-  if (previewDomainSelect) { // 渲染预览下拉
-    const previous = previewDomainSelect.value; // 记录旧值
-    previewDomainSelect.innerHTML = ''; // 清空选项
-    const defaultOption = document.createElement('option'); // 默认选项
-    defaultOption.value = ''; // 空值
-    defaultOption.textContent = '全部 domain'; // 文案
-    previewDomainSelect.appendChild(defaultOption); // 渲染默认项
-    domains.forEach((domain) => { // 遍历 domain
-      const option = document.createElement('option'); // 创建选项
-      option.value = String(domain.id); // 设置值
-      option.textContent = `${domain.name || '未命名'} (#${domain.id})`; // 文案
-      previewDomainSelect.appendChild(option); // 渲染选项
-    });
-    if (previous && domains.some((domain) => String(domain.id) === previous)) { // 尝试恢复旧值
-      previewDomainSelect.value = previous; // 恢复选择
-    }
-  }
-}
-
-function renderPreviewResults(items) { // 渲染 RAG 预览结果
-  if (!previewResultsContainer) return; // 若无容器则退出
-  previewResultsContainer.innerHTML = ''; // 清空旧内容
-  const results = Array.isArray(items) ? items : []; // 规范化数组
-  if (results.length === 0) { // 无数据时
-    const empty = document.createElement('p'); // 创建提示
-    empty.className = 'table-empty'; // 应用样式
-    empty.textContent = '没有检索到相关 chunk'; // 文案
-    previewResultsContainer.appendChild(empty); // 渲染提示
-    return; // 停止处理
-  }
-  results.forEach((item) => { // 遍历结果
-    const card = document.createElement('div'); // 创建结果卡片
-    card.style.border = '1px solid #e5e7eb'; // 设置边框
-    card.style.borderRadius = '8px'; // 设置圆角
-    card.style.padding = '12px'; // 设置内边距
-    card.style.marginBottom = '12px'; // 设置外边距
-    const header = document.createElement('div'); // 创建头部
-    header.style.fontWeight = '600'; // 加粗
-    header.textContent = `Chunk #${item.chunk_id} · Doc ${item.document_id ?? '-'} · Domain ${item.domain_id ?? '-'}`; // 显示基础信息
-    card.appendChild(header); // 渲染头部
-    const scoreValue = typeof item.score === 'number' ? item.score : Number(item.score); // 解析得分
-    const score = document.createElement('div'); // 创建得分节点
-    score.style.margin = '4px 0 8px'; // 设置间距
-    score.textContent = `Score: ${Number.isFinite(scoreValue) ? scoreValue.toFixed(4) : item.score ?? 'N/A'}`; // 显示得分
-    card.appendChild(score); // 渲染得分
-    const content = document.createElement('p'); // 创建内容片段
-    content.style.margin = '0'; // 移除外边距
-    content.style.whiteSpace = 'pre-wrap'; // 保留换行
-    content.style.wordBreak = 'break-word'; // 自动换行
-    content.textContent = item.content_preview || ''; // 显示文本
-    card.appendChild(content); // 渲染内容
-    previewResultsContainer.appendChild(card); // 添加卡片
-  });
 }
 
 function clearMessages() { // 清空消息列表
@@ -640,4 +552,48 @@ function clearMessages() { // 清空消息列表
   const list = messagesContainer.querySelector('#message-list'); // 查找消息列表
   if (list) list.innerHTML = ''; // 清空列表内容
   ragReferenceCache.clear(); // 清理引用缓存
+}
+
+function groupMessages(messages) {
+  const groups = [];
+  let pending = null;
+  messages.forEach((msg) => {
+    if (msg.role === 'user') {
+      if (pending) {
+        groups.push(pending);
+      }
+      pending = { user: msg, assistant: null };
+    } else if (msg.role === 'assistant') {
+      if (pending && !pending.assistant) {
+        pending.assistant = msg;
+        groups.push(pending);
+        pending = null;
+      } else {
+        groups.push({ user: null, assistant: msg });
+      }
+    } else {
+      groups.push({ user: msg, assistant: null });
+      pending = null;
+    }
+  });
+  if (pending) {
+    groups.push(pending);
+  }
+  return groups;
+}
+
+function updateChatHighlight(listContainer, activeId) {
+  if (!listContainer) return;
+  listContainer.querySelectorAll('.table-wrapper').forEach((item) => {
+    item.classList.remove('table-wrapper--active');
+    item.style.border = '';
+  });
+  if (!activeId) return;
+  const activeItem = Array.from(listContainer.querySelectorAll('.table-wrapper')).find(
+    (node) => node.dataset?.chatId === String(activeId),
+  );
+  if (activeItem) {
+    activeItem.classList.add('table-wrapper--active');
+    activeItem.style.border = '2px solid #3b82f6';
+  }
 }
