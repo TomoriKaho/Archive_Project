@@ -3,13 +3,22 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from typing import Any
 from urllib import error, request
 
-from app.core.config import settings
-
 logger = logging.getLogger(__name__)
+
+
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+"""Base URL for the Qdrant service."""
+
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "VOC_Archives")
+"""Target collection name that stores chunk vectors."""
+
+RAG_OLLAMA_TIMEOUT = int(os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
+"""Timeout shared with Ollama settings for outbound HTTP requests."""
 
 
 @dataclass
@@ -54,7 +63,7 @@ def get_client() -> _QdrantHttpClient:
 
     global _client
     if _client is None:
-        _client = _QdrantHttpClient(base_url=settings.QDRANT_URL, timeout=settings.RAG_OLLAMA_TIMEOUT)
+        _client = _QdrantHttpClient(base_url=QDRANT_URL, timeout=RAG_OLLAMA_TIMEOUT)
     return _client
 
 
@@ -62,7 +71,7 @@ def ensure_collection(dim: int) -> None:
     """Ensure the configured collection exists with the expected vector dimension."""
 
     client = get_client()
-    status, body = client.request("GET", f"/collections/{settings.QDRANT_COLLECTION}", allow_404=True)
+    status, body = client.request("GET", f"/collections/{QDRANT_COLLECTION}", allow_404=True)
     if status == 200:
         vectors_cfg = (
             body.get("result", {})
@@ -76,7 +85,7 @@ def ensure_collection(dim: int) -> None:
         if current_dim == dim:
             return  # 维度匹配，直接复用现有集合
         # 维度不匹配需要重建集合以避免插入失败
-        client.request("DELETE", f"/collections/{settings.QDRANT_COLLECTION}")
+        client.request("DELETE", f"/collections/{QDRANT_COLLECTION}")
         status = 404  # 删除后按不存在处理，方便重新创建
     if status != 404:
         raise RuntimeError("unexpected response when checking qdrant collection")
@@ -86,7 +95,7 @@ def ensure_collection(dim: int) -> None:
             "distance": "Cosine",
         }
     }
-    client.request("PUT", f"/collections/{settings.QDRANT_COLLECTION}", payload)
+    client.request("PUT", f"/collections/{QDRANT_COLLECTION}", payload)
 
 
 def upsert_vectors(point_ids: list[int], vectors: list[list[float]]) -> None:
@@ -99,7 +108,7 @@ def upsert_vectors(point_ids: list[int], vectors: list[list[float]]) -> None:
     client = get_client()
     points = [{"id": int(pid), "vector": vec} for pid, vec in zip(point_ids, vectors)]
     payload = {"points": points, "wait": True}
-    client.request("PUT", f"/collections/{settings.QDRANT_COLLECTION}/points", payload)
+    client.request("PUT", f"/collections/{QDRANT_COLLECTION}/points", payload)
 
 
 def search(query_vec: list[float], top_k: int) -> list[int]:
@@ -114,7 +123,7 @@ def search_with_scores(query_vec: list[float], top_k: int) -> list[tuple[int, fl
 
     client = get_client()
     payload = {"vector": query_vec, "limit": top_k}
-    _, body = client.request("POST", f"/collections/{settings.QDRANT_COLLECTION}/points/search", payload)
+    _, body = client.request("POST", f"/collections/{QDRANT_COLLECTION}/points/search", payload)
     points = body.get("result", []) if isinstance(body, dict) else []
     ordered: list[tuple[int, float]] = []
     for point in points:

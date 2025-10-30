@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.core.config import settings
 from app.models.entities import User
 from app.repositories.chat_repo import ChatRepository
 from app.repositories.chunk_repo import ChunkRepository
@@ -15,7 +14,12 @@ from app.repositories.document_repo import DocumentRepository
 from app.repositories.message_repo import MessageRepository
 from app.schemas.message import MessageOut
 from app.schemas.rag import AskRequest, AskResponse, PreviewItem, Reference
-from app.services.rag_service import answer, index_chunks, retrieve_with_scores
+from app.services.rag_service import (
+    DEFAULT_TOP_K,
+    answer,
+    index_chunks,
+    retrieve_with_scores,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +72,7 @@ def ask_in_chat(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="question cannot be empty")
     message_repo.create(chat_id=chat_id, role="user", content=question)
     domain_ids = sorted(set(payload.domain_ids)) if payload.domain_ids else None
-    top_k = payload.top_k or settings.RAG_TOP_K
+    top_k = payload.top_k or DEFAULT_TOP_K
     try:
         answer_text, references = answer(
             question,
@@ -90,7 +94,7 @@ def ask_in_chat(
 @router.get("/rag/preview", response_model=list[PreviewItem])
 def preview_retrieval(
     q: str = Query(..., min_length=1, description="待检索的问题"),
-    top_k: int = Query(settings.RAG_TOP_K, ge=1, le=100, description="返回的 chunk 数量"),
+    top_k: int = Query(DEFAULT_TOP_K, ge=1, le=100, description="返回的 chunk 数量"),
     domain_id: int | None = Query(None, description="可选的 domain 过滤"),
     *,
     db: Session = Depends(get_db),

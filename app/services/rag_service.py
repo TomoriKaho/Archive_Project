@@ -3,18 +3,29 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Sequence
 from urllib import error, request
 
 from sqlalchemy.orm import Session
-
-from app.core.config import settings
 from app.models.entities import Chunk
 from app.repositories.chunk_repo import ChunkRepository
 from .embed_service import embed
 from .qdrant_service import ensure_collection, search_with_scores, upsert_vectors
 
 logger = logging.getLogger(__name__)
+
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+"""Base URL of the Ollama service used for chat completion."""
+
+OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3.1:8b")
+"""Chat model identifier when querying Ollama."""
+
+DEFAULT_TOP_K = int(os.getenv("RAG_TOP_K", "10"))
+"""Default number of chunks retrieved when no explicit top_k is provided."""
+
+RAG_OLLAMA_TIMEOUT = int(os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
+"""HTTP timeout applied to Ollama chat requests."""
 
 _NO_CONTEXT_MESSAGE = "当前知识库中没有足够的信息回答该问题。"
 
@@ -56,7 +67,7 @@ def retrieve_with_scores(
 ) -> tuple[list[Chunk], list[tuple[int, float]]]:
     """Retrieve chunks along with their similarity scores."""
 
-    limit = top_k or settings.RAG_TOP_K
+    limit = top_k or DEFAULT_TOP_K
     query_vec = embed(question)  # 将问题编码为向量
     search_results = search_with_scores(query_vec, limit)  # 调用向量库获取候选
     if not search_results:
@@ -89,7 +100,7 @@ def chat(system: str, user: str, stream: bool = False) -> str:
     """Call Ollama's chat API and return the assistant message content."""
 
     payload = {
-        "model": settings.OLLAMA_CHAT_MODEL,
+        "model": OLLAMA_CHAT_MODEL,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -97,13 +108,13 @@ def chat(system: str, user: str, stream: bool = False) -> str:
         "stream": stream,
     }
     req = request.Request(
-        url=f"{settings.OLLAMA_URL.rstrip('/')}/api/chat",
+        url=f"{OLLAMA_URL.rstrip('/')}/api/chat",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
-        with request.urlopen(req, timeout=settings.RAG_OLLAMA_TIMEOUT) as resp:
+        with request.urlopen(req, timeout=RAG_OLLAMA_TIMEOUT) as resp:
             if stream:
                 pieces: list[str] = []
                 for raw_line in resp:
@@ -139,7 +150,7 @@ def answer(
 ) -> tuple[str, list[tuple[int, float]]]:
     """Run the complete RAG flow and return assistant answer plus references."""
 
-    limit = top_k or settings.RAG_TOP_K
+    limit = top_k or DEFAULT_TOP_K
     chunks, references = retrieve_with_scores(question, limit, domain_ids, db=db)
     if not references:
         return _NO_CONTEXT_MESSAGE, []
