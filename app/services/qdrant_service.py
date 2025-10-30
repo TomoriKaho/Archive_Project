@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 from urllib import error, request
 
 logger = logging.getLogger(__name__)
@@ -98,32 +98,73 @@ def ensure_collection(dim: int) -> None:
     client.request("PUT", f"/collections/{QDRANT_COLLECTION}", payload)
 
 
-def upsert_vectors(point_ids: list[int], vectors: list[list[float]]) -> None:
+def upsert_vectors(
+    point_ids: Sequence[int],
+    vectors: Sequence[Sequence[float]],
+    payloads: Sequence[dict[str, Any] | None] | None = None,
+) -> None:
     """Upsert points into Qdrant with chunk ids as vector identifiers."""
 
     if not point_ids:
         return
     if len(point_ids) != len(vectors):
         raise ValueError("point ids and vectors length mismatch")
+    if payloads is not None and len(payloads) != len(point_ids):
+        raise ValueError("payloads length mismatch")
     client = get_client()
-    points = [{"id": int(pid), "vector": vec} for pid, vec in zip(point_ids, vectors)]
+    points = []
+    for index, (pid, vec) in enumerate(zip(point_ids, vectors)):
+        point: dict[str, Any] = {"id": int(pid), "vector": list(vec)}
+        if payloads is not None:
+            payload = payloads[index]
+            if payload:
+                point["payload"] = payload
+        points.append(point)
     payload = {"points": points, "wait": True}
     client.request("PUT", f"/collections/{QDRANT_COLLECTION}/points", payload)
 
 
-def search(query_vec: list[float], top_k: int) -> list[int]:
+def search(
+    query_vec: Sequence[float], top_k: int, domain_ids: Sequence[int] | None = None
+) -> list[int]:
     """Search the configured Qdrant collection and return chunk ids ordered by similarity."""
 
-    results = search_with_scores(query_vec, top_k)
+    results = search_with_scores(query_vec, top_k, domain_ids=domain_ids)
     return [chunk_id for chunk_id, _ in results]
 
 
-def search_with_scores(query_vec: list[float], top_k: int) -> list[tuple[int, float]]:
+def search_with_scores(
+    query_vec: Sequence[float],
+    top_k: int,
+    *,
+    domain_ids: Sequence[int] | None = None,
+) -> list[tuple[int, float]]:
     """Perform a vector similarity search and keep similarity scores."""
 
     client = get_client()
-    payload = {"vector": query_vec, "limit": top_k}
-    _, body = client.request("POST", f"/collections/{QDRANT_COLLECTION}/points/search", payload)
+    payload: dict[str, Any] = {"vector": list(query_vec), "limit": top_k}
+    if domain_ids:
+        payload["filter"] = {
+            "must": [
+                {
+                    "key": "domain_id",
+                    "match": {
+                        "any": [int(domain_id) for domain_id in dict.fromkeys(domain_ids)]
+                    },
+                }
+            ]
+        }
+    status, body = client.request(
+        "POST",
+        f"/collections/{QDRANT_COLLECTION}/points/search",
+        payload,
+        allow_404=True,
+    )
+    if status == 404:
+        logger.warning(
+            "qdrant collection missing during search collection=%s", QDRANT_COLLECTION
+        )
+        return []
     points = body.get("result", []) if isinstance(body, dict) else []
     ordered: list[tuple[int, float]] = []
     for point in points:

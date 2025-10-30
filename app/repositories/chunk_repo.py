@@ -20,8 +20,9 @@ class ChunkRepository(Repository[Chunk]):
 
     def list_by_document(self, document_id: int) -> Sequence[Chunk]:
         """按文档ID获取所有chunk，按顺序返回。"""
-        stmt: Select = (  # 构造查询语句
+        stmt: Select = (
             select(Chunk)
+            .options(joinedload(Chunk.document))
             .where(Chunk.document_id == document_id)  # 条件限定同一文档
             .order_by(Chunk.ordinal.asc())  # 维持顺序供前端显示
         )
