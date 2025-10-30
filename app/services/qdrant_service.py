@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 """Base URL for the Qdrant service."""
 
-QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "VOC_Archives")
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "Archive_Project_Collection")
 """Target collection name that stores chunk vectors."""
 
 RAG_OLLAMA_TIMEOUT = int(os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
