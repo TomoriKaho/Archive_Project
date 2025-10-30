@@ -19,29 +19,35 @@
    pip install -r requirements.txt
    ```
 4. 设置环境变量
-    本项目使用`.env`文件来管理环境变量。请按照以下步骤设置和配置你的`.env`文件。
-    确保在`.env`文件中设置以下环境变量：
+    本项目使用 `.env` 文件集中管理环境变量。仓库已经提供了一个示例 `.env`，核心字段说明如下：
     ```plaintext
-    DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/mydb
+    DATABASE_URL=postgresql+psycopg://rag_user:rag_password@localhost:5432/rag_db
     QDRANT_URL=http://localhost:6333
+    QDRANT_COLLECTION=archives_chunks
+    OLLAMA_URL=http://localhost:11434
+    OLLAMA_EMBED_MODEL=qwen3-embedding:8b
+    OLLAMA_CHAT_MODEL=llama3.1:8b
     JWT_SECRET_KEY=change-me
     JWT_ALGORITHM=HS256
     ACCESS_TOKEN_EXPIRE_MINUTES=60
     INITIAL_ADMIN_EMAIL=admin@example.com
     ADMIN_INIT_PASSWORD=ChangeMe123
     ```
-   **环境变量配置示例**
-    你可以使用以下命令来配置你的环境变量：
+    上述配置遵循“向量库仅保存 `external_id + 向量`，chunk 文本仍在 PostgreSQL 中维护”的约定：
+    - `QDRANT_*` 控制向量数据库连接与集合名称；
+    - `OLLAMA_*` 控制嵌入模型与对话模型；
+    - 其余字段与认证、初始管理员等功能相关。
+
+    你可以使用以下命令加载 `.env`：
     ```bash
     set -a
     source .env
     set +a
     ```
-    **注意事项:**
+    **注意事项：**
 
-    - 安全性: 不要将真实的敏感信息提交到版本控制系统中。
-
-    - 配置检查: 在启动项目之前，请确保.env文件中的所有环境变量已正确配置。
+    - 不要将真实敏感信息提交到版本控制系统。
+    - 启动前务必确认 `.env` 已填写完整且对应服务已启动。
     <br>
 5. 启动 PostgreSQL（可使用已有容器或服务）
    ```bash
@@ -60,6 +66,13 @@
 8. 启动开发服务器
    ```bash
    uvicorn app.main:app --reload
+   ```
+
+9. 启动 Ollama 并拉取所需模型（示例）
+   ```bash
+   ollama serve &
+   ollama pull qwen3-embedding:8b
+   ollama pull llama3.1:8b
    ```
 
 ## API 路由参考
@@ -151,6 +164,7 @@
   ```
 - **成功响应**：`201 Created`，`DocumentOut`。
 - **错误**：`404 Not Found`（domain 不存在）。
+- **RAG 自动索引**：文档创建成功后会立即调用 Ollama 生成 chunk 向量，并写入 Qdrant（仅保存 `external_id` 与向量）。chunk 正文仍位于 PostgreSQL，后续问答会基于 `external_id` 回表拼装上下文。
 
 #### GET /domains/{domain_id}/documents
 - **说明**：列出某个 domain 下最近创建的文档（限制 50 条）。
@@ -198,6 +212,40 @@
 #### PATCH /domains/{domain_id}/documents/{doc_id}/chunks/{chunk_id}
 - **说明**：禁止修改 chunk 内容，接口固定返回 405。
 - **响应**：`405 Method Not Allowed`，`{"detail": "chunk modification is disabled to keep consistency with source content"}`。
+
+### RAG 问答
+#### POST /rag/query
+- **说明**：执行一次检索增强问答。后端会：
+  1. 使用 Ollama 嵌入模型为问题生成向量并查询 Qdrant（仅返回 `external_id` 与相似度分数）；
+  2. 根据 `external_id` 回表获取 chunk 文本及其所属文档、domain 信息，支持 `domain_id` 过滤；
+  3. 将筛选后的 chunk 作为上下文交给 Ollama 对话模型生成回答。
+- **请求体**：`RagQueryRequest`
+  ```json
+  {
+    "question": "介绍 VOC 档案的数字化情况",
+    "top_k": 5,
+    "domain_id": 1
+  }
+  ```
+- **成功响应**：`200 OK`，返回 `RagQueryResponse`
+  ```json
+  {
+    "answer": "...",
+    "hits": [
+      {
+        "chunk_id": 12,
+        "external_id": "...",
+        "document_id": 8,
+        "document_title": "VOC 档案概览",
+        "domain_id": 1,
+        "ordinal": 0,
+        "content": "...",
+        "score": 0.92
+      }
+    ]
+  }
+  ```
+- **错误**：`502 Bad Gateway`（向量检索或回答失败）、`500 Internal Server Error`（配置缺失）。
 
 ### 对话（chats）
 #### POST /chats/

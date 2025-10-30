@@ -20,6 +20,7 @@ from app.schemas.document import (  # 文档相关schema
 )
 from app.schemas.chunk import ChunkOut  # chunk输出schema
 from app.services.chunking import make_chunks  # 文档切分服务
+from app.services.rag import RagConfigurationError, get_rag_service  # RAG 索引服务
 
 router = APIRouter(tags=["documents"])  # 声明文档相关路由
 logger = logging.getLogger(__name__)  # 初始化模块级日志
@@ -103,7 +104,23 @@ def create_document(domain_id: int, payload: DocumentCreate, db: Session = Depen
     data["domain_id"] = domain_id  # 写入所属domain
     document = doc_repo.create(**data)  # 创建文档记录
     chunk_texts = make_chunks(document, raw_content)  # 生成chunk文本列表
-    ChunkRepository(db).bulk_create_for_document(document.id, chunk_texts)  # 批量写入chunk表
+    chunk_repo = ChunkRepository(db)
+    chunks = chunk_repo.bulk_create_for_document(document.id, chunk_texts)  # 批量写入chunk表
+    try:
+        rag_pairs = [(chunk.external_id, chunk.content) for chunk in chunks]
+        get_rag_service().index_chunks(rag_pairs)
+    except RagConfigurationError as exc:  # 明确配置缺失
+        logger.exception("create_document rag_configuration_error document_id=%s", document.id)
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:  # pragma: no cover - 网络错误等不可预测情况
+        logger.exception("create_document rag_index_failed document_id=%s", document.id)
+        raise HTTPException(
+            status_code=500,
+            detail="failed to index document chunks into vector store",
+        ) from exc
     logger.info(
         "create_document domain=%s document_id=%s uuid=%s chunk_count=%s",
         domain_id,

@@ -1,9 +1,9 @@
 """文档块仓储，集中管理chunks表的访问逻辑。"""
 import logging  # 引入日志便于观察批量操作
-from typing import Iterable, Sequence  # 提供类型注解
+from typing import Iterable, Mapping, Sequence  # 提供类型注解
 
 from sqlalchemy import Select, delete, select  # 使用select/delete构造SQL
-from sqlalchemy.orm import Session  # 操作文档块依赖Session
+from sqlalchemy.orm import Session, selectinload  # 操作文档块依赖Session
 
 from .base import Repository  # 复用通用仓储能力
 from app.models.entities import Chunk  # 引入Chunk模型
@@ -50,4 +50,22 @@ class ChunkRepository(Repository[Chunk]):
         self.db.execute(delete(Chunk).where(Chunk.document_id == document_id))  # 构造并执行删除
         self.db.flush()  # 刷新以确保删除立即生效
         logger.info("delete_chunks_by_document document_id=%s", document_id)  # 记录清理操作
-        # 设计说明：该操作通常由外键级联覆盖，此处保留以应对旧数据。 
+        # 设计说明：该操作通常由外键级联覆盖，此处保留以应对旧数据。
+
+    def map_by_external_ids(self, external_ids: Sequence[str]) -> Mapping[str, Chunk]:
+        """批量加载 external_id 对应的 chunk，并携带文档信息。"""
+
+        if not external_ids:
+            return {}
+
+        stmt = (
+            select(Chunk)
+            .options(selectinload(Chunk.document))
+            .where(Chunk.external_id.in_(external_ids))
+        )
+        rows = self.db.execute(stmt).scalars().all()
+        logger.info(
+            "map_chunks_by_external_ids count=%s",
+            len(rows),
+        )
+        return {row.external_id: row for row in rows}
