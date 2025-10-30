@@ -7,7 +7,6 @@ import {
   createMessage,
   updateMessage,
   deleteMessage,
-  askChatWithRag,
   previewRag,
   getDomains,
 } from '../api.js'; // 导入聊天、消息与 RAG 接口
@@ -21,13 +20,11 @@ let messageForm = null; // 缓存发送消息表单
 let sendHandler = null; // 缓存发送事件处理器
 let currentChatId = null; // 当前选中的会话 ID
 let paginationState = { limit: 50, offset: 0 }; // 消息分页状态
-let ragForm = null; // RAG 问答表单引用
-let ragSubmitHandler = null; // RAG 提交事件处理器
-let ragQuestionInput = null; // RAG 问题输入框
-let ragTopKInput = null; // RAG top_k 输入框
-let ragDomainSelect = null; // RAG domain 多选框
-let ragSubmitBtn = null; // RAG 提交按钮
-let ragDomainHint = null; // RAG domain 提示文本
+let questionInput = null; // 用户问题输入框
+let topKInput = null; // RAG top_k 输入框
+let domainSelect = null; // domain 多选框
+let sendBtn = null; // 发送按钮引用
+let domainHintText = null; // domain 选择提示
 let previewForm = null; // RAG 预览表单引用
 let previewSubmitHandler = null; // RAG 预览提交处理器
 let previewQuestionInput = null; // RAG 预览问题输入框
@@ -89,114 +86,86 @@ export default { // 导出聊天视图
     messageList.style.maxHeight = '480px'; // 限制高度
     messageList.style.overflowY = 'auto'; // 启用滚动
     messagesContainer.appendChild(messageList); // 渲染消息列表
-    messageForm = document.createElement('form'); // 创建发送表单
+    messageForm = document.createElement('form'); // 创建问答表单
     messageForm.style.marginTop = '16px'; // 设置间距
-    messageForm.style.display = 'grid'; // 使用网格布局
-    messageForm.style.gridTemplateColumns = '120px 1fr 100px'; // 定义列宽
-    messageForm.style.gap = '8px'; // 设置间距
-    const roleSelect = document.createElement('select'); // 创建角色选择器
-    roleSelect.className = 'input'; // 应用样式
-    roleSelect.name = 'role'; // 设置 name
-    ['user', 'assistant', 'system'].forEach((role) => { // 初始化角色选项
-      const option = document.createElement('option'); // 创建选项
-      option.value = role; // 设置值
-      option.textContent = role; // 设置文本
-      roleSelect.appendChild(option); // 添加选项
-    });
-    const contentInput = document.createElement('input'); // 创建消息输入框
-    contentInput.className = 'input'; // 应用样式
-    contentInput.name = 'content'; // 设置 name
-    contentInput.placeholder = '输入消息内容'; // 设置提示
-    contentInput.required = true; // 设置必填
-    const sendBtn = document.createElement('button'); // 创建发送按钮
-    sendBtn.className = 'button'; // 主按钮样式
-    sendBtn.type = 'submit'; // 指定提交类型
-    sendBtn.textContent = '发送'; // 按钮文本
-    messageForm.appendChild(roleSelect); // 添加角色选择器
-    messageForm.appendChild(contentInput); // 添加输入框
-    messageForm.appendChild(sendBtn); // 添加发送按钮
-    messagesContainer.appendChild(messageForm); // 渲染发送表单
+    messageForm.style.display = 'flex'; // 使用纵向布局
+    messageForm.style.flexDirection = 'column';
+    messageForm.style.gap = '12px'; // 设置间距
 
-    const ragSection = document.createElement('section'); // 创建 RAG 区域
-    ragSection.style.marginTop = '24px'; // 设置顶部间距
-    const ragHeading = document.createElement('h3'); // RAG 标题
-    ragHeading.textContent = 'RAG 智能问答'; // 设置标题
-    ragSection.appendChild(ragHeading); // 渲染标题
-    const ragDescription = document.createElement('p'); // RAG 描述
-    ragDescription.textContent = '提交问题后将自动创建问答消息并使用知识库生成回答。'; // 设置描述
-    ragDescription.style.margin = '4px 0 12px'; // 设置间距
-    ragDescription.style.color = '#555'; // 调整颜色
-    ragDescription.style.fontSize = '13px'; // 调整字号
-    ragSection.appendChild(ragDescription); // 渲染描述
-    ragForm = document.createElement('form'); // 创建 RAG 表单
-    ragForm.style.display = 'grid'; // 使用网格布局
-    ragForm.style.gap = '12px'; // 设置间距
-    ragForm.setAttribute('aria-label', 'RAG 问答表单'); // 设置无障碍说明
-    ragSection.appendChild(ragForm); // 渲染表单
-    const questionGroup = document.createElement('div'); // 问题容器
-    questionGroup.className = 'form-group'; // 应用样式
-    const questionLabel = document.createElement('label'); // 问题标签
-    questionLabel.className = 'label'; // 标签样式
-    questionLabel.textContent = '问题'; // 标签文本
-    questionLabel.setAttribute('for', 'rag-question'); // 关联输入
-    questionGroup.appendChild(questionLabel); // 渲染标签
-    ragQuestionInput = document.createElement('textarea'); // 问题输入
-    ragQuestionInput.className = 'input'; // 应用样式
-    ragQuestionInput.id = 'rag-question'; // 设置 ID
-    ragQuestionInput.name = 'question'; // 设置 name
-    ragQuestionInput.required = true; // 设置必填
-    ragQuestionInput.placeholder = '请输入要向知识库查询的问题'; // 设置提示
-    ragQuestionInput.style.minHeight = '120px'; // 调整高度
-    questionGroup.appendChild(ragQuestionInput); // 渲染输入
-    ragForm.appendChild(questionGroup); // 添加问题容器
-    const topkGroup = document.createElement('div'); // top_k 容器
-    topkGroup.className = 'form-group'; // 应用样式
-    const topkLabel = document.createElement('label'); // top_k 标签
-    topkLabel.className = 'label'; // 标签样式
-    topkLabel.textContent = 'Top K (可选)'; // 标签文本
-    topkLabel.setAttribute('for', 'rag-topk'); // 关联输入
-    topkGroup.appendChild(topkLabel); // 渲染标签
-    ragTopKInput = document.createElement('input'); // top_k 输入
-    ragTopKInput.className = 'input'; // 应用样式
-    ragTopKInput.type = 'number'; // 数字输入
-    ragTopKInput.min = '1'; // 最小值
-    ragTopKInput.max = '100'; // 最大值
-    ragTopKInput.id = 'rag-topk'; // 设置 ID
-    ragTopKInput.placeholder = '留空则使用默认环境值'; // 设置提示
-    topkGroup.appendChild(ragTopKInput); // 渲染输入
-    ragForm.appendChild(topkGroup); // 添加 top_k 容器
-    const domainGroup = document.createElement('div'); // domain 容器
-    domainGroup.className = 'form-group'; // 应用样式
-    const domainLabel = document.createElement('label'); // domain 标签
-    domainLabel.className = 'label'; // 标签样式
-    domainLabel.textContent = '限制 Domain (可多选)'; // 标签文本
-    domainLabel.setAttribute('for', 'rag-domains'); // 关联选择器
-    domainGroup.appendChild(domainLabel); // 渲染标签
-    ragDomainSelect = document.createElement('select'); // domain 多选
-    ragDomainSelect.className = 'input'; // 应用样式
-    ragDomainSelect.id = 'rag-domains'; // 设置 ID
-    ragDomainSelect.multiple = true; // 启用多选
-    ragDomainSelect.size = 6; // 默认展示选项数量
-    domainGroup.appendChild(ragDomainSelect); // 渲染多选框
-    const domainHint = document.createElement('p'); // 多选提示
-    domainHint.textContent = '按住 Ctrl/⌘ 可多选，留空表示在全部 domain 中检索。'; // 提示文案
-    domainHint.style.marginTop = '4px'; // 设置间距
-    domainHint.style.fontSize = '12px'; // 调整字号
-    domainHint.style.color = '#666'; // 调整颜色
-    ragDomainHint = domainHint; // 缓存提示文本以便动态更新
-    domainGroup.appendChild(domainHint); // 渲染提示
-    ragForm.appendChild(domainGroup); // 添加 domain 容器
-    const ragActions = document.createElement('div'); // RAG 按钮容器
-    ragActions.style.display = 'flex'; // 使用弹性布局
-    ragActions.style.justifyContent = 'flex-end'; // 右对齐按钮
-    ragActions.style.gap = '12px'; // 设置间距
-    ragForm.appendChild(ragActions); // 渲染按钮容器
-    ragSubmitBtn = document.createElement('button'); // RAG 提交按钮
-    ragSubmitBtn.className = 'button'; // 主按钮样式
-    ragSubmitBtn.type = 'submit'; // 提交表单
-    ragSubmitBtn.textContent = '发起 RAG'; // 按钮文本
-    ragActions.appendChild(ragSubmitBtn); // 渲染按钮
-    messagesContainer.appendChild(ragSection); // 将 RAG 区域加入消息面板
+    const questionGroup = document.createElement('div'); // 问题输入区域
+    questionGroup.className = 'form-group';
+    const questionLabel = document.createElement('label');
+    questionLabel.className = 'label';
+    questionLabel.textContent = '向知识库提问';
+    questionLabel.setAttribute('for', 'chat-question');
+    questionGroup.appendChild(questionLabel);
+    questionInput = document.createElement('textarea');
+    questionInput.className = 'input';
+    questionInput.id = 'chat-question';
+    questionInput.name = 'question';
+    questionInput.placeholder = '请输入要咨询的内容，系统会结合知识库作答';
+    questionInput.required = true;
+    questionInput.style.minHeight = '140px';
+    questionGroup.appendChild(questionInput);
+    messageForm.appendChild(questionGroup);
+
+    const optionsRow = document.createElement('div'); // 选项区域
+    optionsRow.style.display = 'flex';
+    optionsRow.style.flexWrap = 'wrap';
+    optionsRow.style.gap = '12px';
+
+    const domainGroup = document.createElement('div');
+    domainGroup.style.flex = '1 1 260px';
+    domainGroup.style.minWidth = '240px';
+    const domainLabel = document.createElement('label');
+    domainLabel.className = 'label';
+    domainLabel.textContent = '限定 Domain (可多选)';
+    domainLabel.setAttribute('for', 'chat-domains');
+    domainGroup.appendChild(domainLabel);
+    domainSelect = document.createElement('select');
+    domainSelect.className = 'input';
+    domainSelect.id = 'chat-domains';
+    domainSelect.multiple = true;
+    domainSelect.size = 6;
+    domainGroup.appendChild(domainSelect);
+    domainHintText = document.createElement('p');
+    domainHintText.textContent = '按住 Ctrl/⌘ 可多选，留空表示在全部知识库中检索。';
+    domainHintText.style.marginTop = '4px';
+    domainHintText.style.fontSize = '12px';
+    domainHintText.style.color = '#666';
+    domainGroup.appendChild(domainHintText);
+    optionsRow.appendChild(domainGroup);
+
+    const topkGroup = document.createElement('div');
+    topkGroup.style.flex = '0 0 160px';
+    const topkLabel = document.createElement('label');
+    topkLabel.className = 'label';
+    topkLabel.textContent = 'Top K (可选)';
+    topkLabel.setAttribute('for', 'chat-topk');
+    topkGroup.appendChild(topkLabel);
+    topKInput = document.createElement('input');
+    topKInput.className = 'input';
+    topKInput.type = 'number';
+    topKInput.min = '1';
+    topKInput.max = '100';
+    topKInput.id = 'chat-topk';
+    topKInput.placeholder = '默认使用环境变量';
+    topkGroup.appendChild(topKInput);
+    optionsRow.appendChild(topkGroup);
+
+    messageForm.appendChild(optionsRow);
+
+    const actionRow = document.createElement('div');
+    actionRow.style.display = 'flex';
+    actionRow.style.justifyContent = 'flex-end';
+    sendBtn = document.createElement('button');
+    sendBtn.className = 'button';
+    sendBtn.type = 'submit';
+    sendBtn.textContent = '发送问题';
+    actionRow.appendChild(sendBtn);
+    messageForm.appendChild(actionRow);
+
+    messagesContainer.appendChild(messageForm); // 渲染问答表单
 
     const previewCard = document.createElement('div'); // 创建 RAG 预览卡片
     previewCard.className = 'table-wrapper'; // 使用卡片样式
@@ -291,21 +260,34 @@ export default { // 导出聊天视图
         toast('请选择一个会话', 'info'); // 提示选择会话
         return; // 停止处理
       }
-      const formData = new FormData(messageForm); // 读取表单数据
-      const role = formData.get('role'); // 获取角色
-      const content = formData.get('content'); // 获取内容
-      if (!content) { // 内容为空时
-        toast('消息内容不能为空', 'error'); // 提示错误
+      const question = questionInput?.value?.trim(); // 读取问题
+      if (!question) { // 内容为空时
+        toast('请输入要咨询的问题', 'error'); // 提示错误
         return; // 停止处理
       }
+      const topkRaw = topKInput?.value?.trim(); // 读取 top_k 输入
+      const topKValue = topkRaw ? Number(topkRaw) : undefined;
+      const domainIds = domainSelect
+        ? Array.from(domainSelect.selectedOptions)
+            .map((option) => Number(option.value))
+            .filter((id) => Number.isFinite(id))
+        : [];
       sendBtn.disabled = true; // 禁用发送按钮
       const loading = spinner(); // 创建加载指示器
       sendBtn.appendChild(loading); // 显示加载
       try { // 捕获异常
-        await createMessage(currentChatId, { role, content }); // 调用发送接口
-        toast('消息已发送', 'success'); // 提示成功
-        formData.set('content', ''); // 清空内容
-        contentInput.value = ''; // 清空输入框
+        const response = await createMessage(currentChatId, {
+          role: 'user',
+          content: question,
+          top_k: Number.isFinite(topKValue) ? topKValue : undefined,
+          domain_ids: domainIds.length > 0 ? domainIds : undefined,
+        }); // 调用发送接口
+        toast('问题已提交，RAG 回答即将生成', 'success'); // 提示成功
+        questionInput.value = ''; // 清空输入
+        if (topKInput) topKInput.value = ''; // 清空 top_k 输入
+        if (response?.assistant?.id && Array.isArray(response.references)) {
+          ragReferenceCache.set(response.assistant.id, response.references); // 缓存引用
+        }
         await loadMessages(currentChatId); // 刷新消息列表
       } catch (error) { // 捕获错误
         toast(error.message || '发送失败', 'error'); // 显示错误
@@ -315,47 +297,6 @@ export default { // 导出聊天视图
       }
     }; // sendHandler 定义结束
     messageForm.addEventListener('submit', sendHandler); // 绑定提交事件
-    ragSubmitHandler = async (event) => { // RAG 提交逻辑
-      event.preventDefault(); // 阻止默认提交
-      if (!currentChatId) { // 未选择会话
-        toast('请选择一个会话', 'info'); // 提示用户
-        return; // 终止处理
-      }
-      const question = ragQuestionInput?.value?.trim(); // 读取问题
-      if (!question) { // 问题为空
-        toast('请输入问题后再提交', 'error'); // 提示错误
-        return; // 终止处理
-      }
-      const topkRaw = ragTopKInput?.value?.trim(); // 读取 top_k
-      const topKValue = topkRaw ? Number(topkRaw) : undefined; // 转换为数字
-      const domainIds = ragDomainSelect && !ragDomainSelect.disabled
-        ? Array.from(ragDomainSelect.selectedOptions)
-            .map((option) => Number(option.value))
-            .filter((id) => Number.isFinite(id))
-        : []; // 解析 domain
-      ragSubmitBtn.disabled = true; // 禁用按钮
-      const loading = spinner(); // 创建加载指示器
-      ragSubmitBtn.appendChild(loading); // 显示加载
-      try {
-        const response = await askChatWithRag(currentChatId, {
-          question,
-          top_k: Number.isFinite(topKValue) ? topKValue : undefined,
-          domain_ids: domainIds.length > 0 ? domainIds : undefined,
-        }); // 调用后端 RAG 接口
-        toast('RAG 回答已生成', 'success'); // 提示成功
-        ragQuestionInput.value = ''; // 清空输入
-        if (response?.references?.length) { // 缓存引用信息
-          ragReferenceCache.set(response.id, response.references);
-        }
-        await loadMessages(currentChatId); // 刷新消息列表
-      } catch (error) {
-        toast(error.message || 'RAG 问答失败', 'error'); // 提示错误
-      } finally {
-        ragSubmitBtn.disabled = false; // 恢复按钮
-        loading.remove(); // 移除加载动画
-      }
-    }; // ragSubmitHandler 结束
-    if (ragForm) ragForm.addEventListener('submit', ragSubmitHandler); // 绑定 RAG 表单
     previewSubmitHandler = async (event) => { // 预览提交逻辑
       event.preventDefault(); // 阻止默认提交
       const question = previewQuestionInput?.value?.trim(); // 读取问题
@@ -388,8 +329,7 @@ export default { // 导出聊天视图
     if (previewForm) previewForm.addEventListener('submit', previewSubmitHandler); // 绑定预览表单
   }, // mount 结束
   unmount() { // 卸载逻辑
-    if (messageForm && sendHandler) messageForm.removeEventListener('submit', sendHandler); // 移除普通消息事件
-    if (ragForm && ragSubmitHandler) ragForm.removeEventListener('submit', ragSubmitHandler); // 移除 RAG 事件
+    if (messageForm && sendHandler) messageForm.removeEventListener('submit', sendHandler); // 移除问答提交事件
     if (previewForm && previewSubmitHandler) previewForm.removeEventListener('submit', previewSubmitHandler); // 移除预览事件
     if (containerRef) containerRef.innerHTML = ''; // 清空容器
     containerRef = null; // 释放容器引用
@@ -397,13 +337,11 @@ export default { // 导出聊天视图
     messagesContainer = null; // 清空消息容器
     messageForm = null; // 清空表单引用
     sendHandler = null; // 清空处理器引用
-    ragForm = null; // 清空 RAG 表单
-    ragSubmitHandler = null; // 清空 RAG 处理器
-    ragQuestionInput = null; // 清空 RAG 输入
-    ragTopKInput = null; // 清空 RAG top_k 输入
-    ragDomainSelect = null; // 清空 RAG 选择器
-    ragSubmitBtn = null; // 清空 RAG 按钮
-    ragDomainHint = null; // 清空 RAG 提示
+    questionInput = null; // 清空问题输入
+    topKInput = null; // 清空 top_k 输入
+    domainSelect = null; // 清空 domain 多选
+    sendBtn = null; // 清空按钮引用
+    domainHintText = null; // 清空提示文本
     previewForm = null; // 清空预览表单
     previewSubmitHandler = null; // 清空预览处理器
     previewQuestionInput = null; // 清空预览输入
@@ -620,26 +558,26 @@ async function loadRagDomains() { // 加载可用 domain 列表
 }
 
 function populateDomainSelects(domains) { // 将 domain 渲染到选择器
-  if (ragDomainSelect) { // 渲染多选框
-    ragDomainSelect.innerHTML = ''; // 清空旧选项
+  if (domainSelect) { // 渲染聊天问答区域的多选框
+    domainSelect.innerHTML = ''; // 清空旧选项
     if (!domains.length) { // 无可选 domain
       const option = document.createElement('option'); // 创建提示项
       option.value = ''; // 空值
       option.textContent = '暂无可选 domain'; // 文案
       option.disabled = true; // 禁用选择
       option.selected = true; // 默认选中提示
-      ragDomainSelect.appendChild(option); // 渲染选项
-      ragDomainSelect.disabled = true; // 禁用多选
-      if (ragDomainHint) ragDomainHint.textContent = '暂无 domain，系统会对全部知识库检索。'; // 更新提示
+      domainSelect.appendChild(option); // 渲染选项
+      domainSelect.disabled = true; // 禁用多选
+      if (domainHintText) domainHintText.textContent = '暂无 domain，系统会对全部知识库检索。'; // 更新提示
     } else {
       domains.forEach((domain) => { // 遍历 domain
         const option = document.createElement('option'); // 创建选项
         option.value = String(domain.id); // 设置值
         option.textContent = `${domain.name || '未命名'} (#${domain.id})`; // 设置文案
-        ragDomainSelect.appendChild(option); // 渲染选项
+        domainSelect.appendChild(option); // 渲染选项
       });
-      ragDomainSelect.disabled = false; // 启用选择
-      if (ragDomainHint) ragDomainHint.textContent = '按住 Ctrl/⌘ 可多选，留空表示在全部 domain 中检索。'; // 还原提示
+      domainSelect.disabled = false; // 启用选择
+      if (domainHintText) domainHintText.textContent = '按住 Ctrl/⌘ 可多选，留空表示在全部知识库中检索。'; // 还原提示
     }
   }
   if (previewDomainSelect) { // 渲染预览下拉

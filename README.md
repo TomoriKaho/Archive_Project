@@ -232,16 +232,19 @@
 
 ### 消息（messages）
 #### POST /chats/{chat_id}/messages
-- **说明**：在指定 chat 下新增消息，路径中的 `chat_id` 会覆盖请求体中的同名字段。
+- **说明**：在指定 chat 下新增消息，路径中的 `chat_id` 会覆盖请求体中的同名字段；当 `role` 为 `user` 时会自动触发 RAG 检索并生成对应的助手回复。
 - **请求体**：`MessageCreate`
   ```json
   {
     "chat_id": 0,
     "role": "user | assistant | system",
-    "content": "string"
+    "content": "string",
+    "top_k": 10,
+    "domain_ids": [1, 2]
   }
   ```
-- **成功响应**：`201 Created`，`MessageOut`。
+  `top_k`、`domain_ids` 字段可选，用于调整单次检索的 chunk 数量与 domain 过滤。
+- **成功响应**：`201 Created`，`MessageCreateResponse`，包含 `user`、`assistant` 与 `references` 三个字段方便前端一次性渲染问答结果。
 
 #### GET /chats/{chat_id}/messages
 - **说明**：分页列出 chat 下的消息。
@@ -426,9 +429,10 @@ ollama pull llama3.1:8b
 curl -X POST http://localhost:8000/rag/ingest/42
 
 # 2) 在 chat 中问问题（并得到 RAG 的回答）
-curl -X POST http://localhost:8000/chats/7/ask \
+curl -X POST http://localhost:8000/chats/7/messages \
      -H 'Content-Type: application/json' \
-     -d '{"question": "What is the access code of ...?", "top_k": 8, "domain_ids": [3]}'
+     -H 'Authorization: Bearer <token>' \
+     -d '{"role": "user", "content": "What is the access code of ...?", "top_k": 8, "domain_ids": [3]}'
 
 # 3) 预览检索命中（开发调试）
 curl 'http://localhost:8000/rag/preview?q=VOC+Batavia&top_k=5&domain_id=3'

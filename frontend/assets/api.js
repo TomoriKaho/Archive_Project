@@ -165,8 +165,11 @@ export function deleteChat(chat_id) { // 删除会话
   return request(`/chats/${chat_id}`, { method: 'DELETE' }); // DELETE 会话
 }
 
-export function createMessage(chat_id, { role, content }) { // 创建消息
-  return request(`/chats/${chat_id}/messages`, { method: 'POST', body: { chat_id, role, content } }); // POST 消息
+export function createMessage(chat_id, { role = 'user', content, top_k, domain_ids } = {}) { // 创建消息
+  const body = { chat_id, role, content };
+  if (Number.isFinite(top_k)) body.top_k = top_k;
+  if (Array.isArray(domain_ids) && domain_ids.length > 0) body.domain_ids = domain_ids;
+  return request(`/chats/${chat_id}/messages`, { method: 'POST', body }); // POST 消息
 }
 
 export function getMessages(chat_id, { limit, offset } = {}) { // 获取消息列表
@@ -187,10 +190,6 @@ export function deleteMessage(msg_id) { // 删除消息
 
 export function ingestDocumentToRag(document_id) { // 将指定文档的 chunks 写入向量库
   return request(`/rag/ingest/${document_id}`, { method: 'POST' }); // POST /rag/ingest/{document_id}
-}
-
-export function askChatWithRag(chat_id, { question, top_k, domain_ids } = {}) { // 在聊天中触发 RAG 问答
-  return request(`/chats/${chat_id}/ask`, { method: 'POST', body: { question, top_k, domain_ids } }); // POST ask 接口
 }
 
 export function previewRag({ q, top_k, domain_id } = {}) { // 调试用的 RAG 预览接口

@@ -29,7 +29,7 @@ app.include_router(chats.router)
 app.include_router(documents.router)
 app.include_router(auth.router)
 app.include_router(users.router)
-app.include_router(rag_router.router)
+app.include_router(rag.router)
 
 
 @app.on_event("startup")
