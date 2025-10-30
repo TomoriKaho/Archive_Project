@@ -138,7 +138,7 @@ def chat(system: str, user: str, stream: bool = False) -> str:
     data = json.loads(raw) if raw else {}
     message = data.get("message") if isinstance(data, dict) else {}
     content = message.get("content") if isinstance(message, dict) else ""
-    return content.strip()
+    return content.strip() if content else ""
 
 
 def answer(
