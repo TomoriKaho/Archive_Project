@@ -5,6 +5,7 @@ from fastapi import FastAPI  # 导入FastAPI主体
 from fastapi.middleware.cors import CORSMiddleware  # 引入CORS中间件处理跨域预检请求
 
 from app.api import domains, chats, documents, auth, users  # 导入各功能路由模块
+from app.api.routers import rag as rag_router  # RAG 相关路由
 from app.db.schema_compat import ensure_document_uuid_column  # 旧库兼容补丁
 from app.db.session import SessionLocal, engine  # 提供数据库连接引擎
 from app.services.initial_admin import ensure_initial_admin  # 启动时确保初始管理员存在
@@ -28,6 +29,7 @@ app.include_router(chats.router)
 app.include_router(documents.router)
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(rag_router.router)
 
 
 @app.on_event("startup")

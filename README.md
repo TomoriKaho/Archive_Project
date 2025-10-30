@@ -392,3 +392,44 @@
 5. 打开 “文档列表” 页，在不同域间切换筛选，创建一篇普通文本文档和一篇结构化 JSON 文档，进入详情页查看 Chunks 标签与原始内容，再删除文档并确认列表为空。  
 6. （可选）进入 “聊天记录” 页，新建会话、发送消息、编辑消息并删除会话，验证消息区会随会话切换刷新。  
 7. 点击右上角 “登出” 按钮，确认返回登录页面。
+
+## RAG 快速开始
+
+### `.env` 关键配置
+
+```dotenv
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=VOC_Archives
+OLLAMA_URL=http://localhost:11434
+OLLAMA_EMBED_MODEL=qwen3-embedding:8b
+OLLAMA_CHAT_MODEL=llama3.1:8b
+RAG_TOP_K=10
+RAG_OLLAMA_TIMEOUT=60
+```
+
+### 启动 Qdrant 与 Ollama（示例）
+
+```bash
+# Qdrant（单节点）
+docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+
+# Ollama（需要预先拉取所需模型）
+ollama serve &
+ollama pull qwen3-embedding:8b
+ollama pull llama3.1:8b
+```
+
+### 常用调试命令
+
+```bash
+# 1) 把指定文档的向量写入 Qdrant
+curl -X POST http://localhost:8000/rag/ingest/42
+
+# 2) 在 chat 中问问题（并得到 RAG 的回答）
+curl -X POST http://localhost:8000/chats/7/ask \
+     -H 'Content-Type: application/json' \
+     -d '{"question": "What is the access code of ...?", "top_k": 8, "domain_ids": [3]}'
+
+# 3) 预览检索命中（开发调试）
+curl 'http://localhost:8000/rag/preview?q=VOC+Batavia&top_k=5&domain_id=3'
+```
