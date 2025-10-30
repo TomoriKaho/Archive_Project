@@ -232,16 +232,19 @@
 
 ### 消息（messages）
 #### POST /chats/{chat_id}/messages
-- **说明**：在指定 chat 下新增消息，路径中的 `chat_id` 会覆盖请求体中的同名字段。
+- **说明**：在指定 chat 下新增消息，路径中的 `chat_id` 会覆盖请求体中的同名字段；当 `role` 为 `user` 时会自动触发 RAG 检索并生成对应的助手回复。
 - **请求体**：`MessageCreate`
   ```json
   {
     "chat_id": 0,
     "role": "user | assistant | system",
-    "content": "string"
+    "content": "string",
+    "top_k": 10,
+    "domain_ids": [1, 2]
   }
   ```
-- **成功响应**：`201 Created`，`MessageOut`。
+  `top_k`、`domain_ids` 字段可选，用于调整单次检索的 chunk 数量与 domain 过滤。
+- **成功响应**：`201 Created`，`MessageCreateResponse`，包含 `user`、`assistant` 与 `references` 三个字段方便前端一次性渲染问答结果。
 
 #### GET /chats/{chat_id}/messages
 - **说明**：分页列出 chat 下的消息。
@@ -392,3 +395,45 @@
 5. 打开 “文档列表” 页，在不同域间切换筛选，创建一篇普通文本文档和一篇结构化 JSON 文档，进入详情页查看 Chunks 标签与原始内容，再删除文档并确认列表为空。  
 6. （可选）进入 “聊天记录” 页，新建会话、发送消息、编辑消息并删除会话，验证消息区会随会话切换刷新。  
 7. 点击右上角 “登出” 按钮，确认返回登录页面。
+
+## RAG 快速开始
+
+### `.env` 关键配置
+
+```dotenv
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=VOC_Archives
+OLLAMA_URL=http://localhost:11434
+OLLAMA_EMBED_MODEL=qwen3-embedding:8b
+OLLAMA_CHAT_MODEL=llama3.1:8b
+RAG_TOP_K=10
+RAG_OLLAMA_TIMEOUT=60
+```
+
+### 启动 Qdrant 与 Ollama（示例）
+
+```bash
+# Qdrant（单节点）
+docker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant
+
+# Ollama（需要预先拉取所需模型）
+ollama serve &
+ollama pull qwen3-embedding:8b
+ollama pull llama3.1:8b
+```
+
+### 常用调试命令
+
+```bash
+# 1) 把指定文档的向量写入 Qdrant
+curl -X POST http://localhost:8000/rag/ingest/42
+
+# 2) 在 chat 中问问题（并得到 RAG 的回答）
+curl -X POST http://localhost:8000/chats/7/messages \
+     -H 'Content-Type: application/json' \
+     -H 'Authorization: Bearer <token>' \
+     -d '{"role": "user", "content": "What is the access code of ...?", "top_k": 8, "domain_ids": [3]}'
+
+# 3) 预览检索命中（开发调试）
+curl 'http://localhost:8000/rag/preview?q=VOC+Batavia&top_k=5&domain_id=3'
+```

@@ -1,4 +1,4 @@
-import { getDocumentByUUID, getChunksByDocId, getChunksByUUID, deleteDocumentByUUID } from '../api.js'; // 导入文档与 chunks 接口
+import { getDocumentByUUID, getChunksByDocId, getChunksByUUID, deleteDocumentByUUID, ingestDocumentToRag } from '../api.js'; // 导入文档、chunks 与 RAG 接口
 import { toast, spinner, confirmDialog } from '../ui/components.js'; // 引入提示、加载与确认组件
 import { navigate } from '../app.js'; // 引入导航函数
 
@@ -73,6 +73,27 @@ function renderHeader(container, doc) { // 渲染文档头部信息
   actions.style.display = 'flex'; // 设置水平布局
   actions.style.gap = '12px'; // 设置按钮间距
   actions.style.marginTop = '16px'; // 设置顶部间距
+  const ingestBtn = document.createElement('button'); // 创建向量入库按钮
+  ingestBtn.className = 'button'; // 使用主按钮样式
+  ingestBtn.type = 'button'; // 指定按钮类型
+  ingestBtn.textContent = '写入向量库'; // 按钮文案
+  ingestBtn.addEventListener('click', async () => { // 绑定入库逻辑
+    ingestBtn.disabled = true; // 禁用按钮避免重复提交
+    const loading = spinner(); // 创建加载指示器
+    ingestBtn.appendChild(loading); // 显示加载状态
+    try { // 捕获异常
+      const result = await ingestDocumentToRag(doc.id); // 调用向量入库接口
+      const indexed = result?.indexed ?? 0; // 解析成功写入数量
+      const total = result?.total_chunks ?? indexed; // 读取总 chunk 数
+      toast(`已写入向量库：${indexed}/${total}`, 'success'); // 提示成功
+    } catch (error) { // 请求失败
+      toast(error.message || '写入向量库失败', 'error'); // 提示错误
+    } finally { // 收尾处理
+      ingestBtn.disabled = false; // 恢复按钮
+      loading.remove(); // 移除加载动画
+    }
+  });
+  actions.appendChild(ingestBtn); // 将按钮加入操作区
   const backBtn = document.createElement('button'); // 创建返回按钮
   backBtn.className = 'button button--ghost'; // 使用次级样式
   backBtn.type = 'button'; // 指定类型

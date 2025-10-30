@@ -165,8 +165,11 @@ export function deleteChat(chat_id) { // 删除会话
   return request(`/chats/${chat_id}`, { method: 'DELETE' }); // DELETE 会话
 }
 
-export function createMessage(chat_id, { role, content }) { // 创建消息
-  return request(`/chats/${chat_id}/messages`, { method: 'POST', body: { chat_id, role, content } }); // POST 消息
+export function createMessage(chat_id, { role = 'user', content, top_k, domain_ids } = {}) { // 创建消息
+  const body = { chat_id, role, content };
+  if (Number.isFinite(top_k)) body.top_k = top_k;
+  if (Array.isArray(domain_ids) && domain_ids.length > 0) body.domain_ids = domain_ids;
+  return request(`/chats/${chat_id}/messages`, { method: 'POST', body }); // POST 消息
 }
 
 export function getMessages(chat_id, { limit, offset } = {}) { // 获取消息列表
@@ -183,4 +186,19 @@ export function updateMessage(msg_id, { content }) { // 更新消息内容
 
 export function deleteMessage(msg_id) { // 删除消息
   return request(`/chats/messages/${msg_id}`, { method: 'DELETE' }); // DELETE 消息
+}
+
+export function ingestDocumentToRag(document_id) { // 将指定文档的 chunks 写入向量库
+  return request(`/rag/ingest/${document_id}`, { method: 'POST' }); // POST /rag/ingest/{document_id}
+}
+
+export function previewRag({ q, top_k, domain_id } = {}) { // 调试用的 RAG 预览接口
+  const params = new URLSearchParams(); // 初始化查询参数
+  if (q) params.set('q', q); // 写入问题内容
+  if (top_k !== undefined) params.set('top_k', String(top_k)); // 写入召回数量
+  if (domain_id !== undefined && domain_id !== null && domain_id !== '') {
+    params.set('domain_id', String(domain_id)); // 写入 domain 过滤
+  }
+  const query = params.toString(); // 序列化查询参数
+  return request(`/rag/preview${query ? `?${query}` : ''}`, { method: 'GET' }); // GET /rag/preview
 }
