@@ -6,12 +6,14 @@ import logging
 import os
 from typing import Sequence
 from urllib import error, request
-
+from dotenv import find_dotenv, load_dotenv
 from sqlalchemy.orm import Session
+
 from app.models.entities import Chunk
 from app.repositories.chunk_repo import ChunkRepository
 from .embed_service import embed
 from .qdrant_service import ensure_collection, search_with_scores, upsert_vectors
+load_dotenv(find_dotenv(), override=False)
 
 logger = logging.getLogger(__name__)
 

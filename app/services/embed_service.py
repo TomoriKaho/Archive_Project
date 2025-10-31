@@ -5,7 +5,8 @@ import json
 import logging
 import os
 from urllib import error, request
-
+from dotenv import find_dotenv, load_dotenv
+load_dotenv(find_dotenv(), override=False)
 logger = logging.getLogger(__name__)
 
 

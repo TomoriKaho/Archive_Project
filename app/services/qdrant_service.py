@@ -7,7 +7,8 @@ import os
 from dataclasses import dataclass
 from typing import Any, Sequence
 from urllib import error, request
-
+from dotenv import find_dotenv, load_dotenv
+load_dotenv(find_dotenv(), override=False)
 logger = logging.getLogger(__name__)
 
 
