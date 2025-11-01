@@ -1,11 +1,23 @@
 """文档与chunk相关的REST接口。"""
 from __future__ import annotations  # 允许前置类型注解
 
+import json  # 处理Form中的元数据
 import logging  # 统一日志输出
 from typing import List, Literal, Optional  # 类型注解
 from uuid import UUID  # 使用UUID匹配数据库字段
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status  # FastAPI核心组件
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)  # FastAPI核心组件
 from sqlalchemy.orm import Session  # 数据库会话类型
 
 from app.api.deps import get_db  # 获取数据库session的依赖
@@ -19,7 +31,10 @@ from app.schemas.document import (  # 文档相关schema
     DocumentUpdate,
 )
 from app.schemas.chunk import ChunkOut  # chunk输出schema
-from app.services.chunking import make_chunks  # 文档切分服务
+from app.services.chunking import (
+    make_chunks,
+    parse_structured_entities_from_csv,
+)  # 文档切分服务
 
 router = APIRouter(tags=["documents"])  # 声明文档相关路由
 logger = logging.getLogger(__name__)  # 初始化模块级日志
@@ -91,18 +106,78 @@ def delete_document_by_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
     return Response(status_code=status.HTTP_204_NO_CONTENT)  # 幂等策略：无论是否存在都返回204
 
 
-@router.post("/domains/{domain_id}/documents", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
-def create_document(domain_id: int, payload: DocumentCreate, db: Session = Depends(get_db)):
+@router.post(
+    "/domains/{domain_id}/documents",
+    response_model=DocumentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_document(
+    domain_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    title_form: str | None = Form(default=None),
+    mode_form: str | None = Form(default=None),
+    content_form: str | None = Form(default=None),
+    metadata_form: str | None = Form(default=None),
+    file: UploadFile | None = File(default=None),
+):
     """在指定domain下创建文档并立即生成chunks。"""
     domain_repo = DomainRepository(db)  # 初始化domain仓储
     if not domain_repo.get(domain_id):
         raise HTTPException(status_code=404, detail="domain not found")  # domain不存在直接返回404
     doc_repo = DocumentRepository(db)  # 初始化文档仓储
-    data = payload.model_dump()  # 转换为字典便于拆分
-    raw_content = data.pop("content")  # 取出原始内容用于切分
-    data["domain_id"] = domain_id  # 写入所属domain
+    content_type = request.headers.get("content-type", "")
+    structured_entities = None
+    if content_type.startswith("multipart/form-data"):
+        title_value = (title_form or "").strip()
+        if not title_value:
+            raise HTTPException(status_code=422, detail="title is required")
+        mode = (mode_form or "text").lower()
+        doc_metadata = {}
+        raw_content = ""
+        if metadata_form:
+            try:
+                parsed_metadata = json.loads(metadata_form)
+                if isinstance(parsed_metadata, dict):
+                    doc_metadata = parsed_metadata
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="doc_metadata must be valid JSON")
+        if mode == "csv":
+            if file is None:
+                raise HTTPException(status_code=400, detail="csv file is required")
+            raw_bytes = await file.read()
+            if not raw_bytes:
+                raise HTTPException(status_code=400, detail="csv file is empty")
+            try:
+                csv_text = raw_bytes.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                csv_text = raw_bytes.decode("utf-8", errors="ignore")
+            structured_entities = parse_structured_entities_from_csv(csv_text)
+            if not structured_entities:
+                raise HTTPException(status_code=400, detail="csv file has no valid rows")
+            raw_content = csv_text
+            doc_metadata.update({"type": "structured", "source": "csv"})
+        else:
+            raw_content = content_form or ""
+            if not raw_content.strip():
+                raise HTTPException(status_code=400, detail="text content is required")
+        title = title_value
+    else:
+        try:
+            payload_data = await request.json()
+        except ValueError as exc:  # pragma: no cover - FastAPI会统一处理但做容错
+            raise HTTPException(status_code=400, detail="invalid request body") from exc
+        payload = DocumentCreate.model_validate(payload_data)
+        title = payload.title
+        raw_content = payload.content
+        doc_metadata = payload.doc_metadata or {}
+    data = {"title": title, "doc_metadata": doc_metadata, "domain_id": domain_id}
     document = doc_repo.create(**data)  # 创建文档记录
-    chunk_texts = make_chunks(document, raw_content)  # 生成chunk文本列表
+    chunk_texts = make_chunks(
+        document,
+        raw_content,
+        structured_entities=structured_entities,
+    )  # 生成chunk文本列表
     ChunkRepository(db).bulk_create_for_document(document.id, chunk_texts)  # 批量写入chunk表
     logger.info(
         "create_document domain=%s document_id=%s uuid=%s chunk_count=%s",
