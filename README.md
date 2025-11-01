@@ -428,7 +428,7 @@ ollama pull llama3.1:8b
 ### 常用调试命令
 
 ```bash
-# 1) 把指定文档的向量写入 Qdrant
+# 1) 手动重新把指定文档的向量写入 Qdrant（通常无需调用）
 curl -X POST http://localhost:8000/rag/ingest/42
 
 # 2) 在 chat 中问问题（并得到 RAG 的回答）

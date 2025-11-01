@@ -35,6 +35,7 @@ from app.services.chunking import (
     make_chunks,
     parse_structured_entities_from_csv,
 )  # 文档切分服务
+from app.services.rag_service import index_chunks, remove_vectors  # 自动管理向量库
 
 router = APIRouter(tags=["documents"])  # 声明文档相关路由
 logger = logging.getLogger(__name__)  # 初始化模块级日志
@@ -98,11 +99,37 @@ def get_document_by_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
 @router.delete("/documents/by-uuid/{doc_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document_by_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
     """按UUID删除文档，同时依赖外键级联清理chunks。"""
-    deleted = DocumentRepository(db).delete_by_uuid(doc_uuid)  # 先删后看结果
-    if not deleted:
+    doc_repo = DocumentRepository(db)
+    document = doc_repo.get_by_uuid(doc_uuid)
+    if not document:
         logger.info("delete_document_by_uuid idempotent miss uuid=%s", doc_uuid)  # 记录幂等删除
-    else:
-        logger.info("delete_document_by_uuid success uuid=%s", doc_uuid)  # 删除成功日志
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    chunk_repo = ChunkRepository(db)
+    chunks = list(chunk_repo.list_by_document(document.id))
+    chunk_ids = [chunk.id for chunk in chunks]
+    removed = 0
+    if chunk_ids:
+        try:
+            removed = remove_vectors(chunk_ids)
+        except RuntimeError as exc:  # pragma: no cover - 向量服务异常时记录日志并返回
+            logger.exception(
+                "auto_remove_vectors_failed document_id=%s uuid=%s chunk_count=%s",
+                document.id,
+                doc_uuid,
+                len(chunk_ids),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(exc),
+            ) from exc
+    db.delete(document)
+    db.flush()
+    logger.info(
+        "delete_document_by_uuid success uuid=%s document_id=%s removed_vectors=%s",
+        doc_uuid,
+        document.id,
+        removed,
+    )  # 删除成功日志
     return Response(status_code=status.HTTP_204_NO_CONTENT)  # 幂等策略：无论是否存在都返回204
 
 
@@ -178,13 +205,32 @@ async def create_document(
         raw_content,
         structured_entities=structured_entities,
     )  # 生成chunk文本列表
-    ChunkRepository(db).bulk_create_for_document(document.id, chunk_texts)  # 批量写入chunk表
+    chunk_repo = ChunkRepository(db)
+    chunks = list(
+        chunk_repo.bulk_create_for_document(document.id, chunk_texts)
+    )  # 批量写入chunk表
+    for chunk in chunks:  # 确保向量写入时能读取domain信息
+        chunk.document = document
+    try:
+        indexed = index_chunks(chunks)
+    except RuntimeError as exc:  # pragma: no cover - 向量服务异常时记录日志并返回
+        logger.exception(
+            "auto_index_document_failed domain=%s document_id=%s uuid=%s",
+            domain_id,
+            document.id,
+            document.uuid,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
     logger.info(
-        "create_document domain=%s document_id=%s uuid=%s chunk_count=%s",
+        "create_document domain=%s document_id=%s uuid=%s chunk_count=%s indexed=%s",
         domain_id,
         document.id,
         document.uuid,
         len(chunk_texts),
+        indexed,
     )  # 记录创建详情
     return document  # 返回文档信息
 
