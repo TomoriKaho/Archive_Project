@@ -280,6 +280,144 @@ body {
   margin-bottom: 16px;
 }
 
+/* 表单模式切换容器 */
+.form-toggle {
+  /* 使用响应式网格排列选项 */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* 模式切换单个选项 */
+.form-toggle__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+/* 模式切换选项激活状态 */
+.form-toggle__option--active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  background-color: #eff6ff;
+}
+
+/* 模式切换文本容器 */
+.form-toggle__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 模式标题 */
+.form-toggle__title {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* 模式描述 */
+.form-toggle__description {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* 内容面板容器 */
+.content-pane {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 当前激活的内容面板 */
+.content-pane--active {
+  display: flex;
+}
+
+/* 文本输入区域补充样式 */
+.content-pane textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+/* 表单提示文本 */
+.form-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+/* 上传区域样式 */
+.upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  border: 2px dashed #cbd5f5;
+  border-radius: 10px;
+  background-color: #f8fafc;
+  color: #1f2937;
+  text-align: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  cursor: pointer;
+}
+
+/* 上传提示文字 */
+.upload-dropzone__hint {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+/* 拖拽状态样式 */
+.upload-dropzone--dragover {
+  border-color: #2563eb;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* 已选择文件名样式 */
+.upload-filename {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* 高亮显示已选文件名 */
+.upload-filename--active {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+/* 处理中提示 */
+.form-processing {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  color: #2563eb;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+/* 处理中提示激活状态 */
+.form-processing--active {
+  display: inline-flex;
+}
+
+/* 处理中提示中的加载指示器稍小一点 */
+.form-processing .spinner {
+  width: 14px;
+  height: 14px;
+}
+
 /* 表格容器 */
 .table-wrapper {
   /* 使用白色背景突出数据 */
