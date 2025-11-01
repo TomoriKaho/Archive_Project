@@ -146,14 +146,12 @@
 #### POST /domains/{domain_id}/documents
 - **说明**：在指定 domain 下创建文档并自动生成 chunks。
 - **路径参数**：`domain_id`（int）。
-- **请求体**：`DocumentCreate`
-  ```json
-  {
-    "title": "string",
-    "content": "string",
-    "doc_metadata": {}
-  }
-  ```
+- **请求体**：
+  - 纯文本：仍可发送 JSON 请求体 `DocumentCreate`，内容使用滑动窗口（大小 250、前后重叠 50）拆分。
+  - 结构化 CSV：发送 `multipart/form-data`，字段包含：
+    - `title`：文档标题；
+    - `mode=csv`；
+    - `file`：CSV 文件，首列 `entity`，其余列作为键值字段，服务端解析为 `entity:key:value` 形式的 chunks（每段 <250 字符，尽量容纳更多键值对）。
 - **成功响应**：`201 Created`，`DocumentOut`。
 - **错误**：`404 Not Found`（domain 不存在）。
 

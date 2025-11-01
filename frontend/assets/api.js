@@ -124,8 +124,8 @@ export function getDocumentByUUID(uuid) { // 根据 UUID 获取文档
   return request(`/documents/by-uuid/${uuid}`, { method: 'GET' }); // 调用详情接口
 }
 
-export function createDocument(domain_id, { title, content, doc_metadata }) { // 创建文档
-  return request(`/domains/${domain_id}/documents`, { method: 'POST', body: { title, content, doc_metadata } }); // 在指定域下创建文档
+export function createDocument(domain_id, payload) { // 创建文档
+  return request(`/domains/${domain_id}/documents`, { method: 'POST', body: payload }); // 在指定域下创建文档
 }
 
 export function deleteDocumentByUUID(uuid) { // 删除文档

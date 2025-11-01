@@ -271,30 +271,51 @@ function openCreateDialog(refresh) { // 打开创建文档对话框
   modeLabel.className = 'label'; // 设置样式
   modeLabel.textContent = '内容模式'; // 标签文本
   modeGroup.appendChild(modeLabel); // 添加标签
-  const textOption = document.createElement('label'); // 创建文本模式选项
-  textOption.style.display = 'flex'; // 使用弹性布局
-  textOption.style.alignItems = 'center'; // 垂直居中
-  textOption.style.gap = '8px'; // 设置间距
-  const textRadio = document.createElement('input'); // 创建单选按钮
-  textRadio.type = 'radio'; // 指定类型
-  textRadio.name = 'mode'; // 设置 name
-  textRadio.value = 'text'; // 设置值
-  textRadio.checked = true; // 默认选中文本模式
-  textOption.appendChild(textRadio); // 添加单选按钮
-  textOption.appendChild(document.createTextNode('纯文本')); // 添加文本说明
-  const jsonOption = document.createElement('label'); // 创建 JSON 模式选项
-  jsonOption.style.display = 'flex'; // 使用弹性布局
-  jsonOption.style.alignItems = 'center'; // 垂直居中
-  jsonOption.style.gap = '8px'; // 设置间距
-  const jsonRadio = document.createElement('input'); // 创建单选按钮
-  jsonRadio.type = 'radio'; // 指定类型
-  jsonRadio.name = 'mode'; // 设置 name
-  jsonRadio.value = 'json'; // 设置值
-  jsonOption.appendChild(jsonRadio); // 添加单选按钮
-  jsonOption.appendChild(document.createTextNode('结构化 JSON')); // 添加文本说明
-  modeGroup.appendChild(textOption); // 添加文本选项
-  modeGroup.appendChild(jsonOption); // 添加 JSON 选项
-  form.appendChild(modeGroup); // 渲染容器
+  const modeOptions = document.createElement('div'); // 创建模式切换区域
+  modeOptions.className = 'form-toggle'; // 应用样式
+  const textOption = document.createElement('label'); // 文本模式选项
+  textOption.className = 'form-toggle__option form-toggle__option--active';
+  textOption.setAttribute('data-mode', 'text');
+  const textRadio = document.createElement('input'); // 文本模式单选
+  textRadio.type = 'radio';
+  textRadio.name = 'mode';
+  textRadio.value = 'text';
+  textRadio.checked = true;
+  const textOptionContent = document.createElement('div'); // 文本模式说明
+  textOptionContent.className = 'form-toggle__content';
+  const textOptionTitle = document.createElement('div');
+  textOptionTitle.className = 'form-toggle__title';
+  textOptionTitle.textContent = '纯文本';
+  const textOptionDesc = document.createElement('div');
+  textOptionDesc.className = 'form-toggle__description';
+  textOptionDesc.textContent = '直接粘贴或输入纯文本内容，系统将按滑动窗口拆分。';
+  textOptionContent.appendChild(textOptionTitle);
+  textOptionContent.appendChild(textOptionDesc);
+  textOption.appendChild(textRadio);
+  textOption.appendChild(textOptionContent);
+  const csvOption = document.createElement('label'); // CSV 模式选项
+  csvOption.className = 'form-toggle__option';
+  csvOption.setAttribute('data-mode', 'csv');
+  const csvRadio = document.createElement('input'); // CSV 单选按钮
+  csvRadio.type = 'radio';
+  csvRadio.name = 'mode';
+  csvRadio.value = 'csv';
+  const csvOptionContent = document.createElement('div');
+  csvOptionContent.className = 'form-toggle__content';
+  const csvOptionTitle = document.createElement('div');
+  csvOptionTitle.className = 'form-toggle__title';
+  csvOptionTitle.textContent = 'CSV 上传';
+  const csvOptionDesc = document.createElement('div');
+  csvOptionDesc.className = 'form-toggle__description';
+  csvOptionDesc.textContent = '上传结构化 CSV，我们会解析实体并按 key-value 自动分段。';
+  csvOptionContent.appendChild(csvOptionTitle);
+  csvOptionContent.appendChild(csvOptionDesc);
+  csvOption.appendChild(csvRadio);
+  csvOption.appendChild(csvOptionContent);
+  modeOptions.appendChild(textOption);
+  modeOptions.appendChild(csvOption);
+  modeGroup.appendChild(modeOptions);
+  form.appendChild(modeGroup); // 渲染模式切换
   const contentGroup = document.createElement('div'); // 创建内容输入容器
   contentGroup.className = 'form-group'; // 应用样式
   const contentLabel = document.createElement('label'); // 创建标签
@@ -302,14 +323,140 @@ function openCreateDialog(refresh) { // 打开创建文档对话框
   contentLabel.textContent = '内容'; // 标签文本
   contentLabel.setAttribute('for', 'doc-content'); // 关联输入
   contentGroup.appendChild(contentLabel); // 添加标签
+  const textPane = document.createElement('div'); // 文本模式容器
+  textPane.className = 'content-pane content-pane--active';
   const contentInput = document.createElement('textarea'); // 创建文本域
   contentInput.className = 'input'; // 应用输入样式
   contentInput.id = 'doc-content'; // 设置 ID
   contentInput.name = 'content'; // 设置 name
-  contentInput.required = true; // 设置必填
+  contentInput.required = true; // 默认文本必填
   contentInput.style.minHeight = '160px'; // 设置高度
-  contentGroup.appendChild(contentInput); // 添加文本域
-  form.appendChild(contentGroup); // 渲染容器
+  textPane.appendChild(contentInput); // 添加文本域
+  const textHint = document.createElement('p'); // 文本模式提示
+  textHint.className = 'form-hint';
+  textHint.textContent = '系统会使用 250 字符窗口并重叠 50 字符自动拆分文本。';
+  textPane.appendChild(textHint);
+  const csvPane = document.createElement('div'); // CSV 模式容器
+  csvPane.className = 'content-pane';
+  const fileInput = document.createElement('input'); // 创建文件选择器
+  fileInput.type = 'file';
+  fileInput.accept = '.csv,text/csv';
+  fileInput.name = 'file';
+  fileInput.id = 'doc-file';
+  fileInput.style.display = 'none';
+  const uploadLabel = document.createElement('label'); // 上传区域
+  uploadLabel.className = 'upload-dropzone';
+  uploadLabel.setAttribute('for', 'doc-file');
+  uploadLabel.setAttribute('role', 'button');
+  uploadLabel.tabIndex = 0;
+  const uploadTitle = document.createElement('strong');
+  uploadTitle.textContent = '选择或拖拽 CSV 文件';
+  const uploadHint = document.createElement('span');
+  uploadHint.className = 'upload-dropzone__hint';
+  uploadHint.textContent = '仅支持 UTF-8 编码 CSV，首行作为表头。';
+  uploadLabel.appendChild(uploadTitle);
+  uploadLabel.appendChild(uploadHint);
+  const fileNameDisplay = document.createElement('span');
+  fileNameDisplay.className = 'upload-filename';
+  fileNameDisplay.textContent = '尚未选择文件';
+  const csvHint = document.createElement('p');
+  csvHint.className = 'form-hint';
+  csvHint.textContent = '我们会将每一行解析为 entity:key:value 形式，单段最长 250 字符。';
+  csvPane.appendChild(fileInput);
+  csvPane.appendChild(uploadLabel);
+  csvPane.appendChild(fileNameDisplay);
+  csvPane.appendChild(csvHint);
+  contentGroup.appendChild(textPane);
+  contentGroup.appendChild(csvPane);
+  form.appendChild(contentGroup); // 渲染内容区域
+  const processingNotice = document.createElement('div'); // 处理中提示
+  processingNotice.className = 'form-processing';
+  const processingSpinner = spinner();
+  processingNotice.appendChild(processingSpinner);
+  const processingText = document.createElement('span');
+  processingText.textContent = '处理中，请稍候…';
+  processingNotice.appendChild(processingText);
+  form.appendChild(processingNotice);
+  let currentMode = 'text'; // 记录当前模式
+  const updateFileName = (file) => { // 更新已选文件名
+    if (file) {
+      fileNameDisplay.textContent = file.name;
+      fileNameDisplay.classList.add('upload-filename--active');
+    } else {
+      fileNameDisplay.textContent = '尚未选择文件';
+      fileNameDisplay.classList.remove('upload-filename--active');
+    }
+  };
+  const setMode = (mode) => { // 切换模式
+    currentMode = mode;
+    const isCsv = mode === 'csv';
+    textRadio.checked = !isCsv;
+    csvRadio.checked = isCsv;
+    if (isCsv) {
+      textOption.classList.remove('form-toggle__option--active');
+      csvOption.classList.add('form-toggle__option--active');
+      textPane.classList.remove('content-pane--active');
+      csvPane.classList.add('content-pane--active');
+      contentInput.required = false;
+      fileInput.required = true;
+    } else {
+      csvOption.classList.remove('form-toggle__option--active');
+      textOption.classList.add('form-toggle__option--active');
+      csvPane.classList.remove('content-pane--active');
+      textPane.classList.add('content-pane--active');
+      fileInput.required = false;
+      contentInput.required = true;
+    }
+  };
+  textRadio.addEventListener('change', () => {
+    if (textRadio.checked) setMode('text');
+  });
+  csvRadio.addEventListener('change', () => {
+    if (csvRadio.checked) setMode('csv');
+  });
+  uploadLabel.addEventListener('keydown', (event) => { // 键盘支持
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      fileInput.click();
+    }
+  });
+  uploadLabel.addEventListener('dragover', (event) => { // 拖拽状态
+    event.preventDefault();
+    uploadLabel.classList.add('upload-dropzone--dragover');
+  });
+  uploadLabel.addEventListener('dragleave', () => {
+    uploadLabel.classList.remove('upload-dropzone--dragover');
+  });
+  uploadLabel.addEventListener('drop', (event) => { // 支持拖拽上传
+    event.preventDefault();
+    uploadLabel.classList.remove('upload-dropzone--dragover');
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (typeof DataTransfer !== 'undefined') {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+      } else {
+        try {
+          fileInput.files = files;
+        } catch (err) {
+          // 某些浏览器不允许直接赋值，忽略错误并保持原状
+        }
+      }
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+  fileInput.addEventListener('change', () => { // 文件选择回调
+    const file = fileInput.files && fileInput.files[0];
+    updateFileName(file);
+  });
+  setMode('text'); // 初始化文本模式
+  const toggleInputsDisabled = (disabled) => { // 批量禁用输入
+    [domainSelect, titleInput, textRadio, csvRadio, contentInput, fileInput].forEach((el) => {
+      if (el) el.disabled = disabled;
+    });
+  };
   const actions = document.createElement('div'); // 创建按钮容器
   actions.className = 'dialog__actions'; // 应用布局样式
   const cancelBtn = document.createElement('button'); // 创建取消按钮
@@ -325,37 +472,58 @@ function openCreateDialog(refresh) { // 打开创建文档对话框
   actions.appendChild(submitBtn); // 添加提交按钮
   form.addEventListener('submit', async (event) => { // 绑定提交事件
     event.preventDefault(); // 阻止默认行为
-    submitBtn.disabled = true; // 禁用按钮
-    const loading = spinner(); // 创建加载指示器
-    submitBtn.appendChild(loading); // 显示加载
     const formData = new FormData(form); // 读取表单数据
     const domain_id = formData.get('domain_id'); // 获取域 ID
-    const titleValue = formData.get('title'); // 获取标题
-    const mode = formData.get('mode'); // 获取模式
-    const contentValue = formData.get('content'); // 获取内容
-    try { // 捕获错误
-      let payloadContent = contentValue; // 默认使用原始内容
-      let metadata = {}; // 初始化元数据
-      if (mode === 'json') { // 若选择结构化模式
-        try { // 尝试解析 JSON
-          JSON.parse(contentValue); // 验证 JSON 格式
-          metadata = { type: 'structured' }; // 标记为结构化
-        } catch (error) { // 解析失败
-          toast('结构化模式需要合法 JSON', 'error'); // 提示错误
-          submitBtn.disabled = false; // 恢复按钮
-          loading.remove(); // 移除加载
-          return; // 中止提交流程
+    const titleValue = (formData.get('title') || '').toString().trim(); // 标题
+    const contentValue = (contentInput.value || '').toString(); // 文本内容
+    const selectedFile = fileInput.files && fileInput.files[0]; // 文件
+    if (!domain_id) {
+      toast('请选择所属域', 'error');
+      return;
+    }
+    if (!titleValue) {
+      toast('请输入标题', 'error');
+      return;
+    }
+    submitBtn.disabled = true; // 禁用提交
+    cancelBtn.disabled = true; // 禁用取消
+    toggleInputsDisabled(true); // 禁用输入控件
+    if (processingNotice) {
+      processingNotice.classList.add('form-processing--active');
+    }
+    try {
+      const payload = new FormData(); // 准备提交载荷
+      payload.append('title', titleValue); // 写入标题
+      payload.append('mode', currentMode || 'text'); // 写入模式
+      if (currentMode === 'csv') {
+        if (!selectedFile) {
+          toast('请选择 CSV 文件', 'error');
+          return;
         }
+        payload.append('file', selectedFile);
+      } else {
+        if (!contentValue.trim()) {
+          toast('请输入文档内容', 'error');
+          return;
+        }
+        payload.append('content', contentValue);
       }
-      await createDocument(domain_id, { title: titleValue, content: payloadContent, doc_metadata: metadata }); // 调用创建接口
+      await createDocument(domain_id, payload); // 调用创建接口
       toast('文档创建成功', 'success'); // 提示成功
       backdrop.remove(); // 关闭对话框
       if (typeof refresh === 'function') await refresh(); // 刷新列表
     } catch (error) { // 捕获异常
       toast(error.message || '创建失败', 'error'); // 提示错误
-    } finally { // 收尾处理
-      submitBtn.disabled = false; // 恢复按钮
-      loading.remove(); // 移除加载指示器
+    } finally {
+      if (processingNotice && processingNotice.classList.contains('form-processing--active')) {
+        processingNotice.classList.remove('form-processing--active');
+      }
+      if (form.isConnected) {
+        submitBtn.disabled = false;
+        cancelBtn.disabled = false;
+        toggleInputsDisabled(false);
+        setMode(currentMode);
+      }
     }
   }); // 提交事件结束
   form.appendChild(actions); // 渲染按钮容器

@@ -1,6 +1,8 @@
 """文档切分服务，负责生成chunk文本。"""
 from __future__ import annotations  # 允许前置注解
 
+import csv  # 解析结构化CSV内容
+import io  # 提供内存文本缓冲
 import json  # 解析结构化JSON内容
 import logging  # 记录切分过程方便调试
 from typing import Any, Dict, List  # 类型注解辅助
@@ -67,9 +69,70 @@ def chunk_structured_entities(entities: List[Dict[str, Any]], max_len: int = 250
     # 设计说明：利用len()按字符计算长度，比字节更符合前端展示长度且兼容中文字符宽度。
 
 
-def make_chunks(document: Document, content: str, size: int = 250, overlap: int = 50) -> List[str]:
+def parse_structured_entities_from_csv(csv_text: str) -> List[Dict[str, Any]]:
+    """将CSV文本解析为实体列表，每个实体包含键值对数据。"""
+    if not csv_text:
+        return []  # 空文本直接返回
+    stream = io.StringIO(csv_text)
+    try:
+        reader = csv.DictReader(stream)
+    except csv.Error:
+        return []  # CSV格式错误直接返回空列表让上层决定
+    if not reader.fieldnames:
+        return []  # 无表头无法识别字段
+    normalized_headers = [
+        (header or "").strip() for header in reader.fieldnames
+    ]  # 去除首尾空白
+    entity_index = 0
+    for idx, header in enumerate(normalized_headers):
+        if header.lower() == "entity":
+            entity_index = idx
+            break
+    entity_header = reader.fieldnames[entity_index]
+    data_headers = [
+        reader.fieldnames[idx]
+        for idx in range(len(reader.fieldnames))
+        if idx != entity_index and reader.fieldnames[idx] is not None
+    ]
+    aggregated: Dict[str, Dict[str, Any]] = {}
+    for row in reader:
+        entity_raw = row.get(entity_header)
+        if entity_raw is None:
+            continue
+        entity = str(entity_raw).strip()
+        if not entity:
+            continue  # 跳过缺少实体名的行
+        entity_data = aggregated.setdefault(entity, {})
+        for header in data_headers:
+            key_name = (header or "").strip()
+            if not key_name:
+                continue
+            value = row.get(header)
+            if value is None:
+                continue
+            value_str = str(value).strip()
+            if not value_str:
+                continue
+            entity_data[key_name] = value_str
+    return [
+        {"entity": entity, "data": data}
+        for entity, data in aggregated.items()
+        if data
+    ]
+
+
+def make_chunks(
+    document: Document,
+    content: str,
+    size: int = 250,
+    overlap: int = 50,
+    structured_entities: List[Dict[str, Any]] | None = None,
+) -> List[str]:
     """根据文档元数据选择合适的切分策略。"""
     metadata: Dict[str, Any] = document.doc_metadata or {}  # 读取文档元数据
+    if structured_entities:
+        logger.info("make_chunks structured_preparsed uuid=%s", document.uuid)
+        return chunk_structured_entities(structured_entities)
     structured_type = metadata.get("type") == "structured"  # 判断是否标记为结构化
     parsed_entities: List[Dict[str, Any]] | None = None  # 初始化解析结果
     if content:
