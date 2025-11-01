@@ -282,18 +282,18 @@ function openCreateDialog(refresh) { // 打开创建文档对话框
   textRadio.checked = true; // 默认选中文本模式
   textOption.appendChild(textRadio); // 添加单选按钮
   textOption.appendChild(document.createTextNode('纯文本')); // 添加文本说明
-  const jsonOption = document.createElement('label'); // 创建 JSON 模式选项
-  jsonOption.style.display = 'flex'; // 使用弹性布局
-  jsonOption.style.alignItems = 'center'; // 垂直居中
-  jsonOption.style.gap = '8px'; // 设置间距
-  const jsonRadio = document.createElement('input'); // 创建单选按钮
-  jsonRadio.type = 'radio'; // 指定类型
-  jsonRadio.name = 'mode'; // 设置 name
-  jsonRadio.value = 'json'; // 设置值
-  jsonOption.appendChild(jsonRadio); // 添加单选按钮
-  jsonOption.appendChild(document.createTextNode('结构化 JSON')); // 添加文本说明
+  const csvOption = document.createElement('label'); // 创建 CSV 模式选项
+  csvOption.style.display = 'flex'; // 使用弹性布局
+  csvOption.style.alignItems = 'center'; // 垂直居中
+  csvOption.style.gap = '8px'; // 设置间距
+  const csvRadio = document.createElement('input'); // 创建单选按钮
+  csvRadio.type = 'radio'; // 指定类型
+  csvRadio.name = 'mode'; // 设置 name
+  csvRadio.value = 'csv'; // 设置值
+  csvOption.appendChild(csvRadio); // 添加单选按钮
+  csvOption.appendChild(document.createTextNode('结构化 CSV')); // 添加文本说明
   modeGroup.appendChild(textOption); // 添加文本选项
-  modeGroup.appendChild(jsonOption); // 添加 JSON 选项
+  modeGroup.appendChild(csvOption); // 添加 CSV 选项
   form.appendChild(modeGroup); // 渲染容器
   const contentGroup = document.createElement('div'); // 创建内容输入容器
   contentGroup.className = 'form-group'; // 应用样式
@@ -309,7 +309,29 @@ function openCreateDialog(refresh) { // 打开创建文档对话框
   contentInput.required = true; // 设置必填
   contentInput.style.minHeight = '160px'; // 设置高度
   contentGroup.appendChild(contentInput); // 添加文本域
+  const fileInput = document.createElement('input'); // 创建文件选择器
+  fileInput.type = 'file'; // 指定为文件
+  fileInput.accept = '.csv,text/csv'; // 限制选择CSV
+  fileInput.name = 'file'; // 设置 name
+  fileInput.style.display = 'none'; // 初始隐藏
+  contentGroup.appendChild(fileInput); // 添加文件输入
   form.appendChild(contentGroup); // 渲染容器
+  const switchMode = (mode) => { // 根据模式切换输入控件
+    if (mode === 'csv') {
+      contentInput.style.display = 'none';
+      contentInput.required = false;
+      fileInput.style.display = 'block';
+      fileInput.required = true;
+    } else {
+      contentInput.style.display = 'block';
+      contentInput.required = true;
+      fileInput.style.display = 'none';
+      fileInput.required = false;
+      fileInput.value = '';
+    }
+  };
+  textRadio.addEventListener('change', () => switchMode('text'));
+  csvRadio.addEventListener('change', () => switchMode('csv'));
   const actions = document.createElement('div'); // 创建按钮容器
   actions.className = 'dialog__actions'; // 应用布局样式
   const cancelBtn = document.createElement('button'); // 创建取消按钮
@@ -333,21 +355,29 @@ function openCreateDialog(refresh) { // 打开创建文档对话框
     const titleValue = formData.get('title'); // 获取标题
     const mode = formData.get('mode'); // 获取模式
     const contentValue = formData.get('content'); // 获取内容
+    const selectedFile = fileInput.files[0]; // 获取文件
     try { // 捕获错误
-      let payloadContent = contentValue; // 默认使用原始内容
-      let metadata = {}; // 初始化元数据
-      if (mode === 'json') { // 若选择结构化模式
-        try { // 尝试解析 JSON
-          JSON.parse(contentValue); // 验证 JSON 格式
-          metadata = { type: 'structured' }; // 标记为结构化
-        } catch (error) { // 解析失败
-          toast('结构化模式需要合法 JSON', 'error'); // 提示错误
-          submitBtn.disabled = false; // 恢复按钮
-          loading.remove(); // 移除加载
-          return; // 中止提交流程
+      const payload = new FormData(); // 准备提交载荷
+      payload.append('title', titleValue); // 写入标题
+      payload.append('mode', mode || 'text'); // 写入模式
+      if (mode === 'csv') { // CSV模式
+        if (!selectedFile) { // 未选择文件
+          toast('请选择 CSV 文件', 'error');
+          submitBtn.disabled = false;
+          loading.remove();
+          return;
         }
+        payload.append('file', selectedFile); // 上传文件
+      } else { // 文本模式
+        if (!contentValue || !String(contentValue).trim()) { // 校验文本
+          toast('请输入文档内容', 'error');
+          submitBtn.disabled = false;
+          loading.remove();
+          return;
+        }
+        payload.append('content', contentValue); // 写入文本内容
       }
-      await createDocument(domain_id, { title: titleValue, content: payloadContent, doc_metadata: metadata }); // 调用创建接口
+      await createDocument(domain_id, payload); // 调用创建接口
       toast('文档创建成功', 'success'); // 提示成功
       backdrop.remove(); // 关闭对话框
       if (typeof refresh === 'function') await refresh(); // 刷新列表
