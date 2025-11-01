@@ -363,17 +363,19 @@ async function loadMessages(chatId) { // 加载消息列表
         const userSection = document.createElement('div');
         userSection.style.display = 'flex';
         userSection.style.flexDirection = 'column';
+        const headerRow = document.createElement('div');
+        headerRow.style.display = 'flex';
+        headerRow.style.alignItems = 'flex-start';
+        headerRow.style.justifyContent = 'space-between';
         const header = document.createElement('div');
-        header.textContent = `USER · ID ${group.user.id}`;
+        header.textContent = 'USER';
         header.style.fontWeight = '600';
-        userSection.appendChild(header);
+        headerRow.appendChild(header);
         const content = document.createElement('p');
         content.textContent = group.user.content || '';
-        userSection.appendChild(content);
         const actions = document.createElement('div');
         actions.style.display = 'flex';
         actions.style.gap = '8px';
-        actions.style.marginTop = '8px';
         const editBtn = document.createElement('button');
         editBtn.className = 'button button--ghost';
         editBtn.type = 'button';
@@ -458,7 +460,9 @@ async function loadMessages(chatId) { // 加载消息列表
           });
         });
         actions.appendChild(deleteBtn);
-        userSection.appendChild(actions);
+        headerRow.appendChild(actions);
+        userSection.appendChild(headerRow);
+        userSection.appendChild(content);
         card.appendChild(userSection);
       }
 
@@ -472,7 +476,7 @@ async function loadMessages(chatId) { // 加载消息列表
         assistantSection.style.display = 'flex';
         assistantSection.style.flexDirection = 'column';
         const header = document.createElement('div');
-        header.textContent = `ASSISTANT · ID ${group.assistant.id}`;
+        header.textContent = 'ASSISTANT';
         header.style.fontWeight = '600';
         assistantSection.appendChild(header);
         const content = document.createElement('p');
