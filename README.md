@@ -67,6 +67,67 @@
    uvicorn app.main:app --reload
    ```
 
+## 前端启动指南（Vue CLI 应用）
+
+新的前端代码位于 `frontend/` 目录，使用 Vue 3 + Pinia + Vue Router 搭建。下面给出从安装依赖到本地调试、构建的完整流程。
+
+1. **进入前端目录并安装依赖**
+
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+   > 如果你在公司或内网环境，需要配置 npm 私有源，请先根据网络要求设置好 `npm config set registry`。
+
+2. **配置前端环境变量**
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+   使用编辑器打开 `.env.local`，根据后端服务的访问地址调整变量：
+
+   ```ini
+   VUE_APP_API_BASE_URL=http://localhost:8000/api
+   VUE_APP_TOKEN_STORAGE_KEY=archive_ai_token
+   ```
+
+   - `VUE_APP_API_BASE_URL`：指向后端 API 的基础路径，默认假设后端运行在本地 8000 端口。
+   - `VUE_APP_TOKEN_STORAGE_KEY`：浏览器本地存储 JWT 的键名，如无特殊需求可保持默认。
+
+3. **启动前端开发服务器**
+
+   ```bash
+   npm run serve
+   ```
+
+   Vue CLI 会在 <http://localhost:8080> 启动热更新开发服务器。首次访问时请确保后端服务已启动，并在登录页面使用后端允许的账号密码登录。
+
+4. **运行代码检查与单元测试（可选）**
+
+   - 代码格式检查：
+
+     ```bash
+     npm run lint
+     ```
+
+   - 单元测试：
+
+     ```bash
+     npm run test:unit
+     ```
+
+5. **构建生产版本（部署时使用）**
+
+   ```bash
+   npm run build
+   ```
+
+   构建产物输出到 `frontend/dist/`，可部署到任意静态资源服务器或反向代理中间件。
+
+完成上述步骤后，即可在浏览器中访问新的 Vue 前端界面。旧的静态 HTML/CSS 前端已移除，不再需要。
+
 ## API 路由参考
 以下内容按资源分组，所有路径均以 `http://localhost:8000` 为基准，实际部署时请替换主机名。
 

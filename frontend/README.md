@@ -85,6 +85,6 @@ src/
 
 All HTTP requests are made through the Axios instance in `src/services/api.js`. The instance automatically attaches the stored JWT and logs the user out when a 401/419 response is received.
 
-## Migrating additional legacy styles or views
+## 扩展样式或视图
 
-Legacy static assets remain under `../legacy_frontend/` for reference. When migrating new UI pieces, convert them into Vue single-file components and either scope styles locally or place shared rules inside `src/assets/styles/main.css`.
+旧的静态资源已移除，如需扩展样式，请参考 `src/assets/styles/` 中的全局样式文件或在组件内使用 `scoped` 样式。
