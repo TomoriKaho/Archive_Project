@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 from app.models.entities import Chunk
 from app.repositories.chunk_repo import ChunkRepository
 from .embed_service import embed
-from .qdrant_service import ensure_collection, search_with_scores, upsert_vectors
+from .qdrant_service import (
+    delete_vectors,
+    ensure_collection,
+    search_with_scores,
+    upsert_vectors,
+)
 load_dotenv(find_dotenv(), override=False)
 
 logger = logging.getLogger(__name__)
@@ -56,6 +61,16 @@ def index_chunks(chunks: Sequence[Chunk]) -> int:
     ensure_collection(dim)  # 首次写入时按首个向量推断维度
     upsert_vectors(ids, vectors, payloads)  # 使用 chunk.id 作为向量库主键
     return len(ids)
+
+
+def remove_vectors(chunk_ids: Sequence[int]) -> int:
+    """Remove chunk vectors from Qdrant and return the number of deleted items."""
+
+    if not chunk_ids:
+        return 0
+    unique_ids = [int(chunk_id) for chunk_id in dict.fromkeys(chunk_ids)]
+    delete_vectors(unique_ids)
+    return len(unique_ids)
 
 
 def retrieve(question: str, top_k: int, domain_ids: list[int] | None, *, db: Session) -> list[Chunk]:

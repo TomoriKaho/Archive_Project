@@ -125,6 +125,21 @@ def upsert_vectors(
     client.request("PUT", f"/collections/{QDRANT_COLLECTION}/points", payload)
 
 
+def delete_vectors(point_ids: Sequence[int]) -> None:
+    """Delete points from Qdrant by their identifiers."""
+
+    if not point_ids:
+        return
+    unique_ids = [int(pid) for pid in dict.fromkeys(point_ids)]
+    client = get_client()
+    payload: dict[str, Any] = {"points": unique_ids, "wait": True}
+    client.request(
+        "POST",
+        f"/collections/{QDRANT_COLLECTION}/points/delete",
+        payload,
+    )
+
+
 def search(
     query_vec: Sequence[float], top_k: int, domain_ids: Sequence[int] | None = None
 ) -> list[int]:
