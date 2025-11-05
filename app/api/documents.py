@@ -142,10 +142,10 @@ async def create_document(
     domain_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    title_form: str | None = Form(default=None),
-    mode_form: str | None = Form(default=None),
-    content_form: str | None = Form(default=None),
-    metadata_form: str | None = Form(default=None),
+    title_form: str | None = Form(default=None, alias="title"),
+    mode_form: str | None = Form(default=None, alias="mode"),
+    content_form: str | None = Form(default=None, alias="content"),
+    metadata_form: str | None = Form(default=None, alias="doc_metadata"),
     file: UploadFile | None = File(default=None),
 ):
     """在指定domain下创建文档并立即生成chunks。"""
