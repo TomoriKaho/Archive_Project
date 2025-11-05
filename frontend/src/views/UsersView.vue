@@ -1,0 +1,199 @@
+<template>
+  <section class="users">
+    <header class="users__header">
+      <div>
+        <h2>Users</h2>
+        <p>Manage roles and send invitations.</p>
+      </div>
+    </header>
+
+    <section class="users__invite">
+      <h3>Invite a user</h3>
+      <div class="invite-form">
+        <div class="form-field" :class="{ 'form-field--error': inviteErrors.email }">
+          <label for="invite-email">Email</label>
+          <input id="invite-email" v-model.trim="inviteForm.email" type="email" placeholder="person@example.com" />
+          <p v-if="inviteErrors.email" class="form-field__error">{{ inviteErrors.email }}</p>
+        </div>
+        <div class="form-field">
+          <label for="invite-role">Role</label>
+          <select id="invite-role" v-model="inviteForm.role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <button class="button button--primary" type="button" @click="inviteUser">
+          {{ isInviting ? 'Sending…' : 'Send invite' }}
+        </button>
+      </div>
+    </section>
+
+    <table class="users__table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-if="usersStore.items.length === 0">
+          <td colspan="5" class="empty">No users found.</td>
+        </tr>
+        <tr v-for="user in usersStore.items" :key="user.id">
+          <td>{{ user.name }}</td>
+          <td>{{ user.email }}</td>
+          <td>
+            <select v-model="userDraft[user.id].role">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </td>
+          <td>
+            <label class="toggle">
+              <input type="checkbox" v-model="userDraft[user.id].active" />
+              <span>{{ userDraft[user.id].active ? 'Active' : 'Disabled' }}</span>
+            </label>
+          </td>
+          <td>
+            <button class="button" type="button" @click="saveUser(user.id)">
+              {{ savingUserId === user.id ? 'Saving…' : 'Save' }}
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</template>
+
+<script setup>
+import { onMounted, reactive, ref, watch } from 'vue';
+
+import { useUsersStore } from '@/store/users';
+
+const usersStore = useUsersStore();
+
+const userDraft = reactive({});
+const savingUserId = ref(null);
+
+const inviteForm = reactive({
+  email: '',
+  role: 'user'
+});
+const inviteErrors = reactive({
+  email: ''
+});
+const isInviting = ref(false);
+
+onMounted(async () => {
+  await usersStore.loadUsers();
+  initializeDraft();
+});
+
+watch(
+  () => usersStore.items,
+  () => {
+    initializeDraft();
+  }
+);
+
+function initializeDraft() {
+  usersStore.items.forEach((user) => {
+    userDraft[user.id] = {
+      role: user.role,
+      active: user.active !== false
+    };
+  });
+}
+
+function validateInvite() {
+  inviteErrors.email = inviteForm.email ? '' : 'Email is required.';
+  return !inviteErrors.email;
+}
+
+async function inviteUser() {
+  if (!validateInvite()) return;
+  isInviting.value = true;
+  try {
+    await usersStore.invite({ ...inviteForm });
+    inviteForm.email = '';
+    inviteForm.role = 'user';
+  } finally {
+    isInviting.value = false;
+  }
+}
+
+async function saveUser(userId) {
+  savingUserId.value = userId;
+  try {
+    await usersStore.saveUser(userId, userDraft[userId]);
+  } finally {
+    savingUserId.value = null;
+  }
+}
+</script>
+
+<style scoped>
+.users__invite {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+  margin-bottom: 24px;
+}
+
+.invite-form {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.invite-form .form-field {
+  flex: 1 1 200px;
+}
+
+.users__table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+}
+
+th,
+td {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f3f4f6;
+  text-align: left;
+}
+
+.empty {
+  text-align: center;
+  color: #9ca3af;
+  padding: 32px 16px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button {
+  border: none;
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.button--primary {
+  background: #1f2937;
+  color: #ffffff;
+}
+</style>

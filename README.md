@@ -440,3 +440,7 @@ curl -X POST http://localhost:8000/chats/7/messages \
 # 3) 预览检索命中（开发调试）
 curl 'http://localhost:8000/rag/preview?q=VOC+Batavia&top_k=5&domain_id=3'
 ```
+
+## Frontend
+
+The Vue-based client lives in [`frontend/`](frontend/README.md). Refer to its README for setup, environment variables, and available npm scripts.
