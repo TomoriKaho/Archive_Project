@@ -17,7 +17,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAuthenticated: (state) => Boolean(state.token),
-    isAdmin: (state) => state.user?.role === 'admin'
+    isAdmin: (state) => Boolean(state.user?.is_admin)
   },
   actions: {
     initialize() {
@@ -38,8 +38,14 @@ export const useAuthStore = defineStore('auth', {
       this.status = 'loading';
       try {
         const { data } = await loginRequest(credentials);
-        this.token = data.token;
-        persistToken(data.token);
+        const token = data.access_token || data.token;
+
+        if (!token) {
+          throw new Error('No access token received from the server.');
+        }
+
+        this.token = token;
+        persistToken(token);
         configureApi(this);
         await this.refreshUser();
         useUiStore().showToast({
@@ -86,7 +92,9 @@ export const useAuthStore = defineStore('auth', {
         const { data } = await fetchCurrentUser();
         this.user = data;
       } catch (error) {
-        this.handleAuthError();
+        if ([401, 403, 419].includes(error.response?.status)) {
+          this.handleAuthError();
+        }
         throw error;
       }
     },

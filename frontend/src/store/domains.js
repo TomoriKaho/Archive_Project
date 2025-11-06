@@ -30,7 +30,11 @@ export const useDomainsStore = defineStore('domains', {
     },
     async create(payload) {
       try {
-        await createDomain(payload);
+        const body = {
+          name: payload.name,
+          description: payload.description || null
+        };
+        await createDomain(body);
         useUiStore().showToast({ type: 'success', message: 'Domain created.' });
         await this.loadDomains();
       } catch (error) {
@@ -43,7 +47,11 @@ export const useDomainsStore = defineStore('domains', {
     },
     async update(domainId, payload) {
       try {
-        await updateDomain(domainId, payload);
+        const body = {
+          name: payload.name,
+          description: payload.description || null
+        };
+        await updateDomain(domainId, body);
         useUiStore().showToast({ type: 'success', message: 'Domain updated.' });
         await this.loadDomains();
       } catch (error) {
