@@ -17,7 +17,9 @@
           }"
         >
           <button type="button" @click="selectConversation(conversation.id)">
-            <span class="chat__conversation-name">{{ conversation.name }}</span>
+            <span class="chat__conversation-name">{{
+              conversation.title || 'Untitled conversation'
+            }}</span>
             <span class="chat__conversation-date">{{
               formatDate(conversation.updated_at)
             }}</span>
@@ -70,7 +72,7 @@
         class="form-field"
         :class="{ 'form-field--error': newConversationErrors.name }"
       >
-        <label for="conversation-name">Conversation Name</label>
+        <label for="conversation-name">Conversation Title</label>
         <input
           id="conversation-name"
           v-model.trim="newConversationForm.name"

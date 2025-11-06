@@ -1,7 +1,7 @@
 """FastAPI 应用入口。"""
 import logging  # 提前配置日志模块
 
-from fastapi import FastAPI  # 导入FastAPI主体
+from fastapi import APIRouter, FastAPI  # 导入FastAPI主体与路由分组
 from fastapi.middleware.cors import CORSMiddleware  # 引入CORS中间件处理跨域预检请求
 
 from app.api import domains, chats, documents, auth, users, rag  # 导入各功能路由模块
@@ -23,12 +23,16 @@ app.add_middleware(
     allow_headers=["*"]  # 允许所有自定义请求头，满足Authorization等需求
 )
 
-app.include_router(domains.router)
-app.include_router(chats.router)
-app.include_router(documents.router)
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(rag.router)
+# 统一为所有API增加 `/api` 前缀，兼容前端默认的代理路径
+api_router = APIRouter(prefix="/api")
+api_router.include_router(domains.router)
+api_router.include_router(chats.router)
+api_router.include_router(documents.router)
+api_router.include_router(auth.router)
+api_router.include_router(users.router)
+api_router.include_router(rag.router)
+
+app.include_router(api_router)
 
 
 @app.on_event("startup")

@@ -1,7 +1,7 @@
 <template>
   <section class="dashboard">
     <div class="dashboard__header">
-      <h2>Hello, {{ user?.name || 'Explorer' }}</h2>
+      <h2>Hello, {{ displayName || 'Explorer' }}</h2>
       <p>Here's what's happening with your knowledge base today.</p>
     </div>
 
@@ -10,13 +10,14 @@
         <h3>Profile</h3>
         <ul class="profile-list">
           <li>
-            <span>Name</span><span>{{ user?.name }}</span>
+            <span>Name</span><span>{{ displayName || '—' }}</span>
           </li>
           <li>
             <span>Email</span><span>{{ user?.email }}</span>
           </li>
           <li>
-            <span>Role</span><span class="tag">{{ user?.role }}</span>
+            <span>Role</span>
+            <span class="tag">{{ user?.is_admin ? 'Admin' : 'Member' }}</span>
           </li>
         </ul>
       </div>
@@ -72,6 +73,7 @@ const authStore = useAuthStore();
 const documentsStore = useDocumentsStore();
 
 const user = computed(() => authStore.user);
+const displayName = computed(() => user.value?.full_name || user.value?.email);
 const isAdmin = computed(() => authStore.isAdmin);
 const recentDocuments = computed(() => documentsStore.items.slice(0, 5));
 
