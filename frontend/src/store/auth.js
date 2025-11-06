@@ -1,7 +1,11 @@
 import { defineStore } from 'pinia';
 import router from '@/router';
 import { configureApi, getStoredToken, persistToken } from '@/services/api';
-import { loginRequest, registerRequest, fetchCurrentUser } from '@/services/auth';
+import {
+  loginRequest,
+  registerRequest,
+  fetchCurrentUser
+} from '@/services/auth';
 import { useUiStore } from './ui';
 
 export const useAuthStore = defineStore('auth', {
@@ -38,12 +42,17 @@ export const useAuthStore = defineStore('auth', {
         persistToken(data.token);
         configureApi(this);
         await this.refreshUser();
-        useUiStore().showToast({ type: 'success', message: 'Logged in successfully.' });
+        useUiStore().showToast({
+          type: 'success',
+          message: 'Logged in successfully.'
+        });
         router.push({ name: 'dashboard' });
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: error.response?.data?.message || 'Unable to login. Check your credentials.'
+          message:
+            error.response?.data?.message ||
+            'Unable to login. Check your credentials.'
         });
         throw error;
       } finally {
@@ -54,12 +63,17 @@ export const useAuthStore = defineStore('auth', {
       this.status = 'loading';
       try {
         await registerRequest(payload);
-        useUiStore().showToast({ type: 'success', message: 'Account created. Please login.' });
+        useUiStore().showToast({
+          type: 'success',
+          message: 'Account created. Please login.'
+        });
         router.push({ name: 'login' });
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: error.response?.data?.message || 'Unable to register. Please try again.'
+          message:
+            error.response?.data?.message ||
+            'Unable to register. Please try again.'
         });
         throw error;
       } finally {
@@ -80,7 +94,10 @@ export const useAuthStore = defineStore('auth', {
       this.token = null;
       this.user = null;
       persistToken(null);
-      useUiStore().showToast({ type: 'info', message: 'You have been logged out.' });
+      useUiStore().showToast({
+        type: 'info',
+        message: 'You have been logged out.'
+      });
       router.push({ name: 'login' });
     },
     handleAuthError() {

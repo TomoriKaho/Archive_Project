@@ -14,7 +14,10 @@ export const useUsersStore = defineStore('users', {
         const { data } = await fetchUsers(params);
         this.items = data.items || data;
       } catch (error) {
-        useUiStore().showToast({ type: 'error', message: 'Failed to load users.' });
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Failed to load users.'
+        });
         throw error;
       } finally {
         this.isLoading = false;
@@ -26,16 +29,25 @@ export const useUsersStore = defineStore('users', {
         useUiStore().showToast({ type: 'success', message: 'User updated.' });
         await this.loadUsers();
       } catch (error) {
-        useUiStore().showToast({ type: 'error', message: 'Unable to update user.' });
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Unable to update user.'
+        });
         throw error;
       }
     },
     async invite(payload) {
       try {
         await inviteUser(payload);
-        useUiStore().showToast({ type: 'success', message: 'Invitation sent.' });
+        useUiStore().showToast({
+          type: 'success',
+          message: 'Invitation sent.'
+        });
       } catch (error) {
-        useUiStore().showToast({ type: 'error', message: 'Unable to send invitation.' });
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Unable to send invitation.'
+        });
         throw error;
       }
     }

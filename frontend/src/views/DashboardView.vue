@@ -9,19 +9,30 @@
       <div class="card">
         <h3>Profile</h3>
         <ul class="profile-list">
-          <li><span>Name</span><span>{{ user?.name }}</span></li>
-          <li><span>Email</span><span>{{ user?.email }}</span></li>
-          <li><span>Role</span><span class="tag">{{ user?.role }}</span></li>
+          <li>
+            <span>Name</span><span>{{ user?.name }}</span>
+          </li>
+          <li>
+            <span>Email</span><span>{{ user?.email }}</span>
+          </li>
+          <li>
+            <span>Role</span><span class="tag">{{ user?.role }}</span>
+          </li>
         </ul>
       </div>
 
       <div class="card">
         <h3>Recent Activity</h3>
         <ul class="activity-list">
-          <li v-if="recentDocuments.length === 0" class="activity-list__empty">No recent documents.</li>
+          <li v-if="recentDocuments.length === 0" class="activity-list__empty">
+            No recent documents.
+          </li>
           <li v-for="document in recentDocuments" :key="document.id">
             <span class="activity-list__title">{{ document.title }}</span>
-            <span class="activity-list__meta">Updated {{ formatDate(document.updated_at || document.created_at) }}</span>
+            <span class="activity-list__meta"
+              >Updated
+              {{ formatDate(document.updated_at || document.created_at) }}</span
+            >
           </li>
         </ul>
       </div>
@@ -29,10 +40,21 @@
       <div class="card">
         <h3>Quick Links</h3>
         <div class="quick-links">
-          <RouterLink class="quick-link" :to="{ name: 'documents' }">Manage Documents</RouterLink>
-          <RouterLink class="quick-link" :to="{ name: 'chat' }">Open Chat</RouterLink>
-          <RouterLink v-if="isAdmin" class="quick-link" :to="{ name: 'domains' }">Domains</RouterLink>
-          <RouterLink v-if="isAdmin" class="quick-link" :to="{ name: 'users' }">Users</RouterLink>
+          <RouterLink class="quick-link" :to="{ name: 'documents' }"
+            >Manage Documents</RouterLink
+          >
+          <RouterLink class="quick-link" :to="{ name: 'chat' }"
+            >Open Chat</RouterLink
+          >
+          <RouterLink
+            v-if="isAdmin"
+            class="quick-link"
+            :to="{ name: 'domains' }"
+            >Domains</RouterLink
+          >
+          <RouterLink v-if="isAdmin" class="quick-link" :to="{ name: 'users' }"
+            >Users</RouterLink
+          >
         </div>
       </div>
     </div>

@@ -2,7 +2,11 @@
   <aside :class="['sidebar', { 'sidebar--collapsed': props.collapsed }]">
     <div class="sidebar__brand">Archive AI</div>
     <ul class="sidebar__menu">
-      <li v-for="item in navigation" :key="item.name" class="sidebar__menu-item">
+      <li
+        v-for="item in navigation"
+        :key="item.name"
+        class="sidebar__menu-item"
+      >
         <RouterLink
           :to="item.to"
           class="sidebar__menu-button"
@@ -37,13 +41,28 @@ const route = useRoute();
 const authStore = useAuthStore();
 
 const baseNavigation = [
-  { name: 'dashboard', label: 'Dashboard', to: { name: 'dashboard' }, path: '/dashboard' },
-  { name: 'documents', label: 'Documents', to: { name: 'documents' }, path: '/documents' },
+  {
+    name: 'dashboard',
+    label: 'Dashboard',
+    to: { name: 'dashboard' },
+    path: '/dashboard'
+  },
+  {
+    name: 'documents',
+    label: 'Documents',
+    to: { name: 'documents' },
+    path: '/documents'
+  },
   { name: 'chat', label: 'Chat', to: { name: 'chat' }, path: '/chat' }
 ];
 
 const adminNavigation = [
-  { name: 'domains', label: 'Domains', to: { name: 'domains' }, path: '/domains' },
+  {
+    name: 'domains',
+    label: 'Domains',
+    to: { name: 'domains' },
+    path: '/domains'
+  },
   { name: 'users', label: 'Users', to: { name: 'users' }, path: '/users' }
 ];
 

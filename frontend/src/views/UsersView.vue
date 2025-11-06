@@ -10,10 +10,20 @@
     <section class="users__invite">
       <h3>Invite a user</h3>
       <div class="invite-form">
-        <div class="form-field" :class="{ 'form-field--error': inviteErrors.email }">
+        <div
+          class="form-field"
+          :class="{ 'form-field--error': inviteErrors.email }"
+        >
           <label for="invite-email">Email</label>
-          <input id="invite-email" v-model.trim="inviteForm.email" type="email" placeholder="person@example.com" />
-          <p v-if="inviteErrors.email" class="form-field__error">{{ inviteErrors.email }}</p>
+          <input
+            id="invite-email"
+            v-model.trim="inviteForm.email"
+            type="email"
+            placeholder="person@example.com"
+          />
+          <p v-if="inviteErrors.email" class="form-field__error">
+            {{ inviteErrors.email }}
+          </p>
         </div>
         <div class="form-field">
           <label for="invite-role">Role</label>
@@ -22,7 +32,11 @@
             <option value="admin">Admin</option>
           </select>
         </div>
-        <button class="button button--primary" type="button" @click="inviteUser">
+        <button
+          class="button button--primary"
+          type="button"
+          @click="inviteUser"
+        >
           {{ isInviting ? 'Sending…' : 'Send invite' }}
         </button>
       </div>
@@ -54,7 +68,9 @@
           <td>
             <label class="toggle">
               <input type="checkbox" v-model="userDraft[user.id].active" />
-              <span>{{ userDraft[user.id].active ? 'Active' : 'Disabled' }}</span>
+              <span>{{
+                userDraft[user.id].active ? 'Active' : 'Disabled'
+              }}</span>
             </label>
           </td>
           <td>

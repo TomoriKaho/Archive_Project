@@ -1,7 +1,11 @@
 <template>
   <header class="topbar">
     <div class="topbar__left">
-      <button class="topbar__toggle" type="button" @click="$emit('toggle-sidebar')">
+      <button
+        class="topbar__toggle"
+        type="button"
+        @click="$emit('toggle-sidebar')"
+      >
         ☰
       </button>
       <h1 class="topbar__title">{{ title }}</h1>

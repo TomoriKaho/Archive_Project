@@ -5,8 +5,20 @@ import DocumentTable from '@/components/DocumentTable.vue';
 
 describe('DocumentTable', () => {
   const documents = [
-    { id: 1, title: 'B Document', created_at: '2024-01-01', owner: { name: 'Alice' }, tags: ['a'] },
-    { id: 2, title: 'A Document', created_at: '2024-02-01', owner: { name: 'Bob' }, tags: ['b'] }
+    {
+      id: 1,
+      title: 'B Document',
+      created_at: '2024-01-01',
+      owner: { name: 'Alice' },
+      tags: ['a']
+    },
+    {
+      id: 2,
+      title: 'A Document',
+      created_at: '2024-02-01',
+      owner: { name: 'Bob' },
+      tags: ['b']
+    }
   ];
 
   it('emits sort changes', async () => {

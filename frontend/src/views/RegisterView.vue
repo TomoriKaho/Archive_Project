@@ -1,27 +1,49 @@
 <template>
   <form class="auth-form" @submit.prevent="onSubmit">
     <h2 class="auth-form__title">Create your account</h2>
-    <p class="auth-form__subtitle">Join Archive AI to manage knowledge effortlessly.</p>
+    <p class="auth-form__subtitle">
+      Join Archive AI to manage knowledge effortlessly.
+    </p>
 
     <div class="form-field" :class="{ 'form-field--error': errors.name }">
       <label for="name">Full name</label>
-      <input id="name" v-model.trim="form.name" type="text" placeholder="Ada Lovelace" />
+      <input
+        id="name"
+        v-model.trim="form.name"
+        type="text"
+        placeholder="Ada Lovelace"
+      />
       <p v-if="errors.name" class="form-field__error">{{ errors.name }}</p>
     </div>
 
     <div class="form-field" :class="{ 'form-field--error': errors.email }">
       <label for="email">Email</label>
-      <input id="email" v-model.trim="form.email" type="email" placeholder="you@example.com" />
+      <input
+        id="email"
+        v-model.trim="form.email"
+        type="email"
+        placeholder="you@example.com"
+      />
       <p v-if="errors.email" class="form-field__error">{{ errors.email }}</p>
     </div>
 
     <div class="form-field" :class="{ 'form-field--error': errors.password }">
       <label for="password">Password</label>
-      <input id="password" v-model="form.password" type="password" placeholder="Strong password" />
-      <p v-if="errors.password" class="form-field__error">{{ errors.password }}</p>
+      <input
+        id="password"
+        v-model="form.password"
+        type="password"
+        placeholder="Strong password"
+      />
+      <p v-if="errors.password" class="form-field__error">
+        {{ errors.password }}
+      </p>
     </div>
 
-    <div class="form-field" :class="{ 'form-field--error': errors.confirmPassword }">
+    <div
+      class="form-field"
+      :class="{ 'form-field--error': errors.confirmPassword }"
+    >
       <label for="confirmPassword">Confirm password</label>
       <input
         id="confirmPassword"
@@ -29,10 +51,16 @@
         type="password"
         placeholder="Re-enter password"
       />
-      <p v-if="errors.confirmPassword" class="form-field__error">{{ errors.confirmPassword }}</p>
+      <p v-if="errors.confirmPassword" class="form-field__error">
+        {{ errors.confirmPassword }}
+      </p>
     </div>
 
-    <button class="button button--primary" type="submit" :disabled="isSubmitting">
+    <button
+      class="button button--primary"
+      type="submit"
+      :disabled="isSubmitting"
+    >
       {{ isSubmitting ? 'Creating account…' : 'Create Account' }}
     </button>
 
@@ -81,8 +109,13 @@ function validate() {
 
   if (!form.password) {
     errors.password = 'Password is required.';
-  } else if (form.password.length < 8 || !/[A-Z]/.test(form.password) || !/\d/.test(form.password)) {
-    errors.password = 'Use at least 8 characters with a number and uppercase letter.';
+  } else if (
+    form.password.length < 8 ||
+    !/[A-Z]/.test(form.password) ||
+    !/\d/.test(form.password)
+  ) {
+    errors.password =
+      'Use at least 8 characters with a number and uppercase letter.';
   } else {
     errors.password = '';
   }
@@ -93,7 +126,9 @@ function validate() {
     errors.confirmPassword = '';
   }
 
-  return !errors.name && !errors.email && !errors.password && !errors.confirmPassword;
+  return (
+    !errors.name && !errors.email && !errors.password && !errors.confirmPassword
+  );
 }
 
 async function onSubmit() {

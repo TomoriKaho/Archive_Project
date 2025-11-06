@@ -3,11 +3,16 @@
     <header class="document-detail__header">
       <div>
         <h2>{{ document.title }}</h2>
-        <p>Owner: {{ document.owner?.name || document.owner?.email || 'Unknown' }}</p>
+        <p>
+          Owner:
+          {{ document.owner?.name || document.owner?.email || 'Unknown' }}
+        </p>
       </div>
       <div class="document-detail__actions">
         <button class="button" type="button" @click="openEdit">Edit</button>
-        <button class="button button--danger" type="button" @click="remove">Delete</button>
+        <button class="button button--danger" type="button" @click="remove">
+          Delete
+        </button>
       </div>
     </header>
 
@@ -33,7 +38,9 @@
     </div>
 
     <div class="document-detail__tags">
-      <span v-for="tag in document.tags || []" :key="tag" class="tag">{{ tag }}</span>
+      <span v-for="tag in document.tags || []" :key="tag" class="tag">{{
+        tag
+      }}</span>
     </div>
 
     <article class="document-detail__content">
@@ -43,19 +50,38 @@
 
     <BaseModal v-model="isEditOpen" title="Edit Document">
       <div class="tab-pane">
-        <div class="form-field" :class="{ 'form-field--error': editErrors.title }">
+        <div
+          class="form-field"
+          :class="{ 'form-field--error': editErrors.title }"
+        >
           <label for="edit-title">Title</label>
           <input id="edit-title" v-model.trim="editForm.title" type="text" />
-          <p v-if="editErrors.title" class="form-field__error">{{ editErrors.title }}</p>
+          <p v-if="editErrors.title" class="form-field__error">
+            {{ editErrors.title }}
+          </p>
         </div>
         <div class="form-field">
           <label for="edit-tags">Tags</label>
-          <input id="edit-tags" v-model.trim="editForm.tags" type="text" placeholder="comma separated" />
+          <input
+            id="edit-tags"
+            v-model.trim="editForm.tags"
+            type="text"
+            placeholder="comma separated"
+          />
         </div>
-        <div class="form-field" :class="{ 'form-field--error': editErrors.content }">
+        <div
+          class="form-field"
+          :class="{ 'form-field--error': editErrors.content }"
+        >
           <label for="edit-content">Content</label>
-          <textarea id="edit-content" v-model="editForm.content" rows="8"></textarea>
-          <p v-if="editErrors.content" class="form-field__error">{{ editErrors.content }}</p>
+          <textarea
+            id="edit-content"
+            v-model="editForm.content"
+            rows="8"
+          ></textarea>
+          <p v-if="editErrors.content" class="form-field__error">
+            {{ editErrors.content }}
+          </p>
         </div>
       </div>
       <template #footer>
@@ -66,9 +92,7 @@
       </template>
     </BaseModal>
   </section>
-  <section v-else class="document-detail__loading">
-    Loading document…
-  </section>
+  <section v-else class="document-detail__loading">Loading document…</section>
 </template>
 
 <script setup>
@@ -138,7 +162,9 @@ async function save() {
   try {
     await documentsStore.saveDocument(route.params.id, {
       title: editForm.title,
-      tags: editForm.tags ? editForm.tags.split(',').map((tag) => tag.trim()) : [],
+      tags: editForm.tags
+        ? editForm.tags.split(',').map((tag) => tag.trim())
+        : [],
       content: editForm.content
     });
     closeEdit();

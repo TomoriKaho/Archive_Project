@@ -1,9 +1,16 @@
 <template>
   <div class="toast-container">
     <transition-group name="toast" tag="div">
-      <div v-for="toast in toasts" :key="toast.id" class="toast" :class="`toast--${toast.type}`">
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
+        class="toast"
+        :class="`toast--${toast.type}`"
+      >
         <span>{{ toast.message }}</span>
-        <button type="button" class="toast__close" @click="remove(toast.id)">×</button>
+        <button type="button" class="toast__close" @click="remove(toast.id)">
+          ×
+        </button>
       </div>
     </transition-group>
   </div>

@@ -299,7 +299,8 @@ body {
   border-radius: 10px;
   background-color: #ffffff;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
 
 /* 模式切换选项激活状态 */
@@ -368,7 +369,8 @@ body {
   background-color: #f8fafc;
   color: #1f2937;
   text-align: center;
-  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease,
+    color 0.2s ease;
   cursor: pointer;
 }
 

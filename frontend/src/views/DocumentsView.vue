@@ -3,9 +3,16 @@
     <header class="documents__header">
       <div>
         <h2>Documents</h2>
-        <p>Manage your knowledge assets and ensure they sync with the vector store.</p>
+        <p>
+          Manage your knowledge assets and ensure they sync with the vector
+          store.
+        </p>
       </div>
-      <button class="button button--primary" type="button" @click="openNewDocument">
+      <button
+        class="button button--primary"
+        type="button"
+        @click="openNewDocument"
+      >
         New Document
       </button>
     </header>
@@ -13,7 +20,12 @@
     <div class="documents__controls">
       <div class="form-field">
         <label for="search">Search</label>
-        <input id="search" v-model="search" type="search" placeholder="Search documents" />
+        <input
+          id="search"
+          v-model="search"
+          type="search"
+          placeholder="Search documents"
+        />
       </div>
     </div>
 
@@ -28,18 +40,36 @@
       <BaseTabs v-model="activeTab" :tabs="tabs">
         <template #default="{ active }">
           <div v-if="active === 'text'" class="tab-pane">
-            <div class="form-field" :class="{ 'form-field--error': textErrors.title }">
+            <div
+              class="form-field"
+              :class="{ 'form-field--error': textErrors.title }"
+            >
               <label for="title">Title</label>
-              <input id="title" v-model.trim="textForm.title" type="text" placeholder="Document title" />
-              <p v-if="textErrors.title" class="form-field__error">{{ textErrors.title }}</p>
+              <input
+                id="title"
+                v-model.trim="textForm.title"
+                type="text"
+                placeholder="Document title"
+              />
+              <p v-if="textErrors.title" class="form-field__error">
+                {{ textErrors.title }}
+              </p>
             </div>
 
             <div class="form-field">
               <label for="tags">Tags (comma separated)</label>
-              <input id="tags" v-model.trim="textForm.tags" type="text" placeholder="research, ai" />
+              <input
+                id="tags"
+                v-model.trim="textForm.tags"
+                type="text"
+                placeholder="research, ai"
+              />
             </div>
 
-            <div class="form-field" :class="{ 'form-field--error': textErrors.content }">
+            <div
+              class="form-field"
+              :class="{ 'form-field--error': textErrors.content }"
+            >
               <label for="content">Content</label>
               <textarea
                 id="content"
@@ -47,15 +77,26 @@
                 rows="8"
                 placeholder="Paste your content here"
               ></textarea>
-              <p v-if="textErrors.content" class="form-field__error">{{ textErrors.content }}</p>
+              <p v-if="textErrors.content" class="form-field__error">
+                {{ textErrors.content }}
+              </p>
             </div>
           </div>
           <div v-else class="tab-pane">
             <div class="upload-zone" @dragover.prevent @drop.prevent="onDrop">
               <p>Drag & drop your CSV here or click to browse.</p>
-              <input ref="fileInput" type="file" accept=".csv,text/csv" @change="onFileChange" />
-              <button class="button" type="button" @click="fileInput?.click()">Select File</button>
-              <p v-if="csvFile" class="upload-zone__file">Selected: {{ csvFile.name }}</p>
+              <input
+                ref="fileInput"
+                type="file"
+                accept=".csv,text/csv"
+                @change="onFileChange"
+              />
+              <button class="button" type="button" @click="fileInput?.click()">
+                Select File
+              </button>
+              <p v-if="csvFile" class="upload-zone__file">
+                Selected: {{ csvFile.name }}
+              </p>
               <p v-if="csvError" class="form-field__error">{{ csvError }}</p>
             </div>
           </div>
@@ -189,7 +230,9 @@ async function submit() {
     try {
       await documentsStore.createDocument({
         title: textForm.title,
-        tags: textForm.tags ? textForm.tags.split(',').map((tag) => tag.trim()) : [],
+        tags: textForm.tags
+          ? textForm.tags.split(',').map((tag) => tag.trim())
+          : [],
         content: textForm.content
       });
       closeModal();
@@ -212,7 +255,10 @@ async function submit() {
 
 function onSort({ sortBy, sortDirection }) {
   documentsStore.setSorting({ sortBy, sortDirection });
-  documentsStore.loadDocuments({ sort_by: sortBy, sort_direction: sortDirection });
+  documentsStore.loadDocuments({
+    sort_by: sortBy,
+    sort_direction: sortDirection
+  });
 }
 </script>
 

@@ -17,7 +17,11 @@ export const useChatStore = defineStore('chat', {
   }),
   getters: {
     activeConversation(state) {
-      return state.conversations.find((conv) => conv.id === state.activeConversationId) || null;
+      return (
+        state.conversations.find(
+          (conv) => conv.id === state.activeConversationId
+        ) || null
+      );
     }
   },
   actions: {
@@ -27,7 +31,10 @@ export const useChatStore = defineStore('chat', {
         const { data } = await fetchConversations();
         this.conversations = data;
       } catch (error) {
-        useUiStore().showToast({ type: 'error', message: 'Unable to load conversations.' });
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Unable to load conversations.'
+        });
         throw error;
       } finally {
         this.isLoading = false;
@@ -44,7 +51,10 @@ export const useChatStore = defineStore('chat', {
         const { data } = await fetchConversationMessages(conversationId);
         this.messages = data;
       } catch (error) {
-        useUiStore().showToast({ type: 'error', message: 'Failed to load messages.' });
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Failed to load messages.'
+        });
         throw error;
       } finally {
         this.isLoading = false;
@@ -57,9 +67,15 @@ export const useChatStore = defineStore('chat', {
         await this.loadConversations();
         this.activeConversationId = data.id;
         await this.loadMessages(data.id);
-        useUiStore().showToast({ type: 'success', message: 'Conversation created.' });
+        useUiStore().showToast({
+          type: 'success',
+          message: 'Conversation created.'
+        });
       } catch (error) {
-        useUiStore().showToast({ type: 'error', message: 'Unable to start conversation.' });
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Unable to start conversation.'
+        });
         throw error;
       } finally {
         this.isSending = false;
@@ -72,7 +88,10 @@ export const useChatStore = defineStore('chat', {
         const { data } = await sendConversationMessage(conversationId, payload);
         this.messages.push(data);
       } catch (error) {
-        useUiStore().showToast({ type: 'error', message: 'Unable to send message.' });
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Unable to send message.'
+        });
         throw error;
       } finally {
         this.isSending = false;

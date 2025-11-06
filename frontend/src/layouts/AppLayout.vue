@@ -1,5 +1,10 @@
 <template>
-  <div :class="['app-shell', { 'app-shell--collapsed': uiStore.isSidebarCollapsed }]">
+  <div
+    :class="[
+      'app-shell',
+      { 'app-shell--collapsed': uiStore.isSidebarCollapsed }
+    ]"
+  >
     <AppSidebar :collapsed="uiStore.isSidebarCollapsed" />
     <div class="main">
       <AppTopbar :title="title" @toggle-sidebar="uiStore.toggleSidebar" />

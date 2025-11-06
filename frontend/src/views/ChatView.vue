@@ -3,17 +3,24 @@
     <aside class="chat__sidebar">
       <header class="chat__header">
         <h2>Conversations</h2>
-        <button class="button" type="button" @click="openNewConversation">New</button>
+        <button class="button" type="button" @click="openNewConversation">
+          New
+        </button>
       </header>
       <ul class="chat__conversation-list">
         <li
           v-for="conversation in chatStore.conversations"
           :key="conversation.id"
-          :class="{ 'chat__conversation--active': conversation.id === chatStore.activeConversationId }"
+          :class="{
+            'chat__conversation--active':
+              conversation.id === chatStore.activeConversationId
+          }"
         >
           <button type="button" @click="selectConversation(conversation.id)">
             <span class="chat__conversation-name">{{ conversation.name }}</span>
-            <span class="chat__conversation-date">{{ formatDate(conversation.updated_at) }}</span>
+            <span class="chat__conversation-date">{{
+              formatDate(conversation.updated_at)
+            }}</span>
           </button>
         </li>
       </ul>
@@ -24,14 +31,21 @@
         <p v-if="chatStore.messages.length === 0" class="chat__empty">
           Select a conversation or start a new one.
         </p>
-        <div v-for="message in chatStore.messages" :key="message.id" class="chat__message" :class="`chat__message--${message.role}`">
+        <div
+          v-for="message in chatStore.messages"
+          :key="message.id"
+          class="chat__message"
+          :class="`chat__message--${message.role}`"
+        >
           <div class="chat__message-meta">
             <span>{{ message.role === 'user' ? 'You' : 'Assistant' }}</span>
             <time>{{ formatDate(message.created_at) }}</time>
           </div>
           <div class="chat__message-content">{{ message.content }}</div>
         </div>
-        <div v-if="chatStore.isSending" class="chat__stream">Assistant is typing…</div>
+        <div v-if="chatStore.isSending" class="chat__stream">
+          Assistant is typing…
+        </div>
       </div>
 
       <form class="chat__composer" @submit.prevent="sendMessage">
@@ -41,26 +55,54 @@
           placeholder="Type your message and press send"
           @keydown.enter.exact.prevent="sendMessage"
         ></textarea>
-        <button class="button button--primary" type="submit" :disabled="!canSend">
+        <button
+          class="button button--primary"
+          type="submit"
+          :disabled="!canSend"
+        >
           Send
         </button>
       </form>
     </div>
 
     <BaseModal v-model="isNewConversationOpen" title="Start New Conversation">
-      <div class="form-field" :class="{ 'form-field--error': newConversationErrors.name }">
+      <div
+        class="form-field"
+        :class="{ 'form-field--error': newConversationErrors.name }"
+      >
         <label for="conversation-name">Conversation Name</label>
-        <input id="conversation-name" v-model.trim="newConversationForm.name" type="text" />
-        <p v-if="newConversationErrors.name" class="form-field__error">{{ newConversationErrors.name }}</p>
+        <input
+          id="conversation-name"
+          v-model.trim="newConversationForm.name"
+          type="text"
+        />
+        <p v-if="newConversationErrors.name" class="form-field__error">
+          {{ newConversationErrors.name }}
+        </p>
       </div>
-      <div class="form-field" :class="{ 'form-field--error': newConversationErrors.prompt }">
+      <div
+        class="form-field"
+        :class="{ 'form-field--error': newConversationErrors.prompt }"
+      >
         <label for="conversation-prompt">Initial Prompt</label>
-        <textarea id="conversation-prompt" v-model="newConversationForm.prompt" rows="4"></textarea>
-        <p v-if="newConversationErrors.prompt" class="form-field__error">{{ newConversationErrors.prompt }}</p>
+        <textarea
+          id="conversation-prompt"
+          v-model="newConversationForm.prompt"
+          rows="4"
+        ></textarea>
+        <p v-if="newConversationErrors.prompt" class="form-field__error">
+          {{ newConversationErrors.prompt }}
+        </p>
       </div>
       <template #footer>
-        <button class="button" type="button" @click="closeNewConversation">Cancel</button>
-        <button class="button button--primary" type="button" @click="startConversation">
+        <button class="button" type="button" @click="closeNewConversation">
+          Cancel
+        </button>
+        <button
+          class="button button--primary"
+          type="button"
+          @click="startConversation"
+        >
           {{ chatStore.isSending ? 'Starting…' : 'Start Conversation' }}
         </button>
       </template>
@@ -88,7 +130,9 @@ const newConversationErrors = reactive({
   prompt: ''
 });
 
-const canSend = computed(() => message.value.trim().length > 0 && !!chatStore.activeConversationId);
+const canSend = computed(
+  () => message.value.trim().length > 0 && !!chatStore.activeConversationId
+);
 
 onMounted(async () => {
   await chatStore.loadConversations();
@@ -122,8 +166,12 @@ function closeNewConversation() {
 }
 
 function validateNewConversation() {
-  newConversationErrors.name = newConversationForm.name ? '' : 'Name is required.';
-  newConversationErrors.prompt = newConversationForm.prompt ? '' : 'Initial prompt is required.';
+  newConversationErrors.name = newConversationForm.name
+    ? ''
+    : 'Name is required.';
+  newConversationErrors.prompt = newConversationForm.prompt
+    ? ''
+    : 'Initial prompt is required.';
   return !newConversationErrors.name && !newConversationErrors.prompt;
 }
 

@@ -5,7 +5,9 @@
         <h2>Domains</h2>
         <p>Manage domains available for document ingestion.</p>
       </div>
-      <button class="button button--primary" type="button" @click="openCreate">New Domain</button>
+      <button class="button button--primary" type="button" @click="openCreate">
+        New Domain
+      </button>
     </header>
 
     <table class="domains__table">
@@ -25,13 +27,25 @@
           <td>{{ domain.name }}</td>
           <td>{{ domain.description }}</td>
           <td>
-            <span class="status" :class="{ 'status--active': domain.active, 'status--inactive': !domain.active }">
+            <span
+              class="status"
+              :class="{
+                'status--active': domain.active,
+                'status--inactive': !domain.active
+              }"
+            >
               {{ domain.active ? 'Active' : 'Inactive' }}
             </span>
           </td>
           <td class="actions">
             <button type="button" @click="openEdit(domain)">Edit</button>
-            <button type="button" class="button--link-danger" @click="remove(domain)">Delete</button>
+            <button
+              type="button"
+              class="button--link-danger"
+              @click="remove(domain)"
+            >
+              Delete
+            </button>
           </td>
         </tr>
       </tbody>
@@ -45,7 +59,11 @@
       </div>
       <div class="form-field">
         <label for="domain-description">Description</label>
-        <textarea id="domain-description" v-model="form.description" rows="3"></textarea>
+        <textarea
+          id="domain-description"
+          v-model="form.description"
+          rows="3"
+        ></textarea>
       </div>
       <div class="form-field form-field--row">
         <label for="domain-active">Active</label>
@@ -83,7 +101,9 @@ const errors = reactive({
   name: ''
 });
 
-const modalTitle = computed(() => (editingDomainId.value ? 'Edit Domain' : 'New Domain'));
+const modalTitle = computed(() =>
+  editingDomainId.value ? 'Edit Domain' : 'New Domain'
+);
 
 onMounted(() => {
   domainsStore.loadDomains();

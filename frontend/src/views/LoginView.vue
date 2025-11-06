@@ -1,21 +1,39 @@
 <template>
   <form class="auth-form" @submit.prevent="onSubmit">
     <h2 class="auth-form__title">Welcome back</h2>
-    <p class="auth-form__subtitle">Sign in to continue managing your archives.</p>
+    <p class="auth-form__subtitle">
+      Sign in to continue managing your archives.
+    </p>
 
     <div class="form-field" :class="{ 'form-field--error': errors.email }">
       <label for="email">Email</label>
-      <input id="email" v-model.trim="form.email" type="email" placeholder="you@example.com" />
+      <input
+        id="email"
+        v-model.trim="form.email"
+        type="email"
+        placeholder="you@example.com"
+      />
       <p v-if="errors.email" class="form-field__error">{{ errors.email }}</p>
     </div>
 
     <div class="form-field" :class="{ 'form-field--error': errors.password }">
       <label for="password">Password</label>
-      <input id="password" v-model="form.password" type="password" placeholder="••••••••" />
-      <p v-if="errors.password" class="form-field__error">{{ errors.password }}</p>
+      <input
+        id="password"
+        v-model="form.password"
+        type="password"
+        placeholder="••••••••"
+      />
+      <p v-if="errors.password" class="form-field__error">
+        {{ errors.password }}
+      </p>
     </div>
 
-    <button class="button button--primary" type="submit" :disabled="isSubmitting">
+    <button
+      class="button button--primary"
+      type="submit"
+      :disabled="isSubmitting"
+    >
       {{ isSubmitting ? 'Signing in…' : 'Sign In' }}
     </button>
 
@@ -60,8 +78,13 @@ function validate() {
 
   if (!form.password) {
     errors.password = 'Password is required.';
-  } else if (form.password.length < 8 || !/[A-Z]/.test(form.password) || !/\d/.test(form.password)) {
-    errors.password = 'Use at least 8 characters with a number and uppercase letter.';
+  } else if (
+    form.password.length < 8 ||
+    !/[A-Z]/.test(form.password) ||
+    !/\d/.test(form.password)
+  ) {
+    errors.password =
+      'Use at least 8 characters with a number and uppercase letter.';
   }
 
   return !errors.email && !errors.password;
@@ -72,7 +95,9 @@ async function onSubmit() {
   isSubmitting.value = true;
   try {
     await authStore.login({ ...form });
-    const redirect = router.currentRoute.value.query.redirect || { name: 'dashboard' };
+    const redirect = router.currentRoute.value.query.redirect || {
+      name: 'dashboard'
+    };
     router.push(redirect);
   } catch (error) {
     // error already handled by store toasts

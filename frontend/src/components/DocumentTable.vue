@@ -6,7 +6,9 @@
           <th v-for="column in columns" :key="column.key">
             <button type="button" @click="changeSort(column.key)">
               {{ column.label }}
-              <span v-if="sortBy === column.key">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+              <span v-if="sortBy === column.key">{{
+                sortDirection === 'asc' ? '▲' : '▼'
+              }}</span>
             </button>
           </th>
           <th>Tags</th>
@@ -24,16 +26,24 @@
           <td>{{ document.owner?.name || document.owner?.email || '—' }}</td>
           <td>
             <div class="tag-list">
-              <span v-for="tag in document.tags || []" :key="tag" class="tag">{{ tag }}</span>
+              <span v-for="tag in document.tags || []" :key="tag" class="tag">{{
+                tag
+              }}</span>
             </div>
           </td>
           <td>
-            <span class="status" :class="`status--${document.status || 'ready'}`">
+            <span
+              class="status"
+              :class="`status--${document.status || 'ready'}`"
+            >
               {{ (document.status || 'ready').toUpperCase() }}
             </span>
           </td>
           <td class="actions">
-            <RouterLink :to="{ name: 'document-detail', params: { id: document.id } }">View</RouterLink>
+            <RouterLink
+              :to="{ name: 'document-detail', params: { id: document.id } }"
+              >View</RouterLink
+            >
           </td>
         </tr>
       </tbody>
