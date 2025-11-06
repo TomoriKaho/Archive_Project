@@ -14,8 +14,8 @@
       <div class="topbar__profile">
         <div class="topbar__avatar">{{ initials }}</div>
         <div>
-          <div class="topbar__name">{{ user.name }}</div>
-          <div class="topbar__role">{{ user.role }}</div>
+          <div class="topbar__name">{{ displayName }}</div>
+          <div class="topbar__role">{{ user.is_admin ? 'Admin' : 'Member' }}</div>
         </div>
       </div>
     </div>
@@ -38,9 +38,12 @@ const authStore = useAuthStore();
 
 const user = computed(() => authStore.user);
 
+const displayName = computed(() => user.value?.full_name || user.value?.email);
+
 const initials = computed(() => {
-  if (!user.value?.name) return 'AA';
-  return user.value.name
+  const source = displayName.value || '';
+  if (!source) return 'AA';
+  return source
     .split(' ')
     .map((part) => part[0])
     .join('')

@@ -6,6 +6,7 @@ import {
   sendConversationMessage
 } from '@/services/chat';
 import { useUiStore } from './ui';
+import { useAuthStore } from './auth';
 
 export const useChatStore = defineStore('chat', {
   state: () => ({
@@ -28,7 +29,12 @@ export const useChatStore = defineStore('chat', {
     async loadConversations() {
       this.isLoading = true;
       try {
-        const { data } = await fetchConversations();
+        const authStore = useAuthStore();
+        if (!authStore.user) {
+          this.conversations = [];
+          return;
+        }
+        const { data } = await fetchConversations(authStore.user.id);
         this.conversations = data;
       } catch (error) {
         useUiStore().showToast({
@@ -63,10 +69,25 @@ export const useChatStore = defineStore('chat', {
     async startConversation(payload) {
       this.isSending = true;
       try {
-        const { data } = await createConversation(payload);
+        const authStore = useAuthStore();
+        if (!authStore.user) {
+          throw new Error('You must be logged in to start a conversation.');
+        }
+        const { name, prompt } = payload;
+        const { data } = await createConversation({
+          user_id: authStore.user.id,
+          title: name?.trim() || null
+        });
         await this.loadConversations();
         this.activeConversationId = data.id;
-        await this.loadMessages(data.id);
+        this.messages = [];
+        if (prompt?.trim()) {
+          await this.sendMessage(data.id, {
+            content: prompt.trim()
+          });
+        } else {
+          await this.loadMessages(data.id);
+        }
         useUiStore().showToast({
           type: 'success',
           message: 'Conversation created.'
@@ -85,8 +106,25 @@ export const useChatStore = defineStore('chat', {
       if (!conversationId) return;
       this.isSending = true;
       try {
-        const { data } = await sendConversationMessage(conversationId, payload);
-        this.messages.push(data);
+        const body = {
+          chat_id: conversationId,
+          role: payload.role || 'user',
+          content: payload.content
+        };
+        if (payload.top_k) {
+          body.top_k = payload.top_k;
+        }
+        if (payload.domain_ids) {
+          body.domain_ids = payload.domain_ids;
+        }
+        const { data } = await sendConversationMessage(conversationId, body);
+        if (data?.user) {
+          this.messages.push(data.user);
+        }
+        if (data?.assistant) {
+          this.messages.push(data.assistant);
+        }
+        return data;
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
