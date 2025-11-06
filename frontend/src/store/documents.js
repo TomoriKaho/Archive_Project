@@ -16,7 +16,8 @@ export const useDocumentsStore = defineStore('documents', {
     filters: {
       search: '',
       sort_by: 'created_at',
-      sort_direction: 'desc'
+      order: 'desc',
+      domain_id: null
     },
     isLoading: false,
     activeDocument: null
@@ -25,7 +26,21 @@ export const useDocumentsStore = defineStore('documents', {
     async loadDocuments(params = {}) {
       this.isLoading = true;
       try {
-        const query = { ...this.filters, ...params };
+        const sortBy = params.sort_by || this.filters.sort_by;
+        const order = params.order || this.filters.order;
+        const domainId =
+          params.domain_id !== undefined
+            ? params.domain_id
+            : this.filters.domain_id;
+        const query = {
+          sort_by: sortBy,
+          order,
+          limit: params.limit ?? 20,
+          offset: params.offset ?? 0
+        };
+        if (domainId) {
+          query.domain_id = domainId;
+        }
         const { data } = await fetchDocuments(query);
         this.items = data.items || data;
         this.total = data.total || data.length;
@@ -44,12 +59,15 @@ export const useDocumentsStore = defineStore('documents', {
     },
     setSorting({ sortBy, sortDirection }) {
       this.filters.sort_by = sortBy;
-      this.filters.sort_direction = sortDirection;
+      this.filters.order = sortDirection;
     },
-    async loadDocument(documentId) {
+    setDomainFilter(domainId) {
+      this.filters.domain_id = domainId;
+    },
+    async loadDocument(documentUuid) {
       this.isLoading = true;
       try {
-        const { data } = await fetchDocument(documentId);
+        const { data } = await fetchDocument(documentUuid);
         this.activeDocument = data;
       } catch (error) {
         useUiStore().showToast({
@@ -63,7 +81,14 @@ export const useDocumentsStore = defineStore('documents', {
     },
     async createDocument(payload) {
       try {
-        const { data } = await createTextDocument(payload);
+        const { domainId, title, content, tags } = payload;
+        const docMetadata = tags?.length ? { tags } : {};
+        const body = {
+          title,
+          content,
+          doc_metadata: docMetadata
+        };
+        const { data } = await createTextDocument(domainId, body);
         useUiStore().showToast({
           type: 'success',
           message: 'Document created successfully.'
@@ -78,9 +103,16 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       }
     },
-    async uploadCsv(formData) {
+    async uploadCsv({ domainId, title, tags, file }) {
       try {
-        await uploadCsvDocument(formData);
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('mode', 'csv');
+        formData.append('file', file);
+        if (tags?.length) {
+          formData.append('doc_metadata', JSON.stringify({ tags }));
+        }
+        await uploadCsvDocument(domainId, formData);
         useUiStore().showToast({
           type: 'success',
           message: 'CSV uploaded successfully.'
@@ -94,9 +126,19 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       }
     },
-    async saveDocument(documentId, payload) {
+    async saveDocument({ documentId, domainId, title, tags, metadata }) {
       try {
-        const { data } = await updateDocument(documentId, payload);
+        const baseMetadata = metadata ? { ...metadata } : {};
+        if (tags?.length) {
+          baseMetadata.tags = tags;
+        } else {
+          delete baseMetadata.tags;
+        }
+        const body = {
+          title,
+          doc_metadata: baseMetadata
+        };
+        const { data } = await updateDocument(domainId, documentId, body);
         useUiStore().showToast({
           type: 'success',
           message: 'Document updated successfully.'
@@ -111,9 +153,9 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       }
     },
-    async removeDocument(documentId) {
+    async removeDocument({ documentId, domainId }) {
       try {
-        await deleteDocument(documentId);
+        await deleteDocument(domainId, documentId);
         useUiStore().showToast({
           type: 'success',
           message: 'Document deleted.'

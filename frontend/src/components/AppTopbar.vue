@@ -15,7 +15,9 @@
         <div class="topbar__avatar">{{ initials }}</div>
         <div>
           <div class="topbar__name">{{ displayName }}</div>
-          <div class="topbar__role">{{ user.is_admin ? 'Admin' : 'Member' }}</div>
+          <div class="topbar__role">
+            {{ user.is_admin ? 'Admin' : 'Member' }}
+          </div>
         </div>
       </div>
     </div>
