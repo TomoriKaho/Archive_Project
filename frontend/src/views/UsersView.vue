@@ -53,13 +53,13 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-if="usersStore.items.length === 0">
+        <tr v-if="usersWithDrafts.length === 0">
           <td colspan="5" class="empty">No users found.</td>
         </tr>
-        <tr v-for="user in usersStore.items" :key="user.id">
+        <tr v-for="{ user, draft } in usersWithDrafts" :key="user.id">
           <td>
             <input
-              v-model.trim="userDraft[user.id].full_name"
+              v-model.trim="draft.full_name"
               type="text"
               placeholder="Name (optional)"
             />
@@ -67,8 +67,8 @@
           <td>{{ user.email }}</td>
           <td>
             <label class="toggle">
-              <input type="checkbox" v-model="userDraft[user.id].is_admin" />
-              <span>{{ userDraft[user.id].is_admin ? 'Admin' : 'User' }}</span>
+              <input type="checkbox" v-model="draft.is_admin" />
+              <span>{{ draft.is_admin ? 'Admin' : 'User' }}</span>
             </label>
           </td>
           <td>{{ formatDate(user.created_at) }}</td>
@@ -84,7 +84,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { useUsersStore } from '@/store/users';
 
@@ -114,13 +114,38 @@ watch(
   }
 );
 
+const usersWithDrafts = computed(() =>
+  usersStore.items.map((user) => ({
+    user,
+    draft: ensureDraft(user)
+  }))
+);
+
 function initializeDraft() {
+  const validIds = new Set(usersStore.items.map((user) => String(user.id)));
+
+  Object.keys(userDraft).forEach((id) => {
+    if (!validIds.has(id)) {
+      delete userDraft[id];
+    }
+  });
+
   usersStore.items.forEach((user) => {
-    userDraft[user.id] = {
+    const draft = ensureDraft(user);
+    draft.full_name = user.full_name ?? '';
+    draft.is_admin = !!user.is_admin;
+  });
+}
+
+function ensureDraft(user) {
+  const id = String(user.id);
+  if (!userDraft[id]) {
+    userDraft[id] = {
       full_name: user.full_name ?? '',
       is_admin: !!user.is_admin
     };
-  });
+  }
+  return userDraft[id];
 }
 
 function formatDate(value) {
@@ -146,9 +171,10 @@ async function inviteUser() {
 }
 
 async function saveUser(userId) {
+  const id = String(userId);
   savingUserId.value = userId;
   try {
-    await usersStore.saveUser(userId, userDraft[userId]);
+    await usersStore.saveUser(userId, userDraft[id]);
   } finally {
     savingUserId.value = null;
   }
