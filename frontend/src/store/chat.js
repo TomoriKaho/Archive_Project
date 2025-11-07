@@ -159,27 +159,44 @@ export const useChatStore = defineStore('chat', {
     },
     async removeConversation(conversationId) {
       if (!conversationId) return;
+      const uiStore = useUiStore();
+      let notFound = false;
       try {
         await deleteConversation(conversationId);
-        if (this.activeConversationId === conversationId) {
-          this.activeConversationId = null;
-          this.messages = [];
-        }
-        await this.loadConversations();
-        if (!this.conversations.length) {
-          return;
-        }
-        if (!this.activeConversationId) {
-          this.activeConversationId = this.conversations[0].id;
-          await this.loadMessages(this.activeConversationId);
-        }
       } catch (error) {
-        useUiStore().showToast({
-          type: 'error',
-          message: 'Unable to delete conversation.'
-        });
-        throw error;
+        if (error?.response?.status === 404) {
+          notFound = true;
+        } else {
+          uiStore.showToast({
+            type: 'error',
+            message: 'Unable to delete conversation.'
+          });
+          throw error;
+        }
       }
+
+      if (this.activeConversationId === conversationId) {
+        this.activeConversationId = null;
+        this.messages = [];
+      }
+
+      await this.loadConversations();
+      if (!this.conversations.length) {
+        uiStore.showToast({
+          type: 'success',
+          message: notFound ? 'Conversation removed.' : 'Conversation deleted.'
+        });
+        return;
+      }
+      if (!this.activeConversationId) {
+        this.activeConversationId = this.conversations[0].id;
+        await this.loadMessages(this.activeConversationId);
+      }
+
+      uiStore.showToast({
+        type: 'success',
+        message: notFound ? 'Conversation removed.' : 'Conversation deleted.'
+      });
     }
   }
 });

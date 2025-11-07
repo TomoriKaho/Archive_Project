@@ -33,7 +33,7 @@
             type="button"
             class="chat__conversation-delete"
             :disabled="conversation.id === deletingConversationId"
-            @click.stop="removeConversation(conversation.id)"
+            @click.stop="promptRemoveConversation(conversation.id)"
             aria-label="Delete conversation"
           >
             {{
@@ -121,6 +121,26 @@
         </button>
       </template>
     </BaseModal>
+
+    <BaseModal v-model="isDeleteConversationOpen" title="Delete Conversation">
+      <p>
+        Are you sure you want to delete this conversation? This action cannot be
+        undone and will remove all messages inside it.
+      </p>
+      <template #footer>
+        <button class="button" type="button" @click="closeDeleteConversation">
+          Cancel
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="deletingConversationId !== null"
+          @click="removeConversation"
+        >
+          {{ deletingConversationId ? 'Deleting…' : 'Delete conversation' }}
+        </button>
+      </template>
+    </BaseModal>
   </section>
 </template>
 
@@ -135,6 +155,8 @@ const message = ref('');
 const messagesContainer = ref(null);
 
 const deletingConversationId = ref(null);
+const confirmingConversationId = ref(null);
+const isDeleteConversationOpen = ref(false);
 
 const isNewConversationOpen = ref(false);
 const newConversationForm = reactive({
@@ -208,13 +230,25 @@ async function sendMessage() {
   await chatStore.sendMessage(chatStore.activeConversationId, { content });
 }
 
-async function removeConversation(id) {
-  if (deletingConversationId.value) return;
+function promptRemoveConversation(id) {
+  confirmingConversationId.value = id;
+  isDeleteConversationOpen.value = true;
+}
+
+function closeDeleteConversation() {
+  isDeleteConversationOpen.value = false;
+  confirmingConversationId.value = null;
+}
+
+async function removeConversation() {
+  const id = confirmingConversationId.value;
+  if (!id || deletingConversationId.value) return;
   deletingConversationId.value = id;
   try {
     await chatStore.removeConversation(id);
   } finally {
     deletingConversationId.value = null;
+    closeDeleteConversation();
   }
 }
 </script>
@@ -384,6 +418,10 @@ async function removeConversation(id) {
   color: #ffffff;
 }
 
+.button--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
 @media (max-width: 960px) {
   .chat {
     grid-template-columns: 1fr;
