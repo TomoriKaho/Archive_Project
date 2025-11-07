@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import {
   fetchConversations,
   createConversation,
+  deleteConversation,
   fetchConversationMessages,
   sendConversationMessage
 } from '@/services/chat';
@@ -104,12 +105,24 @@ export const useChatStore = defineStore('chat', {
     },
     async sendMessage(conversationId, payload) {
       if (!conversationId) return;
+      const content = payload.content?.trim();
+      if (!content) return;
+
+      const tempId = `temp-${Date.now()}`;
+      const userMessage = {
+        id: tempId,
+        role: payload.role || 'user',
+        content,
+        created_at: new Date().toISOString()
+      };
+      this.messages.push(userMessage);
+
       this.isSending = true;
       try {
         const body = {
           chat_id: conversationId,
           role: payload.role || 'user',
-          content: payload.content
+          content
         };
         if (payload.top_k) {
           body.top_k = payload.top_k;
@@ -119,13 +132,22 @@ export const useChatStore = defineStore('chat', {
         }
         const { data } = await sendConversationMessage(conversationId, body);
         if (data?.user) {
-          this.messages.push(data.user);
+          const index = this.messages.findIndex((msg) => msg.id === tempId);
+          if (index !== -1) {
+            this.messages.splice(index, 1, data.user);
+          } else {
+            this.messages.push(data.user);
+          }
         }
         if (data?.assistant) {
           this.messages.push(data.assistant);
         }
         return data;
       } catch (error) {
+        const index = this.messages.findIndex((msg) => msg.id === tempId);
+        if (index !== -1) {
+          this.messages.splice(index, 1);
+        }
         useUiStore().showToast({
           type: 'error',
           message: 'Unable to send message.'
@@ -133,6 +155,30 @@ export const useChatStore = defineStore('chat', {
         throw error;
       } finally {
         this.isSending = false;
+      }
+    },
+    async removeConversation(conversationId) {
+      if (!conversationId) return;
+      try {
+        await deleteConversation(conversationId);
+        if (this.activeConversationId === conversationId) {
+          this.activeConversationId = null;
+          this.messages = [];
+        }
+        await this.loadConversations();
+        if (!this.conversations.length) {
+          return;
+        }
+        if (!this.activeConversationId) {
+          this.activeConversationId = this.conversations[0].id;
+          await this.loadMessages(this.activeConversationId);
+        }
+      } catch (error) {
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Unable to delete conversation.'
+        });
+        throw error;
       }
     }
   }
