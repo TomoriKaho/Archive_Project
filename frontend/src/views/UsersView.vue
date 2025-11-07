@@ -13,13 +13,14 @@
           <th>Name</th>
           <th>Email</th>
           <th>Admin</th>
+          <th>New password</th>
           <th>Created</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr v-if="usersWithDrafts.length === 0">
-          <td colspan="5" class="empty">No users found.</td>
+          <td colspan="6" class="empty">No users found.</td>
         </tr>
         <tr v-for="{ user, draft } in usersWithDrafts" :key="user.id">
           <td>{{ user.full_name || '—' }}</td>
@@ -34,10 +35,27 @@
               {{ draft.is_admin ? 'Admin' : 'User' }}
             </span>
           </td>
+          <td>
+            <input
+              v-model.trim="draft.password"
+              type="password"
+              placeholder="Set new password"
+            />
+          </td>
           <td>{{ formatDate(user.created_at) }}</td>
           <td>
             <button class="button" type="button" @click="openEditUser(user.id)">
               Edit
+            </button>
+            <button
+              class="button button--danger"
+              type="button"
+              :disabled="
+                deletingUserId === user.id || user.id === currentUserId
+              "
+              @click="deleteUser(user.id)"
+            >
+              {{ deleteButtonLabel(user) }}
             </button>
           </td>
         </tr>
