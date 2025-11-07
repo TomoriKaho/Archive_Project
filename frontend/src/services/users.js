@@ -5,7 +5,7 @@ export function fetchUsers(params = {}) {
 }
 
 export function updateUser(userId, payload) {
-  return apiClient.put(`/users/${userId}`, payload);
+  return apiClient.patch(`/users/${userId}`, payload);
 }
 
 export function inviteUser(payload) {

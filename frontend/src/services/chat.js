@@ -1,17 +1,19 @@
 import { apiClient } from './api';
 
-export function fetchConversations() {
-  return apiClient.get('/conversations');
+export function fetchConversations(userId, params = {}) {
+  return apiClient.get('/chats', {
+    params: { user_id: userId, ...params }
+  });
 }
 
 export function createConversation(payload) {
-  return apiClient.post('/conversations', payload);
+  return apiClient.post('/chats', payload);
 }
 
-export function fetchConversationMessages(conversationId) {
-  return apiClient.get(`/conversations/${conversationId}/messages`);
+export function fetchConversationMessages(conversationId, params = {}) {
+  return apiClient.get(`/chats/${conversationId}/messages`, { params });
 }
 
 export function sendConversationMessage(conversationId, payload) {
-  return apiClient.post(`/conversations/${conversationId}/messages`, payload);
+  return apiClient.post(`/chats/${conversationId}/messages`, payload);
 }

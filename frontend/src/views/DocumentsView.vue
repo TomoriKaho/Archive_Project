@@ -27,12 +27,26 @@
           placeholder="Search documents"
         />
       </div>
+      <div class="form-field">
+        <label for="domain-filter">Domain</label>
+        <select id="domain-filter" v-model="selectedDomainFilter">
+          <option value="">All domains</option>
+          <option
+            v-for="domain in domainsStore.items"
+            :key="domain.id"
+            :value="String(domain.id)"
+          >
+            {{ domain.name }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <DocumentTable
       :documents="documentsStore.items"
+      :domains="domainsStore.items"
       :sort-by="documentsStore.filters.sort_by"
-      :sort-direction="documentsStore.filters.sort_direction"
+      :sort-direction="documentsStore.filters.order"
       @update:sort="onSort"
     />
 
@@ -40,6 +54,25 @@
       <BaseTabs v-model="activeTab" :tabs="tabs">
         <template #default="{ active }">
           <div v-if="active === 'text'" class="tab-pane">
+            <div
+              class="form-field"
+              :class="{ 'form-field--error': textErrors.domainId }"
+            >
+              <label for="text-domain">Domain</label>
+              <select id="text-domain" v-model="textForm.domainId">
+                <option value="">Select a domain</option>
+                <option
+                  v-for="domain in domainsStore.items"
+                  :key="domain.id"
+                  :value="String(domain.id)"
+                >
+                  {{ domain.name }}
+                </option>
+              </select>
+              <p v-if="textErrors.domainId" class="form-field__error">
+                {{ textErrors.domainId }}
+              </p>
+            </div>
             <div
               class="form-field"
               :class="{ 'form-field--error': textErrors.title }"
@@ -83,6 +116,49 @@
             </div>
           </div>
           <div v-else class="tab-pane">
+            <div
+              class="form-field"
+              :class="{ 'form-field--error': csvErrors.domainId }"
+            >
+              <label for="csv-domain">Domain</label>
+              <select id="csv-domain" v-model="csvForm.domainId">
+                <option value="">Select a domain</option>
+                <option
+                  v-for="domain in domainsStore.items"
+                  :key="domain.id"
+                  :value="String(domain.id)"
+                >
+                  {{ domain.name }}
+                </option>
+              </select>
+              <p v-if="csvErrors.domainId" class="form-field__error">
+                {{ csvErrors.domainId }}
+              </p>
+            </div>
+            <div
+              class="form-field"
+              :class="{ 'form-field--error': csvErrors.title }"
+            >
+              <label for="csv-title">Title</label>
+              <input
+                id="csv-title"
+                v-model.trim="csvForm.title"
+                type="text"
+                placeholder="Document title"
+              />
+              <p v-if="csvErrors.title" class="form-field__error">
+                {{ csvErrors.title }}
+              </p>
+            </div>
+            <div class="form-field">
+              <label for="csv-tags">Tags (comma separated)</label>
+              <input
+                id="csv-tags"
+                v-model.trim="csvForm.tags"
+                type="text"
+                placeholder="research, ai"
+              />
+            </div>
             <div class="upload-zone" @dragover.prevent @drop.prevent="onDrop">
               <p>Drag & drop your CSV here or click to browse.</p>
               <input
@@ -97,7 +173,9 @@
               <p v-if="csvFile" class="upload-zone__file">
                 Selected: {{ csvFile.name }}
               </p>
-              <p v-if="csvError" class="form-field__error">{{ csvError }}</p>
+              <p v-if="csvErrors.file" class="form-field__error">
+                {{ csvErrors.file }}
+              </p>
             </div>
           </div>
         </template>
@@ -120,10 +198,13 @@ import BaseModal from '@/components/BaseModal.vue';
 import BaseTabs from '@/components/BaseTabs.vue';
 import DocumentTable from '@/components/DocumentTable.vue';
 import { useDocumentsStore } from '@/store/documents';
+import { useDomainsStore } from '@/store/domains';
 
 const documentsStore = useDocumentsStore();
+const domainsStore = useDomainsStore();
 
 const search = ref('');
+const selectedDomainFilter = ref('');
 const isModalOpen = ref(false);
 const activeTab = ref('text');
 const isSubmitting = ref(false);
@@ -134,29 +215,53 @@ const tabs = [
 ];
 
 const textForm = reactive({
+  domainId: '',
   title: '',
   tags: '',
   content: ''
 });
 
 const textErrors = reactive({
+  domainId: '',
   title: '',
   content: ''
 });
 
+const csvForm = reactive({
+  domainId: '',
+  title: '',
+  tags: ''
+});
+
+const csvErrors = reactive({
+  domainId: '',
+  title: '',
+  file: ''
+});
+
 const csvFile = ref(null);
-const csvError = ref('');
 const fileInput = ref(null);
 
 onMounted(() => {
   documentsStore.loadDocuments();
+  domainsStore.loadDomains();
 });
 
 watch(
   () => search.value,
+  () => {
+    documentsStore.setSearch(search.value);
+    documentsStore.loadDocuments();
+  }
+);
+
+watch(
+  () => selectedDomainFilter.value,
   (value) => {
-    documentsStore.setSearch(value);
-    documentsStore.loadDocuments({ search: value });
+    const domainId = value ? Number(value) : null;
+    documentsStore.setDomainFilter(domainId);
+    const query = domainId ? { domain_id: domainId } : {};
+    documentsStore.loadDocuments(query);
   }
 );
 
@@ -170,36 +275,47 @@ function closeModal() {
 }
 
 function resetForms() {
+  textForm.domainId = '';
   textForm.title = '';
   textForm.tags = '';
   textForm.content = '';
+  textErrors.domainId = '';
   textErrors.title = '';
   textErrors.content = '';
+  csvForm.domainId = '';
+  csvForm.title = '';
+  csvForm.tags = '';
+  csvErrors.domainId = '';
+  csvErrors.title = '';
+  csvErrors.file = '';
   csvFile.value = null;
-  csvError.value = '';
+  if (fileInput.value) {
+    fileInput.value.value = '';
+  }
   activeTab.value = 'text';
 }
 
 function validateText() {
+  textErrors.domainId = textForm.domainId ? '' : 'Select a domain.';
   textErrors.title = textForm.title ? '' : 'Title is required.';
   textErrors.content = textForm.content ? '' : 'Content cannot be empty.';
-  return !textErrors.title && !textErrors.content;
+  return !textErrors.domainId && !textErrors.title && !textErrors.content;
 }
 
-function validateCsv(file) {
-  csvError.value = '';
+function validateCsvFile(file) {
+  csvErrors.file = '';
   if (!file) {
-    csvError.value = 'Select a CSV file to upload.';
+    csvErrors.file = 'Select a CSV file to upload.';
     return false;
   }
   const isCsv = file.type === 'text/csv' || file.name.endsWith('.csv');
   if (!isCsv) {
-    csvError.value = 'Only CSV files are allowed.';
+    csvErrors.file = 'Only CSV files are allowed.';
     return false;
   }
   const maxSize = 5 * 1024 * 1024;
   if (file.size > maxSize) {
-    csvError.value = 'File exceeds 5MB limit.';
+    csvErrors.file = 'File exceeds 5MB limit.';
     return false;
   }
   return true;
@@ -207,7 +323,7 @@ function validateCsv(file) {
 
 function onFileChange(event) {
   const [file] = event.target.files;
-  if (validateCsv(file)) {
+  if (validateCsvFile(file)) {
     csvFile.value = file;
   } else {
     csvFile.value = null;
@@ -216,11 +332,26 @@ function onFileChange(event) {
 
 function onDrop(event) {
   const [file] = event.dataTransfer.files;
-  if (validateCsv(file)) {
+  if (validateCsvFile(file)) {
     csvFile.value = file;
   } else {
     csvFile.value = null;
   }
+}
+
+function validateCsvForm() {
+  csvErrors.domainId = csvForm.domainId ? '' : 'Select a domain.';
+  csvErrors.title = csvForm.title ? '' : 'Title is required.';
+  const fileValid = validateCsvFile(csvFile.value);
+  return !csvErrors.domainId && !csvErrors.title && fileValid;
+}
+
+function parseTags(raw) {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 }
 
 async function submit() {
@@ -229,10 +360,9 @@ async function submit() {
     isSubmitting.value = true;
     try {
       await documentsStore.createDocument({
+        domainId: Number(textForm.domainId),
         title: textForm.title,
-        tags: textForm.tags
-          ? textForm.tags.split(',').map((tag) => tag.trim())
-          : [],
+        tags: parseTags(textForm.tags),
         content: textForm.content
       });
       closeModal();
@@ -240,12 +370,15 @@ async function submit() {
       isSubmitting.value = false;
     }
   } else {
-    if (!validateCsv(csvFile.value)) return;
+    if (!validateCsvForm()) return;
     isSubmitting.value = true;
     try {
-      const formData = new FormData();
-      formData.append('file', csvFile.value);
-      await documentsStore.uploadCsv(formData);
+      await documentsStore.uploadCsv({
+        domainId: Number(csvForm.domainId),
+        title: csvForm.title,
+        tags: parseTags(csvForm.tags),
+        file: csvFile.value
+      });
       closeModal();
     } finally {
       isSubmitting.value = false;
@@ -257,7 +390,7 @@ function onSort({ sortBy, sortDirection }) {
   documentsStore.setSorting({ sortBy, sortDirection });
   documentsStore.loadDocuments({
     sort_by: sortBy,
-    sort_direction: sortDirection
+    order: sortDirection
   });
 }
 </script>

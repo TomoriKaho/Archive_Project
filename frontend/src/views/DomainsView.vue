@@ -15,7 +15,8 @@
         <tr>
           <th>Name</th>
           <th>Description</th>
-          <th>Status</th>
+          <th>Created</th>
+          <th>Updated</th>
           <th></th>
         </tr>
       </thead>
@@ -25,18 +26,9 @@
         </tr>
         <tr v-for="domain in domainsStore.items" :key="domain.id">
           <td>{{ domain.name }}</td>
-          <td>{{ domain.description }}</td>
-          <td>
-            <span
-              class="status"
-              :class="{
-                'status--active': domain.active,
-                'status--inactive': !domain.active
-              }"
-            >
-              {{ domain.active ? 'Active' : 'Inactive' }}
-            </span>
-          </td>
+          <td>{{ domain.description || '—' }}</td>
+          <td>{{ formatDate(domain.created_at) }}</td>
+          <td>{{ formatDate(domain.updated_at) }}</td>
           <td class="actions">
             <button type="button" @click="openEdit(domain)">Edit</button>
             <button
@@ -65,10 +57,7 @@
           rows="3"
         ></textarea>
       </div>
-      <div class="form-field form-field--row">
-        <label for="domain-active">Active</label>
-        <input id="domain-active" v-model="form.active" type="checkbox" />
-      </div>
+      <p class="form-hint">Domains are always active once created.</p>
       <template #footer>
         <button class="button" type="button" @click="closeModal">Cancel</button>
         <button class="button button--primary" type="button" @click="submit">
@@ -93,8 +82,7 @@ const editingDomainId = ref(null);
 
 const form = reactive({
   name: '',
-  description: '',
-  active: true
+  description: ''
 });
 
 const errors = reactive({
@@ -113,7 +101,6 @@ function openCreate() {
   editingDomainId.value = null;
   form.name = '';
   form.description = '';
-  form.active = true;
   errors.name = '';
   isModalOpen.value = true;
 }
@@ -122,7 +109,6 @@ function openEdit(domain) {
   editingDomainId.value = domain.id;
   form.name = domain.name;
   form.description = domain.description;
-  form.active = domain.active;
   errors.name = '';
   isModalOpen.value = true;
 }
@@ -141,8 +127,7 @@ async function submit() {
   isSaving.value = true;
   const payload = {
     name: form.name,
-    description: form.description,
-    active: form.active
+    description: form.description
   };
   try {
     if (editingDomainId.value) {
@@ -159,6 +144,11 @@ async function submit() {
 async function remove(domain) {
   if (!confirm(`Delete ${domain.name}?`)) return;
   await domainsStore.remove(domain.id);
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString();
 }
 </script>
 
@@ -205,12 +195,6 @@ td {
   font-weight: 600;
 }
 
-.form-field--row {
-  flex-direction: row;
-  align-items: center;
-  gap: 12px;
-}
-
 .button {
   border: none;
   border-radius: 8px;
@@ -225,11 +209,9 @@ td {
   color: #ffffff;
 }
 
-.status--active {
-  color: #10b981;
-}
-
-.status--inactive {
-  color: #ef4444;
+.form-hint {
+  margin: 12px 0 0;
+  color: #6b7280;
+  font-size: 14px;
 }
 </style>

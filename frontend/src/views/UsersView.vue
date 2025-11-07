@@ -47,8 +47,8 @@
         <tr>
           <th>Name</th>
           <th>Email</th>
-          <th>Role</th>
-          <th>Status</th>
+          <th>Admin</th>
+          <th>Created</th>
           <th></th>
         </tr>
       </thead>
@@ -57,22 +57,21 @@
           <td colspan="5" class="empty">No users found.</td>
         </tr>
         <tr v-for="user in usersStore.items" :key="user.id">
-          <td>{{ user.name }}</td>
+          <td>
+            <input
+              v-model.trim="userDraft[user.id].full_name"
+              type="text"
+              placeholder="Name (optional)"
+            />
+          </td>
           <td>{{ user.email }}</td>
           <td>
-            <select v-model="userDraft[user.id].role">
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
-          </td>
-          <td>
             <label class="toggle">
-              <input type="checkbox" v-model="userDraft[user.id].active" />
-              <span>{{
-                userDraft[user.id].active ? 'Active' : 'Disabled'
-              }}</span>
+              <input type="checkbox" v-model="userDraft[user.id].is_admin" />
+              <span>{{ userDraft[user.id].is_admin ? 'Admin' : 'User' }}</span>
             </label>
           </td>
+          <td>{{ formatDate(user.created_at) }}</td>
           <td>
             <button class="button" type="button" @click="saveUser(user.id)">
               {{ savingUserId === user.id ? 'Saving…' : 'Save' }}
@@ -118,10 +117,15 @@ watch(
 function initializeDraft() {
   usersStore.items.forEach((user) => {
     userDraft[user.id] = {
-      role: user.role,
-      active: user.active !== false
+      full_name: user.full_name ?? '',
+      is_admin: !!user.is_admin
     };
   });
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString();
 }
 
 function validateInvite() {
@@ -185,6 +189,14 @@ td {
   padding: 16px 20px;
   border-bottom: 1px solid #f3f4f6;
   text-align: left;
+}
+
+.users__table input[type='text'] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
 }
 
 .empty {

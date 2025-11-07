@@ -4,24 +4,31 @@ export function fetchDocuments(params = {}) {
   return apiClient.get('/documents', { params });
 }
 
-export function fetchDocument(documentId) {
-  return apiClient.get(`/documents/${documentId}`);
+export function fetchDocument(documentUuid) {
+  return apiClient.get(`/documents/by-uuid/${documentUuid}`);
 }
 
-export function createTextDocument(payload) {
-  return apiClient.post('/documents', payload);
+export function fetchDocumentChunks(documentUuid) {
+  return apiClient.get(`/documents/by-uuid/${documentUuid}/chunks`);
 }
 
-export function uploadCsvDocument(formData) {
-  return apiClient.post('/documents/upload', formData, {
+export function createTextDocument(domainId, payload) {
+  return apiClient.post(`/domains/${domainId}/documents`, payload);
+}
+
+export function uploadCsvDocument(domainId, formData) {
+  return apiClient.post(`/domains/${domainId}/documents`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
 }
 
-export function updateDocument(documentId, payload) {
-  return apiClient.put(`/documents/${documentId}`, payload);
+export function updateDocument(domainId, documentId, payload) {
+  return apiClient.patch(
+    `/domains/${domainId}/documents/${documentId}`,
+    payload
+  );
 }
 
-export function deleteDocument(documentId) {
-  return apiClient.delete(`/documents/${documentId}`);
+export function deleteDocument(domainId, documentId) {
+  return apiClient.delete(`/domains/${domainId}/documents/${documentId}`);
 }

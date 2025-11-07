@@ -25,7 +25,15 @@ export const useUsersStore = defineStore('users', {
     },
     async saveUser(userId, payload) {
       try {
-        await updateUser(userId, payload);
+        const body = {};
+        if (Object.prototype.hasOwnProperty.call(payload, 'full_name')) {
+          const name = payload.full_name ?? '';
+          body.full_name = name.trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'is_admin')) {
+          body.is_admin = !!payload.is_admin;
+        }
+        await updateUser(userId, body);
         useUiStore().showToast({ type: 'success', message: 'User updated.' });
         await this.loadUsers();
       } catch (error) {

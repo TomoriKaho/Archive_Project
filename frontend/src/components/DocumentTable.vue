@@ -4,15 +4,19 @@
       <thead>
         <tr>
           <th v-for="column in columns" :key="column.key">
-            <button type="button" @click="changeSort(column.key)">
+            <button
+              v-if="column.sortable"
+              type="button"
+              @click="changeSort(column.key)"
+            >
               {{ column.label }}
               <span v-if="sortBy === column.key">{{
                 sortDirection === 'asc' ? '▲' : '▼'
               }}</span>
             </button>
+            <span v-else>{{ column.label }}</span>
           </th>
           <th>Tags</th>
-          <th>Status</th>
           <th></th>
         </tr>
       </thead>
@@ -22,26 +26,23 @@
         </tr>
         <tr v-for="document in documents" :key="document.id">
           <td>{{ document.title }}</td>
+          <td>{{ resolveDomainName(document.domain_id) }}</td>
           <td>{{ formatDate(document.created_at) }}</td>
-          <td>{{ document.owner?.name || document.owner?.email || '—' }}</td>
+          <td>{{ formatDate(document.updated_at) }}</td>
           <td>
             <div class="tag-list">
-              <span v-for="tag in document.tags || []" :key="tag" class="tag">{{
-                tag
-              }}</span>
+              <span
+                v-for="tag in extractTags(document.doc_metadata)"
+                :key="tag"
+                class="tag"
+              >
+                {{ tag }}
+              </span>
             </div>
-          </td>
-          <td>
-            <span
-              class="status"
-              :class="`status--${document.status || 'ready'}`"
-            >
-              {{ (document.status || 'ready').toUpperCase() }}
-            </span>
           </td>
           <td class="actions">
             <RouterLink
-              :to="{ name: 'document-detail', params: { id: document.id } }"
+              :to="{ name: 'document-detail', params: { id: document.uuid } }"
               >View</RouterLink
             >
           </td>
@@ -59,6 +60,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  domains: {
+    type: Array,
+    default: () => []
+  },
   sortBy: {
     type: String,
     default: 'created_at'
@@ -72,9 +77,10 @@ const props = defineProps({
 const emit = defineEmits(['update:sort']);
 
 const columns = [
-  { key: 'title', label: 'Name' },
-  { key: 'created_at', label: 'Created' },
-  { key: 'owner', label: 'Owner' }
+  { key: 'title', label: 'Name', sortable: true },
+  { key: 'domain', label: 'Domain', sortable: false },
+  { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'updated_at', label: 'Updated', sortable: false }
 ];
 
 function changeSort(key) {
@@ -85,9 +91,22 @@ function changeSort(key) {
   emit('update:sort', { sortBy: key, sortDirection: direction });
 }
 
+function resolveDomainName(domainId) {
+  if (!domainId) return '—';
+  const domain = props.domains.find((item) => item.id === domainId);
+  return domain?.name || `Domain #${domainId}`;
+}
+
 function formatDate(value) {
   if (!value) return '—';
   return new Date(value).toLocaleDateString();
+}
+
+function extractTags(metadata) {
+  if (!metadata || !Array.isArray(metadata.tags)) {
+    return [];
+  }
+  return metadata.tags.filter((tag) => tag);
 }
 </script>
 
@@ -136,22 +155,6 @@ th button {
   padding: 4px 8px;
   border-radius: 999px;
   font-size: 12px;
-}
-
-.status {
-  font-weight: 600;
-}
-
-.status--processing {
-  color: #f59e0b;
-}
-
-.status--ready {
-  color: #10b981;
-}
-
-.status--error {
-  color: #ef4444;
 }
 
 .actions a {
