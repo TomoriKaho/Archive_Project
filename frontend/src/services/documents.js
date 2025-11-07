@@ -8,6 +8,10 @@ export function fetchDocument(documentUuid) {
   return apiClient.get(`/documents/by-uuid/${documentUuid}`);
 }
 
+export function fetchDocumentChunks(documentUuid) {
+  return apiClient.get(`/documents/by-uuid/${documentUuid}/chunks`);
+}
+
 export function createTextDocument(domainId, payload) {
   return apiClient.post(`/domains/${domainId}/documents`, payload);
 }

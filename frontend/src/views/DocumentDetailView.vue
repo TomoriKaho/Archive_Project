@@ -48,6 +48,33 @@
       <pre>{{ formattedMetadata }}</pre>
     </article>
 
+    <article class="document-detail__content document-detail__chunks">
+      <header class="document-detail__chunks-header">
+        <h3>Chunks</h3>
+        <span class="document-detail__hint">
+          {{ chunks.length }}
+          {{ chunks.length === 1 ? 'chunk' : 'chunks' }}
+          stored for this document.
+        </span>
+      </header>
+      <p v-if="!chunks.length" class="document-detail__empty">
+        No chunks have been generated for this document yet.
+      </p>
+      <ul v-else class="chunk-list">
+        <li v-for="chunk in chunks" :key="chunk.id" class="chunk-list__item">
+          <details>
+            <summary>
+              <span>Chunk {{ chunk.ordinal + 1 }}</span>
+              <span class="chunk-list__meta">
+                {{ formatChunkLength(chunk) }} characters
+              </span>
+            </summary>
+            <pre>{{ chunk.content }}</pre>
+          </details>
+        </li>
+      </ul>
+    </article>
+
     <BaseModal v-model="isEditOpen" title="Edit Document">
       <div class="tab-pane">
         <div
@@ -107,6 +134,7 @@ const editErrors = reactive({
 });
 
 const document = computed(() => documentsStore.activeDocument);
+const chunks = computed(() => documentsStore.activeChunks || []);
 const tags = computed(() => {
   if (!document.value?.doc_metadata?.tags) return [];
   return document.value.doc_metadata.tags.filter((tag) => tag);
@@ -160,6 +188,11 @@ function parseTags(raw) {
     .split(',')
     .map((tag) => tag.trim())
     .filter(Boolean);
+}
+
+function formatChunkLength(chunk) {
+  if (!chunk || typeof chunk.content !== 'string') return 0;
+  return chunk.content.length;
 }
 
 function validate() {
@@ -266,6 +299,71 @@ async function remove() {
 .document-detail__hint {
   color: #6b7280;
   margin: 0 0 12px;
+}
+
+.document-detail__chunks {
+  margin-top: 24px;
+}
+
+.document-detail__chunks-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+@media (min-width: 640px) {
+  .document-detail__chunks-header {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+}
+
+.chunk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chunk-list__item details {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+  padding: 16px;
+}
+
+.chunk-list__item summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.chunk-list__item summary::-webkit-details-marker {
+  display: none;
+}
+
+.chunk-list__item pre {
+  margin-top: 12px;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chunk-list__meta {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
 }
 
 .document-detail__loading {

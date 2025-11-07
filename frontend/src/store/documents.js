@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import {
   fetchDocuments,
   fetchDocument,
+  fetchDocumentChunks,
   createTextDocument,
   uploadCsvDocument,
   updateDocument,
@@ -20,7 +21,8 @@ export const useDocumentsStore = defineStore('documents', {
       domain_id: null
     },
     isLoading: false,
-    activeDocument: null
+    activeDocument: null,
+    activeChunks: []
   }),
   actions: {
     async loadDocuments(params = {}) {
@@ -67,8 +69,14 @@ export const useDocumentsStore = defineStore('documents', {
     async loadDocument(documentUuid) {
       this.isLoading = true;
       try {
-        const { data } = await fetchDocument(documentUuid);
-        this.activeDocument = data;
+        this.activeDocument = null;
+        this.activeChunks = [];
+        const [documentResponse, chunksResponse] = await Promise.all([
+          fetchDocument(documentUuid),
+          fetchDocumentChunks(documentUuid)
+        ]);
+        this.activeDocument = documentResponse.data;
+        this.activeChunks = chunksResponse.data ?? [];
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
