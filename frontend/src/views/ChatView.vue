@@ -16,13 +16,31 @@
               conversation.id === chatStore.activeConversationId
           }"
         >
-          <button type="button" @click="selectConversation(conversation.id)">
+          <button
+            type="button"
+            class="chat__conversation-trigger"
+            @click="selectConversation(conversation.id)"
+          >
             <span class="chat__conversation-name">{{
               conversation.title || 'Untitled conversation'
             }}</span>
             <span class="chat__conversation-date">{{
               formatDate(conversation.updated_at)
             }}</span>
+          </button>
+          <button
+            v-if="conversation.id"
+            type="button"
+            class="chat__conversation-delete"
+            :disabled="conversation.id === deletingConversationId"
+            @click.stop="removeConversation(conversation.id)"
+            aria-label="Delete conversation"
+          >
+            {{
+              conversation.id === deletingConversationId
+                ? 'Deleting…'
+                : 'Delete'
+            }}
           </button>
         </li>
       </ul>
@@ -82,19 +100,13 @@
           {{ newConversationErrors.name }}
         </p>
       </div>
-      <div
-        class="form-field"
-        :class="{ 'form-field--error': newConversationErrors.prompt }"
-      >
-        <label for="conversation-prompt">Initial Prompt</label>
+      <div class="form-field">
+        <label for="conversation-prompt">Initial Prompt (optional)</label>
         <textarea
           id="conversation-prompt"
           v-model="newConversationForm.prompt"
           rows="4"
         ></textarea>
-        <p v-if="newConversationErrors.prompt" class="form-field__error">
-          {{ newConversationErrors.prompt }}
-        </p>
       </div>
       <template #footer>
         <button class="button" type="button" @click="closeNewConversation">
@@ -121,6 +133,8 @@ import { useChatStore } from '@/store/chat';
 const chatStore = useChatStore();
 const message = ref('');
 const messagesContainer = ref(null);
+
+const deletingConversationId = ref(null);
 
 const isNewConversationOpen = ref(false);
 const newConversationForm = reactive({
@@ -164,17 +178,13 @@ function closeNewConversation() {
   newConversationForm.name = '';
   newConversationForm.prompt = '';
   newConversationErrors.name = '';
-  newConversationErrors.prompt = '';
 }
 
 function validateNewConversation() {
   newConversationErrors.name = newConversationForm.name
     ? ''
     : 'Name is required.';
-  newConversationErrors.prompt = newConversationForm.prompt
-    ? ''
-    : 'Initial prompt is required.';
-  return !newConversationErrors.name && !newConversationErrors.prompt;
+  return !newConversationErrors.name;
 }
 
 async function startConversation() {
@@ -194,8 +204,18 @@ async function sendMessage() {
   if (!canSend.value) return;
   const content = message.value.trim();
   if (!content) return;
-  await chatStore.sendMessage(chatStore.activeConversationId, { content });
   message.value = '';
+  await chatStore.sendMessage(chatStore.activeConversationId, { content });
+}
+
+async function removeConversation(id) {
+  if (deletingConversationId.value) return;
+  deletingConversationId.value = id;
+  try {
+    await chatStore.removeConversation(id);
+  } finally {
+    deletingConversationId.value = null;
+  }
 }
 </script>
 
@@ -233,8 +253,14 @@ async function sendMessage() {
   overflow-y: auto;
 }
 
-.chat__conversation-list button {
-  width: 100%;
+.chat__conversation-list li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat__conversation-trigger {
+  flex: 1;
   text-align: left;
   background: #f3f4f6;
   border: none;
@@ -243,9 +269,23 @@ async function sendMessage() {
   cursor: pointer;
 }
 
-.chat__conversation--active button {
+.chat__conversation--active .chat__conversation-trigger {
   background: #1f2937;
   color: #ffffff;
+}
+
+.chat__conversation-delete {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+
+.chat__conversation-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .chat__conversation-name {

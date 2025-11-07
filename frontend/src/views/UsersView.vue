@@ -3,44 +3,9 @@
     <header class="users__header">
       <div>
         <h2>Users</h2>
-        <p>Manage roles and send invitations.</p>
+        <p>Manage roles, passwords, and access.</p>
       </div>
     </header>
-
-    <section class="users__invite">
-      <h3>Invite a user</h3>
-      <div class="invite-form">
-        <div
-          class="form-field"
-          :class="{ 'form-field--error': inviteErrors.email }"
-        >
-          <label for="invite-email">Email</label>
-          <input
-            id="invite-email"
-            v-model.trim="inviteForm.email"
-            type="email"
-            placeholder="person@example.com"
-          />
-          <p v-if="inviteErrors.email" class="form-field__error">
-            {{ inviteErrors.email }}
-          </p>
-        </div>
-        <div class="form-field">
-          <label for="invite-role">Role</label>
-          <select id="invite-role" v-model="inviteForm.role">
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-        <button
-          class="button button--primary"
-          type="button"
-          @click="inviteUser"
-        >
-          {{ isInviting ? 'Sending…' : 'Send invite' }}
-        </button>
-      </div>
-    </section>
 
     <table class="users__table">
       <thead>
@@ -48,13 +13,14 @@
           <th>Name</th>
           <th>Email</th>
           <th>Admin</th>
+          <th>New password</th>
           <th>Created</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr v-if="usersWithDrafts.length === 0">
-          <td colspan="5" class="empty">No users found.</td>
+          <td colspan="6" class="empty">No users found.</td>
         </tr>
         <tr v-for="{ user, draft } in usersWithDrafts" :key="user.id">
           <td>
@@ -71,10 +37,27 @@
               <span>{{ draft.is_admin ? 'Admin' : 'User' }}</span>
             </label>
           </td>
+          <td>
+            <input
+              v-model.trim="draft.password"
+              type="password"
+              placeholder="Set new password"
+            />
+          </td>
           <td>{{ formatDate(user.created_at) }}</td>
           <td>
             <button class="button" type="button" @click="saveUser(user.id)">
               {{ savingUserId === user.id ? 'Saving…' : 'Save' }}
+            </button>
+            <button
+              class="button button--danger"
+              type="button"
+              :disabled="
+                deletingUserId === user.id || user.id === currentUserId
+              "
+              @click="deleteUser(user.id)"
+            >
+              {{ deleteButtonLabel(user) }}
             </button>
           </td>
         </tr>
@@ -87,22 +70,19 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { useUsersStore } from '@/store/users';
+import { useAuthStore } from '@/store/auth';
 
 const usersStore = useUsersStore();
+const authStore = useAuthStore();
 
 const userDraft = reactive({});
 const savingUserId = ref(null);
-
-const inviteForm = reactive({
-  email: '',
-  role: 'user'
-});
-const inviteErrors = reactive({
-  email: ''
-});
-const isInviting = ref(false);
+const deletingUserId = ref(null);
 
 onMounted(async () => {
+  if (!authStore.initialized) {
+    authStore.initialize();
+  }
   await usersStore.loadUsers();
   initializeDraft();
 });
@@ -121,6 +101,8 @@ const usersWithDrafts = computed(() =>
   }))
 );
 
+const currentUserId = computed(() => authStore.user?.id ?? null);
+
 function initializeDraft() {
   const validIds = new Set(usersStore.items.map((user) => String(user.id)));
 
@@ -134,6 +116,7 @@ function initializeDraft() {
     const draft = ensureDraft(user);
     draft.full_name = user.full_name ?? '';
     draft.is_admin = !!user.is_admin;
+    draft.password = '';
   });
 }
 
@@ -142,7 +125,8 @@ function ensureDraft(user) {
   if (!userDraft[id]) {
     userDraft[id] = {
       full_name: user.full_name ?? '',
-      is_admin: !!user.is_admin
+      is_admin: !!user.is_admin,
+      password: ''
     };
   }
   return userDraft[id];
@@ -151,23 +135,6 @@ function ensureDraft(user) {
 function formatDate(value) {
   if (!value) return '—';
   return new Date(value).toLocaleString();
-}
-
-function validateInvite() {
-  inviteErrors.email = inviteForm.email ? '' : 'Email is required.';
-  return !inviteErrors.email;
-}
-
-async function inviteUser() {
-  if (!validateInvite()) return;
-  isInviting.value = true;
-  try {
-    await usersStore.invite({ ...inviteForm });
-    inviteForm.email = '';
-    inviteForm.role = 'user';
-  } finally {
-    isInviting.value = false;
-  }
 }
 
 async function saveUser(userId) {
@@ -179,28 +146,29 @@ async function saveUser(userId) {
     savingUserId.value = null;
   }
 }
+
+async function deleteUser(userId) {
+  if (userId === currentUserId.value) return;
+  deletingUserId.value = userId;
+  try {
+    await usersStore.removeUser(userId);
+  } finally {
+    deletingUserId.value = null;
+  }
+}
+
+function deleteButtonLabel(user) {
+  if (deletingUserId.value === user.id) {
+    return 'Deleting…';
+  }
+  if (user.id === currentUserId.value) {
+    return 'Cannot delete';
+  }
+  return 'Delete';
+}
 </script>
 
 <style scoped>
-.users__invite {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
-  margin-bottom: 24px;
-}
-
-.invite-form {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  align-items: flex-end;
-}
-
-.invite-form .form-field {
-  flex: 1 1 200px;
-}
-
 .users__table {
   width: 100%;
   border-collapse: collapse;
@@ -249,5 +217,16 @@ td {
 .button--primary {
   background: #1f2937;
   color: #ffffff;
+}
+
+.button--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+  margin-left: 8px;
+}
+
+.button--danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
