@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { fetchUsers, updateUser, inviteUser } from '@/services/users';
+import { deleteUser, fetchUsers, updateUser } from '@/services/users';
 import { useUiStore } from './ui';
 
 export const useUsersStore = defineStore('users', {
@@ -33,6 +33,12 @@ export const useUsersStore = defineStore('users', {
         if (Object.prototype.hasOwnProperty.call(payload, 'is_admin')) {
           body.is_admin = !!payload.is_admin;
         }
+        if (Object.prototype.hasOwnProperty.call(payload, 'password')) {
+          const password = payload.password?.trim();
+          if (password) {
+            body.password = password;
+          }
+        }
         await updateUser(userId, body);
         useUiStore().showToast({ type: 'success', message: 'User updated.' });
         await this.loadUsers();
@@ -44,17 +50,18 @@ export const useUsersStore = defineStore('users', {
         throw error;
       }
     },
-    async invite(payload) {
+    async removeUser(userId) {
       try {
-        await inviteUser(payload);
+        await deleteUser(userId);
         useUiStore().showToast({
           type: 'success',
-          message: 'Invitation sent.'
+          message: 'User deleted.'
         });
+        await this.loadUsers();
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Unable to send invitation.'
+          message: 'Unable to delete user.'
         });
         throw error;
       }

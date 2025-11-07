@@ -8,6 +8,6 @@ export function updateUser(userId, payload) {
   return apiClient.patch(`/users/${userId}`, payload);
 }
 
-export function inviteUser(payload) {
-  return apiClient.post('/users/invite', payload);
+export function deleteUser(userId) {
+  return apiClient.delete(`/users/${userId}`);
 }
