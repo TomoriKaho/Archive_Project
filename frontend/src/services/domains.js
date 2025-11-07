@@ -9,7 +9,7 @@ export function createDomain(payload) {
 }
 
 export function updateDomain(domainId, payload) {
-  return apiClient.put(`/domains/${domainId}`, payload);
+  return apiClient.patch(`/domains/${domainId}`, payload);
 }
 
 export function deleteDomain(domainId) {
