@@ -1,5 +1,5 @@
 <template>
-  <Teleport to="body">
+  <Teleport v-if="canTeleport" to="body">
     <transition name="modal">
       <div v-if="modelValue" class="modal-overlay" @click.self="close">
         <div class="modal">
@@ -20,6 +20,8 @@
 </template>
 
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from 'vue';
+
 const props = defineProps({
   title: {
     type: String,
@@ -32,6 +34,16 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
+
+const canTeleport = ref(false);
+
+onMounted(() => {
+  canTeleport.value = true;
+});
+
+onBeforeUnmount(() => {
+  canTeleport.value = false;
+});
 
 function close() {
   emit('update:modelValue', false);

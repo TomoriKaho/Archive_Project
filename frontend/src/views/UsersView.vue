@@ -19,43 +19,23 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-if="usersWithDrafts.length === 0">
-          <td colspan="6" class="empty">No users found.</td>
+        <tr v-if="usersStore.items.length === 0">
+          <td colspan="5" class="empty">No users found.</td>
         </tr>
-        <tr v-for="{ user, draft } in usersWithDrafts" :key="user.id">
+        <tr v-for="user in usersStore.items" :key="user.id">
           <td>{{ user.full_name || '—' }}</td>
           <td>{{ user.email }}</td>
           <td>
             <span
-              :class="[
-                'badge',
-                draft.is_admin ? 'badge--admin' : 'badge--user'
-              ]"
+              :class="['badge', user.is_admin ? 'badge--admin' : 'badge--user']"
             >
-              {{ draft.is_admin ? 'Admin' : 'User' }}
+              {{ user.is_admin ? 'Admin' : 'User' }}
             </span>
-          </td>
-          <td>
-            <input
-              v-model.trim="draft.password"
-              type="password"
-              placeholder="Set new password"
-            />
           </td>
           <td>{{ formatDate(user.created_at) }}</td>
           <td>
             <button class="button" type="button" @click="openEditUser(user.id)">
               Edit
-            </button>
-            <button
-              class="button button--danger"
-              type="button"
-              :disabled="
-                deletingUserId === user.id || user.id === currentUserId
-              "
-              @click="deleteUser(user.id)"
-            >
-              {{ deleteButtonLabel(user) }}
             </button>
           </td>
         </tr>
@@ -64,14 +44,14 @@
 
     <BaseModal
       v-if="editingUser"
-      v-model="isEditModalOpen"
+      v-model="isModalOpen"
       :title="`Edit ${editingUser.full_name || editingUser.email}`"
     >
       <div class="form-field">
         <label for="user-name">Name</label>
         <input
           id="user-name"
-          v-model.trim="editingDraft.full_name"
+          v-model.trim="editingForm.full_name"
           type="text"
           placeholder="Name (optional)"
         />
@@ -79,9 +59,9 @@
 
       <div class="form-field">
         <label class="toggle">
-          <input type="checkbox" v-model="editingDraft.is_admin" />
+          <input type="checkbox" v-model="editingForm.is_admin" />
           <span>
-            {{ editingDraft.is_admin ? 'Administrator' : 'Standard user' }}
+            {{ editingForm.is_admin ? 'Administrator' : 'Standard user' }}
           </span>
         </label>
       </div>
@@ -90,7 +70,7 @@
         <label for="user-password">New password</label>
         <input
           id="user-password"
-          v-model.trim="editingDraft.password"
+          v-model.trim="editingForm.password"
           type="password"
           placeholder="Leave blank to keep current password"
         />
@@ -99,11 +79,7 @@
         </p>
       </div>
 
-      <div
-        v-if="isDeleteConfirmationVisible"
-        class="delete-confirmation"
-        role="alert"
-      >
+      <div v-if="showDeleteConfirm" class="delete-confirmation" role="alert">
         <p>
           Deleting this user will remove their access immediately. This action
           cannot be undone. Do you still want to proceed?
@@ -111,45 +87,35 @@
       </div>
 
       <template #footer>
-        <button
-          class="button"
-          type="button"
-          @click="
-            isDeleteConfirmationVisible
-              ? cancelDeleteRequest()
-              : closeEditUser()
-          "
-        >
-          {{ isDeleteConfirmationVisible ? 'Back' : 'Cancel' }}
+        <button class="button" type="button" @click="onBackOrCancel">
+          {{ showDeleteConfirm ? 'Back' : 'Cancel' }}
         </button>
 
-        <template v-if="isDeleteConfirmationVisible">
+        <template v-if="showDeleteConfirm">
           <button
             class="button button--danger"
             type="button"
-            :disabled="deletingUserId === editingUser.id"
-            @click="confirmDeleteUser()"
+            :disabled="deleting"
+            @click="confirmDelete"
           >
-            {{
-              deletingUserId === editingUser.id ? 'Deleting…' : 'Delete user'
-            }}
+            {{ deleting ? 'Deleting…' : 'Delete user' }}
           </button>
         </template>
         <template v-else>
           <button
             class="button button--primary"
             type="button"
-            :disabled="savingUserId === editingUser.id"
-            @click="saveEditingUser"
+            :disabled="saving"
+            @click="saveUser"
           >
-            {{ savingUserId === editingUser.id ? 'Saving…' : 'Save changes' }}
+            {{ saving ? 'Saving…' : 'Save changes' }}
           </button>
           <button
-            v-if="editingUser.id !== currentUserId"
+            v-if="!isEditingSelf"
             class="button button--danger"
             type="button"
-            :disabled="deletingUserId === editingUser.id"
-            @click="requestDeleteUser()"
+            :disabled="deleting"
+            @click="requestDelete"
           >
             Delete user
           </button>
@@ -162,6 +128,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
+import BaseModal from '@/components/BaseModal.vue';
+import { useAuthStore } from '@/store/auth';
 import { useUsersStore } from '@/store/users';
 import { useAuthStore } from '@/store/auth';
 import BaseModal from '@/components/BaseModal.vue';
@@ -169,144 +137,115 @@ import BaseModal from '@/components/BaseModal.vue';
 const usersStore = useUsersStore();
 const authStore = useAuthStore();
 
-const userDraft = reactive({});
-const savingUserId = ref(null);
-const deletingUserId = ref(null);
-const isEditModalOpen = ref(false);
+const isModalOpen = ref(false);
 const editingUserId = ref(null);
-const isDeleteConfirmationVisible = ref(false);
+const showDeleteConfirm = ref(false);
+const saving = ref(false);
+const deleting = ref(false);
+
+const editingForm = reactive({
+  full_name: '',
+  is_admin: false,
+  password: ''
+});
 
 onMounted(async () => {
   if (!authStore.initialized) {
     authStore.initialize();
   }
   await usersStore.loadUsers();
-  initializeDraft();
 });
 
 watch(
   () => usersStore.items,
   () => {
-    initializeDraft();
-  }
-);
-
-watch(isEditModalOpen, (value) => {
-  if (!value) {
-    const id = editingUserId.value;
-    if (id !== null) {
-      const user = usersStore.items.find((item) => item.id === id);
-      if (user) {
-        const draft = ensureDraft(user);
-        draft.full_name = user.full_name ?? '';
-        draft.is_admin = !!user.is_admin;
-        draft.password = '';
-      }
+    if (!editingUserId.value) return;
+    const latest = usersStore.items.find(
+      (item) => item.id === editingUserId.value
+    );
+    if (!latest) {
+      closeModal();
+      return;
     }
-    editingUserId.value = null;
-    isDeleteConfirmationVisible.value = false;
+    populateForm(latest);
   }
-});
-
-const usersWithDrafts = computed(() =>
-  usersStore.items.map((user) => ({
-    user,
-    draft: ensureDraft(user)
-  }))
 );
 
 const currentUserId = computed(() => authStore.user?.id ?? null);
 
-const editingUser = computed(
-  () => usersStore.items.find((user) => user.id === editingUserId.value) || null
-);
-
-const editingDraft = computed(() => {
-  if (!editingUser.value) {
-    return null;
-  }
-  return ensureDraft(editingUser.value);
+const editingUser = computed(() => {
+  return (
+    usersStore.items.find((user) => user.id === editingUserId.value) || null
+  );
 });
 
-function initializeDraft() {
-  const validIds = new Set(usersStore.items.map((user) => String(user.id)));
+const isEditingSelf = computed(() => {
+  return editingUser.value?.id === currentUserId.value;
+});
 
-  Object.keys(userDraft).forEach((id) => {
-    if (!validIds.has(id)) {
-      delete userDraft[id];
-    }
-  });
-
-  usersStore.items.forEach((user) => {
-    const draft = ensureDraft(user);
-    draft.full_name = user.full_name ?? '';
-    draft.is_admin = !!user.is_admin;
-    draft.password = '';
-  });
+function populateForm(user) {
+  editingForm.full_name = user.full_name ?? '';
+  editingForm.is_admin = !!user.is_admin;
+  editingForm.password = '';
 }
 
-function ensureDraft(user) {
-  const id = String(user.id);
-  if (!userDraft[id]) {
-    userDraft[id] = {
-      full_name: user.full_name ?? '',
-      is_admin: !!user.is_admin,
-      password: ''
-    };
+function openEditUser(userId) {
+  const user = usersStore.items.find((item) => item.id === userId);
+  if (!user) return;
+  editingUserId.value = userId;
+  populateForm(user);
+  showDeleteConfirm.value = false;
+  isModalOpen.value = true;
+}
+
+function onBackOrCancel() {
+  if (showDeleteConfirm.value) {
+    showDeleteConfirm.value = false;
+  } else {
+    closeModal();
   }
-  return userDraft[id];
+}
+
+function closeModal() {
+  isModalOpen.value = false;
+  editingUserId.value = null;
+  showDeleteConfirm.value = false;
+  editingForm.full_name = '';
+  editingForm.is_admin = false;
+  editingForm.password = '';
+}
+
+async function saveUser() {
+  if (!editingUser.value) return;
+  saving.value = true;
+  try {
+    await usersStore.saveUser(editingUser.value.id, { ...editingForm });
+    closeModal();
+  } finally {
+    saving.value = false;
+  }
+}
+
+function requestDelete() {
+  if (isEditingSelf.value) return;
+  showDeleteConfirm.value = true;
+}
+
+async function confirmDelete() {
+  if (!editingUser.value || isEditingSelf.value) return;
+  deleting.value = true;
+  try {
+    await usersStore.removeUser(editingUser.value.id);
+    closeModal();
+  } finally {
+    deleting.value = false;
+    showDeleteConfirm.value = false;
+  }
 }
 
 function formatDate(value) {
   if (!value) return '—';
   return new Date(value).toLocaleString();
-}
-
-function openEditUser(userId) {
-  editingUserId.value = userId;
-  isDeleteConfirmationVisible.value = false;
-  isEditModalOpen.value = true;
-}
-
-function closeEditUser() {
-  isEditModalOpen.value = false;
-}
-
-async function saveEditingUser() {
-  if (!editingUser.value) return;
-  const id = editingUser.value.id;
-  savingUserId.value = id;
-  try {
-    await usersStore.saveUser(id, userDraft[String(id)]);
-    closeEditUser();
-  } finally {
-    savingUserId.value = null;
-  }
-}
-
-function requestDeleteUser() {
-  if (!editingUser.value || editingUser.value.id === currentUserId.value) {
-    return;
-  }
-  isDeleteConfirmationVisible.value = true;
-}
-
-function cancelDeleteRequest() {
-  isDeleteConfirmationVisible.value = false;
-}
-
-async function confirmDeleteUser() {
-  if (!editingUser.value) return;
-  const id = editingUser.value.id;
-  if (id === currentUserId.value) return;
-  deletingUserId.value = id;
-  try {
-    await usersStore.removeUser(id);
-    closeEditUser();
-  } finally {
-    deletingUserId.value = null;
-    isDeleteConfirmationVisible.value = false;
-  }
 }
 </script>
 
