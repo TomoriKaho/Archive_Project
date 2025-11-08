@@ -13,6 +13,7 @@
           <th>Name</th>
           <th>Email</th>
           <th>Admin</th>
+          <th>New password</th>
           <th>Created</th>
           <th></th>
         </tr>
@@ -124,12 +125,14 @@
   </section>
 </template>
 
-<script setup>
+<script>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import BaseModal from '@/components/BaseModal.vue';
 import { useAuthStore } from '@/store/auth';
 import { useUsersStore } from '@/store/users';
+import { useAuthStore } from '@/store/auth';
+import BaseModal from '@/components/BaseModal.vue';
 
 const usersStore = useUsersStore();
 const authStore = useAuthStore();
