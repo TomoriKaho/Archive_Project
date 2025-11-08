@@ -34,7 +34,7 @@
             <button
               type="button"
               class="button--link-danger"
-              @click="remove(domain)"
+              @click="promptRemove(domain)"
             >
               Delete
             </button>
@@ -65,6 +65,25 @@
         </button>
       </template>
     </BaseModal>
+    <BaseModal v-model="isDeleteModalOpen" title="Delete Domain">
+      <p>
+        Deleting a domain will remove it and any associated documents from the
+        system. This action cannot be undone. Do you still want to proceed?
+      </p>
+      <template #footer>
+        <button class="button" type="button" @click="closeDeleteModal">
+          Cancel
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="isDeleting"
+          @click="confirmRemove"
+        >
+          {{ isDeleting ? 'Deleting…' : 'Delete domain' }}
+        </button>
+      </template>
+    </BaseModal>
   </section>
 </template>
 
@@ -77,8 +96,11 @@ import { useDomainsStore } from '@/store/domains';
 const domainsStore = useDomainsStore();
 
 const isModalOpen = ref(false);
+const isDeleteModalOpen = ref(false);
 const isSaving = ref(false);
+const isDeleting = ref(false);
 const editingDomainId = ref(null);
+const deletingDomainId = ref(null);
 
 const form = reactive({
   name: '',
@@ -141,9 +163,25 @@ async function submit() {
   }
 }
 
-async function remove(domain) {
-  if (!confirm(`Delete ${domain.name}?`)) return;
-  await domainsStore.remove(domain.id);
+function promptRemove(domain) {
+  deletingDomainId.value = domain.id;
+  isDeleteModalOpen.value = true;
+}
+
+function closeDeleteModal() {
+  isDeleteModalOpen.value = false;
+  deletingDomainId.value = null;
+}
+
+async function confirmRemove() {
+  if (!deletingDomainId.value || isDeleting.value) return;
+  isDeleting.value = true;
+  try {
+    await domainsStore.remove(deletingDomainId.value);
+    closeDeleteModal();
+  } finally {
+    isDeleting.value = false;
+  }
 }
 
 function formatDate(value) {
