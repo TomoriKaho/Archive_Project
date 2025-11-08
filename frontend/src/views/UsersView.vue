@@ -125,7 +125,7 @@
   </section>
 </template>
 
-<script>
+<script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import BaseModal from '@/components/BaseModal.vue';
