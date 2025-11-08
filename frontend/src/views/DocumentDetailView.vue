@@ -39,14 +39,6 @@
       No tags attached to this document.
     </p>
 
-    <article class="document-detail__content">
-      <h3>Metadata</h3>
-      <p class="document-detail__hint">
-        Documents are chunked on ingestion, so only metadata is stored alongside
-        the vectorised content.
-      </p>
-      <pre>{{ formattedMetadata }}</pre>
-    </article>
 
     <article class="document-detail__content document-detail__chunks">
       <header class="document-detail__chunks-header">
@@ -160,11 +152,7 @@ const tags = computed(() => {
   if (!document.value?.doc_metadata?.tags) return [];
   return document.value.doc_metadata.tags.filter((tag) => tag);
 });
-const formattedMetadata = computed(() =>
-  document.value
-    ? JSON.stringify(document.value.doc_metadata ?? {}, null, 2)
-    : '{}'
-);
+
 const domainName = computed(() => {
   const domain = domainsStore.items.find(
     (item) => item.id === document.value?.domain_id
