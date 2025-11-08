@@ -3,44 +3,9 @@
     <header class="users__header">
       <div>
         <h2>Users</h2>
-        <p>Manage roles and send invitations.</p>
+        <p>Manage roles, passwords, and access.</p>
       </div>
     </header>
-
-    <section class="users__invite">
-      <h3>Invite a user</h3>
-      <div class="invite-form">
-        <div
-          class="form-field"
-          :class="{ 'form-field--error': inviteErrors.email }"
-        >
-          <label for="invite-email">Email</label>
-          <input
-            id="invite-email"
-            v-model.trim="inviteForm.email"
-            type="email"
-            placeholder="person@example.com"
-          />
-          <p v-if="inviteErrors.email" class="form-field__error">
-            {{ inviteErrors.email }}
-          </p>
-        </div>
-        <div class="form-field">
-          <label for="invite-role">Role</label>
-          <select id="invite-role" v-model="inviteForm.role">
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-        <button
-          class="button button--primary"
-          type="button"
-          @click="inviteUser"
-        >
-          {{ isInviting ? 'Sending…' : 'Send invite' }}
-        </button>
-      </div>
-    </section>
 
     <table class="users__table">
       <thead>
@@ -53,154 +18,235 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-if="usersWithDrafts.length === 0">
+        <tr v-if="usersStore.items.length === 0">
           <td colspan="5" class="empty">No users found.</td>
         </tr>
-        <tr v-for="{ user, draft } in usersWithDrafts" :key="user.id">
-          <td>
-            <input
-              v-model.trim="draft.full_name"
-              type="text"
-              placeholder="Name (optional)"
-            />
-          </td>
+        <tr v-for="user in usersStore.items" :key="user.id">
+          <td>{{ user.full_name || '—' }}</td>
           <td>{{ user.email }}</td>
           <td>
-            <label class="toggle">
-              <input type="checkbox" v-model="draft.is_admin" />
-              <span>{{ draft.is_admin ? 'Admin' : 'User' }}</span>
-            </label>
+            <span
+              :class="['badge', user.is_admin ? 'badge--admin' : 'badge--user']"
+            >
+              {{ user.is_admin ? 'Admin' : 'User' }}
+            </span>
           </td>
           <td>{{ formatDate(user.created_at) }}</td>
           <td>
-            <button class="button" type="button" @click="saveUser(user.id)">
-              {{ savingUserId === user.id ? 'Saving…' : 'Save' }}
+            <button class="button" type="button" @click="openEditUser(user.id)">
+              Edit
             </button>
           </td>
         </tr>
       </tbody>
     </table>
+
+    <BaseModal
+      v-if="editingUser"
+      v-model="isModalOpen"
+      :title="`Edit ${editingUser.full_name || editingUser.email}`"
+    >
+      <div class="form-field">
+        <label for="user-name">Name</label>
+        <input
+          id="user-name"
+          v-model.trim="editingForm.full_name"
+          type="text"
+          placeholder="Name (optional)"
+        />
+      </div>
+
+      <div class="form-field">
+        <label class="toggle">
+          <input type="checkbox" v-model="editingForm.is_admin" />
+          <span>
+            {{ editingForm.is_admin ? 'Administrator' : 'Standard user' }}
+          </span>
+        </label>
+      </div>
+
+      <div class="form-field">
+        <label for="user-password">New password</label>
+        <input
+          id="user-password"
+          v-model.trim="editingForm.password"
+          type="password"
+          placeholder="Leave blank to keep current password"
+        />
+        <p class="form-field__hint">
+          Leave blank to keep the existing password.
+        </p>
+      </div>
+
+      <div v-if="showDeleteConfirm" class="delete-confirmation" role="alert">
+        <p>
+          Deleting this user will remove their access immediately. This action
+          cannot be undone. Do you still want to proceed?
+        </p>
+      </div>
+
+      <template #footer>
+        <button class="button" type="button" @click="onBackOrCancel">
+          {{ showDeleteConfirm ? 'Back' : 'Cancel' }}
+        </button>
+
+        <template v-if="showDeleteConfirm">
+          <button
+            class="button button--danger"
+            type="button"
+            :disabled="deleting"
+            @click="confirmDelete"
+          >
+            {{ deleting ? 'Deleting…' : 'Delete user' }}
+          </button>
+        </template>
+        <template v-else>
+          <button
+            class="button button--primary"
+            type="button"
+            :disabled="saving"
+            @click="saveUser"
+          >
+            {{ saving ? 'Saving…' : 'Save changes' }}
+          </button>
+          <button
+            v-if="!isEditingSelf"
+            class="button button--danger"
+            type="button"
+            :disabled="deleting"
+            @click="requestDelete"
+          >
+            Delete user
+          </button>
+        </template>
+      </template>
+    </BaseModal>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
+import BaseModal from '@/components/BaseModal.vue';
+import { useAuthStore } from '@/store/auth';
 import { useUsersStore } from '@/store/users';
 
 const usersStore = useUsersStore();
+const authStore = useAuthStore();
 
-const userDraft = reactive({});
-const savingUserId = ref(null);
+const isModalOpen = ref(false);
+const editingUserId = ref(null);
+const showDeleteConfirm = ref(false);
+const saving = ref(false);
+const deleting = ref(false);
 
-const inviteForm = reactive({
-  email: '',
-  role: 'user'
+const editingForm = reactive({
+  full_name: '',
+  is_admin: false,
+  password: ''
 });
-const inviteErrors = reactive({
-  email: ''
-});
-const isInviting = ref(false);
 
 onMounted(async () => {
+  if (!authStore.initialized) {
+    await authStore.initialize();
+  }
   await usersStore.loadUsers();
-  initializeDraft();
 });
 
 watch(
   () => usersStore.items,
   () => {
-    initializeDraft();
+    if (!editingUserId.value) return;
+    const latest = usersStore.items.find(
+      (item) => item.id === editingUserId.value
+    );
+    if (!latest) {
+      closeModal();
+      return;
+    }
+    populateForm(latest);
   }
 );
 
-const usersWithDrafts = computed(() =>
-  usersStore.items.map((user) => ({
-    user,
-    draft: ensureDraft(user)
-  }))
+const currentUserId = computed(() => authStore.user?.id ?? null);
+
+const editingUser = computed(() => {
+  return (
+    usersStore.items.find((user) => user.id === editingUserId.value) || null
+  );
+});
+
+const isEditingSelf = computed(
+  () => editingUser.value?.id === currentUserId.value
 );
 
-function initializeDraft() {
-  const validIds = new Set(usersStore.items.map((user) => String(user.id)));
-
-  Object.keys(userDraft).forEach((id) => {
-    if (!validIds.has(id)) {
-      delete userDraft[id];
-    }
-  });
-
-  usersStore.items.forEach((user) => {
-    const draft = ensureDraft(user);
-    draft.full_name = user.full_name ?? '';
-    draft.is_admin = !!user.is_admin;
-  });
+function populateForm(user) {
+  editingForm.full_name = user.full_name ?? '';
+  editingForm.is_admin = !!user.is_admin;
+  editingForm.password = '';
 }
 
-function ensureDraft(user) {
-  const id = String(user.id);
-  if (!userDraft[id]) {
-    userDraft[id] = {
-      full_name: user.full_name ?? '',
-      is_admin: !!user.is_admin
-    };
+function openEditUser(userId) {
+  const user = usersStore.items.find((item) => item.id === userId);
+  if (!user) return;
+  editingUserId.value = userId;
+  populateForm(user);
+  showDeleteConfirm.value = false;
+  isModalOpen.value = true;
+}
+
+function onBackOrCancel() {
+  if (showDeleteConfirm.value) {
+    showDeleteConfirm.value = false;
+  } else {
+    closeModal();
   }
-  return userDraft[id];
+}
+
+function closeModal() {
+  isModalOpen.value = false;
+  editingUserId.value = null;
+  showDeleteConfirm.value = false;
+  editingForm.full_name = '';
+  editingForm.is_admin = false;
+  editingForm.password = '';
+}
+
+async function saveUser() {
+  if (!editingUser.value) return;
+  saving.value = true;
+  try {
+    await usersStore.saveUser(editingUser.value.id, { ...editingForm });
+    closeModal();
+  } finally {
+    saving.value = false;
+  }
+}
+
+function requestDelete() {
+  if (isEditingSelf.value) return;
+  showDeleteConfirm.value = true;
+}
+
+async function confirmDelete() {
+  if (!editingUser.value || isEditingSelf.value) return;
+  deleting.value = true;
+  try {
+    await usersStore.removeUser(editingUser.value.id);
+    closeModal();
+  } finally {
+    deleting.value = false;
+    showDeleteConfirm.value = false;
+  }
 }
 
 function formatDate(value) {
   if (!value) return '—';
   return new Date(value).toLocaleString();
 }
-
-function validateInvite() {
-  inviteErrors.email = inviteForm.email ? '' : 'Email is required.';
-  return !inviteErrors.email;
-}
-
-async function inviteUser() {
-  if (!validateInvite()) return;
-  isInviting.value = true;
-  try {
-    await usersStore.invite({ ...inviteForm });
-    inviteForm.email = '';
-    inviteForm.role = 'user';
-  } finally {
-    isInviting.value = false;
-  }
-}
-
-async function saveUser(userId) {
-  const id = String(userId);
-  savingUserId.value = userId;
-  try {
-    await usersStore.saveUser(userId, userDraft[id]);
-  } finally {
-    savingUserId.value = null;
-  }
-}
 </script>
 
 <style scoped>
-.users__invite {
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
-  margin-bottom: 24px;
-}
-
-.invite-form {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  align-items: flex-end;
-}
-
-.invite-form .form-field {
-  flex: 1 1 200px;
-}
-
 .users__table {
   width: 100%;
   border-collapse: collapse;
@@ -215,14 +261,6 @@ td {
   padding: 16px 20px;
   border-bottom: 1px solid #f3f4f6;
   text-align: left;
-}
-
-.users__table input[type='text'] {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 15px;
 }
 
 .empty {
@@ -249,5 +287,68 @@ td {
 .button--primary {
   background: #1f2937;
   color: #ffffff;
+}
+
+.button--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.button--danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.badge--admin {
+  background: #1f2937;
+  color: #ffffff;
+}
+
+.badge--user {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.form-field label {
+  font-weight: 600;
+}
+
+.form-field input[type='text'],
+.form-field input[type='password'] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.form-field__hint {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.delete-confirmation {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 16px;
+  color: #991b1b;
+  margin-top: 8px;
 }
 </style>
