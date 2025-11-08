@@ -7,7 +7,7 @@
       </div>
       <div class="document-detail__actions">
         <button class="button" type="button" @click="openEdit">Edit</button>
-        <button class="button button--danger" type="button" @click="remove">
+        <button class="button button--danger" type="button" @click="openDelete">
           Delete
         </button>
       </div>
@@ -104,6 +104,25 @@
         </button>
       </template>
     </BaseModal>
+    <BaseModal v-model="isDeleteOpen" title="Delete Document">
+      <p>
+        Deleting this document will remove it and all of its chunks permanently.
+        This action cannot be undone. Are you sure you want to continue?
+      </p>
+      <template #footer>
+        <button class="button" type="button" @click="closeDelete">
+          Cancel
+        </button>
+        <button
+          class="button button--danger"
+          type="button"
+          :disabled="isDeleting"
+          @click="remove"
+        >
+          {{ isDeleting ? 'Deleting…' : 'Delete document' }}
+        </button>
+      </template>
+    </BaseModal>
   </section>
   <section v-else class="document-detail__loading">Loading document…</section>
 </template>
@@ -122,6 +141,8 @@ const documentsStore = useDocumentsStore();
 const domainsStore = useDomainsStore();
 
 const isEditOpen = ref(false);
+const isDeleteOpen = ref(false);
+const isDeleting = ref(false);
 const isSaving = ref(false);
 
 const editForm = reactive({
@@ -182,6 +203,14 @@ function closeEdit() {
   isEditOpen.value = false;
 }
 
+function openDelete() {
+  isDeleteOpen.value = true;
+}
+
+function closeDelete() {
+  isDeleteOpen.value = false;
+}
+
 function parseTags(raw) {
   if (!raw) return [];
   return raw
@@ -220,12 +249,18 @@ async function save() {
 
 async function remove() {
   if (!document.value) return;
-  if (!confirm('Delete this document? This action cannot be undone.')) return;
-  await documentsStore.removeDocument({
-    documentId: document.value.id,
-    domainId: document.value.domain_id
-  });
-  router.push({ name: 'documents' });
+  if (isDeleting.value) return;
+  isDeleting.value = true;
+  try {
+    await documentsStore.removeDocument({
+      documentId: document.value.id,
+      domainId: document.value.domain_id
+    });
+    closeDelete();
+    router.push({ name: 'documents' });
+  } finally {
+    isDeleting.value = false;
+  }
 }
 </script>
 
