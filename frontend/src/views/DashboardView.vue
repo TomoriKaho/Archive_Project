@@ -159,6 +159,12 @@ function formatDate(value) {
 }
 
 .activity-list__meta {
+  margin-left: 8px;
+  color: #6b7280;
+  display: inline-block;
+}
+
+.activity-list__meta {
   color: #6b7280;
   font-size: 13px;
 }
