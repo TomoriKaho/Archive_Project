@@ -131,8 +131,6 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import BaseModal from '@/components/BaseModal.vue';
 import { useAuthStore } from '@/store/auth';
 import { useUsersStore } from '@/store/users';
-import { useAuthStore } from '@/store/auth';
-import BaseModal from '@/components/BaseModal.vue';
 
 const usersStore = useUsersStore();
 const authStore = useAuthStore();
