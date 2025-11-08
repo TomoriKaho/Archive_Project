@@ -125,7 +125,7 @@
   </section>
 </template>
 
-<script setup>
+<script>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import BaseModal from '@/components/BaseModal.vue';
@@ -134,119 +134,143 @@ import { useUsersStore } from '@/store/users';
 import { useAuthStore } from '@/store/auth';
 import BaseModal from '@/components/BaseModal.vue';
 
-const usersStore = useUsersStore();
-const authStore = useAuthStore();
+export default {
+  components: {
+    BaseModal
+  },
+  setup() {
+    const usersStore = useUsersStore();
+    const authStore = useAuthStore();
 
-const isModalOpen = ref(false);
-const editingUserId = ref(null);
-const showDeleteConfirm = ref(false);
-const saving = ref(false);
-const deleting = ref(false);
+    const isModalOpen = ref(false);
+    const editingUserId = ref(null);
+    const showDeleteConfirm = ref(false);
+    const saving = ref(false);
+    const deleting = ref(false);
 
-const editingForm = reactive({
-  full_name: '',
-  is_admin: false,
-  password: ''
-});
+    const editingForm = reactive({
+      full_name: '',
+      is_admin: false,
+      password: ''
+    });
 
-onMounted(async () => {
-  if (!authStore.initialized) {
-    authStore.initialize();
-  }
-  await usersStore.loadUsers();
-});
+    onMounted(async () => {
+      if (!authStore.initialized) {
+        await authStore.initialize();
+      }
+      await usersStore.loadUsers();
+    });
 
-watch(
-  () => usersStore.items,
-  () => {
-    if (!editingUserId.value) return;
-    const latest = usersStore.items.find(
-      (item) => item.id === editingUserId.value
+    watch(
+      () => usersStore.items,
+      () => {
+        if (!editingUserId.value) return;
+        const latest = usersStore.items.find(
+          (item) => item.id === editingUserId.value
+        );
+        if (!latest) {
+          closeModal();
+          return;
+        }
+        populateForm(latest);
+      }
     );
-    if (!latest) {
-      closeModal();
-      return;
+
+    const currentUserId = computed(() => authStore.user?.id ?? null);
+
+    const editingUser = computed(() => {
+      return (
+        usersStore.items.find((user) => user.id === editingUserId.value) || null
+      );
+    });
+
+    const isEditingSelf = computed(() => {
+      return editingUser.value?.id === currentUserId.value;
+    });
+
+    function populateForm(user) {
+      editingForm.full_name = user.full_name ?? '';
+      editingForm.is_admin = !!user.is_admin;
+      editingForm.password = '';
     }
-    populateForm(latest);
+
+    function openEditUser(userId) {
+      const user = usersStore.items.find((item) => item.id === userId);
+      if (!user) return;
+      editingUserId.value = userId;
+      populateForm(user);
+      showDeleteConfirm.value = false;
+      isModalOpen.value = true;
+    }
+
+    function onBackOrCancel() {
+      if (showDeleteConfirm.value) {
+        showDeleteConfirm.value = false;
+      } else {
+        closeModal();
+      }
+    }
+
+    function closeModal() {
+      isModalOpen.value = false;
+      editingUserId.value = null;
+      showDeleteConfirm.value = false;
+      editingForm.full_name = '';
+      editingForm.is_admin = false;
+      editingForm.password = '';
+    }
+
+    async function saveUser() {
+      if (!editingUser.value) return;
+      saving.value = true;
+      try {
+        await usersStore.saveUser(editingUser.value.id, { ...editingForm });
+        closeModal();
+      } finally {
+        saving.value = false;
+      }
+    }
+
+    function requestDelete() {
+      if (isEditingSelf.value) return;
+      showDeleteConfirm.value = true;
+    }
+
+    async function confirmDelete() {
+      if (!editingUser.value || isEditingSelf.value) return;
+      deleting.value = true;
+      try {
+        await usersStore.removeUser(editingUser.value.id);
+        closeModal();
+      } finally {
+        deleting.value = false;
+        showDeleteConfirm.value = false;
+      }
+    }
+
+    function formatDate(value) {
+      if (!value) return '—';
+      return new Date(value).toLocaleString();
+    }
+
+    return {
+      usersStore,
+      isModalOpen,
+      editingUser,
+      editingForm,
+      showDeleteConfirm,
+      saving,
+      deleting,
+      isEditingSelf,
+      openEditUser,
+      onBackOrCancel,
+      requestDelete,
+      confirmDelete,
+      saveUser,
+      formatDate
+    };
   }
-);
-
-const currentUserId = computed(() => authStore.user?.id ?? null);
-
-const editingUser = computed(() => {
-  return (
-    usersStore.items.find((user) => user.id === editingUserId.value) || null
-  );
-});
-
-const isEditingSelf = computed(() => {
-  return editingUser.value?.id === currentUserId.value;
-});
-
-function populateForm(user) {
-  editingForm.full_name = user.full_name ?? '';
-  editingForm.is_admin = !!user.is_admin;
-  editingForm.password = '';
-}
-
-function openEditUser(userId) {
-  const user = usersStore.items.find((item) => item.id === userId);
-  if (!user) return;
-  editingUserId.value = userId;
-  populateForm(user);
-  showDeleteConfirm.value = false;
-  isModalOpen.value = true;
-}
-
-function onBackOrCancel() {
-  if (showDeleteConfirm.value) {
-    showDeleteConfirm.value = false;
-  } else {
-    closeModal();
-  }
-}
-
-function closeModal() {
-  isModalOpen.value = false;
-  editingUserId.value = null;
-  showDeleteConfirm.value = false;
-  editingForm.full_name = '';
-  editingForm.is_admin = false;
-  editingForm.password = '';
-}
-
-async function saveUser() {
-  if (!editingUser.value) return;
-  saving.value = true;
-  try {
-    await usersStore.saveUser(editingUser.value.id, { ...editingForm });
-    closeModal();
-  } finally {
-    saving.value = false;
-  }
-}
-
-function requestDelete() {
-  if (isEditingSelf.value) return;
-  showDeleteConfirm.value = true;
-}
-
-async function confirmDelete() {
-  if (!editingUser.value || isEditingSelf.value) return;
-  deleting.value = true;
-  try {
-    await usersStore.removeUser(editingUser.value.id);
-    closeModal();
-  } finally {
-    deleting.value = false;
-    showDeleteConfirm.value = false;
-  }
-}
-
-function formatDate(value) {
-  if (!value) return '—';
-  return new Date(value).toLocaleString();
-}
+};
 </script>
 
 <style scoped>
