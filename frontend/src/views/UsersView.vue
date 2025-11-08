@@ -13,6 +13,7 @@
           <th>Name</th>
           <th>Email</th>
           <th>Admin</th>
+          <th>New password</th>
           <th>Created</th>
           <th></th>
         </tr>
@@ -130,6 +131,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import BaseModal from '@/components/BaseModal.vue';
 import { useAuthStore } from '@/store/auth';
 import { useUsersStore } from '@/store/users';
+import { useAuthStore } from '@/store/auth';
+import BaseModal from '@/components/BaseModal.vue';
 
 export default {
   components: {
