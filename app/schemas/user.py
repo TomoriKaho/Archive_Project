@@ -44,6 +44,8 @@ class UserListResponse(ORMModel):  # 分页列表响应模型
     total: int = Field(..., description="符合条件的总条数")  # 总条数
     limit: int = Field(..., description="每页条数")  # 分页大小
     offset: int = Field(..., description="偏移量")  # 偏移量
+    sort_by: str = Field(..., description="当前排序字段")
+    order: str = Field(..., description="排序方向")
 
 
 class Token(ORMModel):  # 登录成功后返回的令牌结构

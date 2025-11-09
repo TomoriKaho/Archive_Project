@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -23,8 +25,14 @@ def list_domains(
     db: Session = Depends(get_db),
     offset: int = 0,
     limit: int = Query(100, le=200),
+    sort_by: Literal["name", "description", "created_at", "updated_at"] = Query(
+        "name", description="排序字段"
+    ),
+    order: Literal["asc", "desc"] = Query("asc", description="排序方向"),
 ):
-    return DomainRepository(db).list(offset=offset, limit=limit)
+    return DomainRepository(db).list(
+        offset=offset, limit=limit, sort_by=sort_by, order=order
+    )
 
 # Get domain by ID
 @router.get("/{domain_id}", response_model=DomainOut)

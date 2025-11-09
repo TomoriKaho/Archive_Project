@@ -23,9 +23,28 @@ class UserRepository(Repository[User]):  # 用户仓储实现
             stmt = stmt.where(or_(User.email.ilike(pattern), User.full_name.ilike(pattern)))  # 在邮箱或姓名上做模糊匹配
         return stmt  # 返回构造好的语句
 
-    def list_with_total(self, limit: int, offset: int, keyword: str | None = None) -> Tuple[List[User], int]:  # 分页查询接口
-        """按分页返回用户列表以及总条数，支持关键词搜索。"""  # 方法描述
-        stmt = self._base_query(keyword).order_by(User.created_at.desc())  # 按创建时间倒序排列
+    def list_with_total(
+        self,
+        limit: int,
+        offset: int,
+        keyword: str | None = None,
+        sort_by: str = "created_at",
+        order: str = "desc",
+    ) -> Tuple[List[User], int]:  # 分页查询接口
+        """按分页返回用户列表以及总条数，支持关键词搜索和排序。"""  # 方法描述
+        stmt = self._base_query(keyword)
+        if sort_by == "name":
+            sort_column = func.coalesce(User.full_name, "")
+        elif sort_by == "email":
+            sort_column = User.email
+        elif sort_by == "admin":
+            sort_column = User.is_admin
+        elif sort_by == "updated_at":
+            sort_column = User.updated_at
+        else:
+            sort_column = User.created_at
+        sort_expression = sort_column.asc() if order == "asc" else sort_column.desc()
+        stmt = stmt.order_by(sort_expression, User.id.asc())
         result = self.db.execute(stmt.offset(offset).limit(limit))  # 执行分页查询
         items = list(result.scalars().all())  # 显式转换为列表
         count_stmt = select(func.count()).select_from(self._base_query(keyword).subquery())  # 子查询统计总量
