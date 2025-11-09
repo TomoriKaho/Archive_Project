@@ -116,7 +116,8 @@ export const useChatStore = defineStore('chat', {
         const domainIds = normalizeDomainIds(rawDomainIds);
         const { data } = await createConversation({
           user_id: authStore.user.id,
-          title: name?.trim() || null
+          title: name?.trim() || null,
+          domain_ids: domainIds.length ? domainIds : null
         });
         await this.loadConversations();
         this.setConversationDomains(data.id, domainIds, { notify: false });

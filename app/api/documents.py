@@ -60,6 +60,12 @@ def _build_document_response(document) -> DocumentOut:
 @router.get("/documents", response_model=DocumentListResponse)
 def list_documents(
     domain_id: Optional[int] = Query(default=None, description="按domain过滤，缺省返回全量"),  # 可选domain过滤
+    search: Optional[str] = Query(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="按标题模糊搜索（大小写不敏感）",
+    ),  # 支持标题模糊搜索
     limit: int = Query(20, ge=1, le=100, description="单页数量，最大100以避免全表扫描"),  # 限制单次查询量
     offset: int = Query(0, ge=0, description="分页偏移量，从0开始"),  # 偏移量
     sort_by: Literal["created_at", "title", "domain", "updated_at"] = Query(
@@ -74,14 +80,16 @@ def list_documents(
 ):
     """获取文档列表，支持分页与排序。"""
     doc_repo = DocumentRepository(db)  # 初始化仓储
+    search_value = search.strip() if search else None
     items = doc_repo.list_with_filters(
         limit=limit,
         offset=offset,
         sort_by=sort_by,
         order=order,
         domain_id=domain_id,
+        search=search_value,
     )  # 查询数据
-    total = doc_repo.count_with_filters(domain_id=domain_id)  # 计算总量
+    total = doc_repo.count_with_filters(domain_id=domain_id, search=search_value)  # 计算总量
     logger.info(
         "list_documents_paged domain=%s limit=%s offset=%s sort_by=%s order=%s total=%s",
         domain_id,
