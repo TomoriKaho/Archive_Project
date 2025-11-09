@@ -1,5 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from .base import Repository
 from app.models.entities import Domain
 
@@ -16,3 +17,28 @@ class DomainRepository(Repository[Domain]):
         if dom:
             return dom
         return self.create(name=name, description=description)
+
+    def list(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 50,
+        sort_by: str = "name",
+        order: str = "asc",
+    ) -> list[Domain]:
+        if sort_by == "description":
+            sort_column = Domain.description
+        elif sort_by == "created_at":
+            sort_column = Domain.created_at
+        elif sort_by == "updated_at":
+            sort_column = Domain.updated_at
+        else:
+            sort_column = Domain.name
+        sort_expression = sort_column.asc() if order == "asc" else sort_column.desc()
+        stmt = (
+            select(Domain)
+            .order_by(sort_expression, Domain.id.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).scalars().all())

@@ -10,29 +10,48 @@
     <table class="users__table">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Admin</th>
-          <th>New password</th>
-          <th>Created</th>
+          <th v-for="column in columns" :key="column.key">
+            <button
+              v-if="column.sortable"
+              type="button"
+              @click="changeSort(column.key)"
+            >
+              {{ column.label }}
+              <span v-if="sortBy === column.key">{{
+                sortDirection === 'asc' ? '▲' : '▼'
+              }}</span>
+            </button>
+            <span v-else>{{ column.label }}</span>
+          </th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr v-if="usersStore.items.length === 0">
-          <td colspan="5" class="empty">No users found.</td>
+          <td colspan="6" class="empty">No users found.</td>
         </tr>
         <tr v-for="user in usersStore.items" :key="user.id">
-          <td>{{ user.full_name || '—' }}</td>
-          <td>{{ user.email }}</td>
-          <td>
-            <span
-              :class="['badge', user.is_admin ? 'badge--admin' : 'badge--user']"
-            >
-              {{ user.is_admin ? 'Admin' : 'User' }}
-            </span>
+          <td v-for="column in columns" :key="column.key">
+            <template v-if="column.key === 'name'">
+              {{ user.full_name || '—' }}
+            </template>
+            <template v-else-if="column.key === 'email'">
+              {{ user.email }}
+            </template>
+            <template v-else-if="column.key === 'admin'">
+              <span
+                :class="['badge', user.is_admin ? 'badge--admin' : 'badge--user']"
+              >
+                {{ user.is_admin ? 'Admin' : 'User' }}
+              </span>
+            </template>
+            <template v-else-if="column.key === 'updated_at'">
+              {{ formatDate(user.updated_at) }}
+            </template>
+            <template v-else-if="column.key === 'created_at'">
+              {{ formatDate(user.created_at) }}
+            </template>
           </td>
-          <td>{{ formatDate(user.created_at) }}</td>
           <td>
             <button class="button" type="button" @click="openEditUser(user.id)">
               Edit
@@ -135,6 +154,17 @@ import { useUsersStore } from '@/store/users';
 const usersStore = useUsersStore();
 const authStore = useAuthStore();
 
+const columns = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'email', label: 'Email', sortable: true },
+  { key: 'admin', label: 'Admin', sortable: true },
+  { key: 'updated_at', label: 'Updated', sortable: true },
+  { key: 'created_at', label: 'Created', sortable: true }
+];
+
+const sortBy = computed(() => usersStore.filters.sort_by);
+const sortDirection = computed(() => usersStore.filters.order);
+
 const isModalOpen = ref(false);
 const editingUserId = ref(null);
 const showDeleteConfirm = ref(false);
@@ -153,6 +183,20 @@ onMounted(async () => {
   }
   await usersStore.loadUsers();
 });
+
+function changeSort(key) {
+  let direction = 'asc';
+  if (sortBy.value === key) {
+    direction = sortDirection.value === 'asc' ? 'desc' : 'asc';
+  }
+  usersStore.setSorting({ sortBy: key, sortDirection: direction });
+  usersStore.loadUsers({
+    sort_by: key,
+    order: direction,
+    limit: usersStore.filters.limit,
+    offset: usersStore.filters.offset
+  });
+}
 
 watch(
   () => usersStore.items,
@@ -262,6 +306,16 @@ td {
   padding: 16px 20px;
   border-bottom: 1px solid #f3f4f6;
   text-align: left;
+}
+
+th button {
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .empty {

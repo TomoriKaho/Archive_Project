@@ -13,16 +13,25 @@
     <table class="domains__table">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Description</th>
-          <th>Created</th>
-          <th>Updated</th>
+          <th v-for="column in columns" :key="column.key">
+            <button
+              v-if="column.sortable"
+              type="button"
+              @click="changeSort(column.key)"
+            >
+              {{ column.label }}
+              <span v-if="sortBy === column.key">{{
+                sortDirection === 'asc' ? '▲' : '▼'
+              }}</span>
+            </button>
+            <span v-else>{{ column.label }}</span>
+          </th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr v-if="domainsStore.items.length === 0">
-          <td colspan="4" class="empty">No domains found.</td>
+          <td colspan="5" class="empty">No domains found.</td>
         </tr>
         <tr v-for="domain in domainsStore.items" :key="domain.id">
           <td>{{ domain.name }}</td>
@@ -95,6 +104,16 @@ import { useDomainsStore } from '@/store/domains';
 
 const domainsStore = useDomainsStore();
 
+const columns = [
+  { key: 'name', label: 'Name', sortable: true },
+  { key: 'description', label: 'Description', sortable: true },
+  { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'updated_at', label: 'Updated', sortable: true }
+];
+
+const sortBy = computed(() => domainsStore.filters.sort_by);
+const sortDirection = computed(() => domainsStore.filters.order);
+
 const isModalOpen = ref(false);
 const isDeleteModalOpen = ref(false);
 const isSaving = ref(false);
@@ -118,6 +137,15 @@ const modalTitle = computed(() =>
 onMounted(() => {
   domainsStore.loadDomains();
 });
+
+function changeSort(key) {
+  let direction = 'asc';
+  if (sortBy.value === key) {
+    direction = sortDirection.value === 'asc' ? 'desc' : 'asc';
+  }
+  domainsStore.setSorting({ sortBy: key, sortDirection: direction });
+  domainsStore.loadDomains({ sort_by: key, order: direction });
+}
 
 function openCreate() {
   editingDomainId.value = null;
@@ -212,6 +240,16 @@ td {
   padding: 16px 20px;
   border-bottom: 1px solid #f3f4f6;
   text-align: left;
+}
+
+th button {
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .empty {

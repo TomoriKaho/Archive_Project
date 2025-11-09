@@ -10,14 +10,27 @@ import { useUiStore } from './ui';
 export const useDomainsStore = defineStore('domains', {
   state: () => ({
     items: [],
-    isLoading: false
+    isLoading: false,
+    filters: {
+      sort_by: 'name',
+      order: 'asc'
+    }
   }),
   actions: {
-    async loadDomains() {
+    async loadDomains(params = {}) {
       this.isLoading = true;
       try {
-        const { data } = await fetchDomains();
+        const sortBy = params.sort_by || this.filters.sort_by;
+        const order = params.order || this.filters.order;
+        const query = {
+          ...params,
+          sort_by: sortBy,
+          order
+        };
+        const { data } = await fetchDomains(query);
         this.items = data;
+        this.filters.sort_by = sortBy;
+        this.filters.order = order;
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
@@ -27,6 +40,10 @@ export const useDomainsStore = defineStore('domains', {
       } finally {
         this.isLoading = false;
       }
+    },
+    setSorting({ sortBy, sortDirection }) {
+      this.filters.sort_by = sortBy;
+      this.filters.order = sortDirection;
     },
     async create(payload) {
       try {

@@ -16,7 +16,6 @@
             </button>
             <span v-else>{{ column.label }}</span>
           </th>
-          <th>Tags</th>
           <th></th>
         </tr>
       </thead>
@@ -25,20 +24,27 @@
           <td colspan="6" class="empty">No documents found.</td>
         </tr>
         <tr v-for="document in documents" :key="document.id">
-          <td>{{ document.title }}</td>
-          <td>{{ resolveDomainName(document.domain_id) }}</td>
-          <td>{{ formatDate(document.created_at) }}</td>
-          <td>{{ formatDate(document.updated_at) }}</td>
-          <td>
-            <div class="tag-list">
-              <span
-                v-for="tag in extractTags(document.doc_metadata)"
-                :key="tag"
-                class="tag"
-              >
-                {{ tag }}
-              </span>
-            </div>
+          <td v-for="column in columns" :key="column.key">
+            <template v-if="column.key === 'title'">
+              {{ document.title }}
+            </template>
+            <template v-else-if="column.key === 'domain'">
+              {{ resolveDomainName(document.domain_id) }}
+            </template>
+            <template v-else-if="column.key === 'created_at'">
+              {{ formatDate(document.created_at) }}
+            </template>
+            <template v-else-if="column.key === 'updated_at'">
+              {{ formatDate(document.updated_at) }}
+            </template>
+            <template v-else-if="column.key === 'tags'">
+              <div v-if="getTags(document).length" class="tag-list">
+                <span v-for="tag in getTags(document)" :key="tag" class="tag">
+                  {{ tag }}
+                </span>
+              </div>
+              <span v-else>—</span>
+            </template>
           </td>
           <td class="actions">
             <RouterLink
@@ -78,9 +84,10 @@ const emit = defineEmits(['update:sort']);
 
 const columns = [
   { key: 'title', label: 'Name', sortable: true },
-  { key: 'domain', label: 'Domain', sortable: false },
+  { key: 'domain', label: 'Domain', sortable: true },
   { key: 'created_at', label: 'Created', sortable: true },
-  { key: 'updated_at', label: 'Updated', sortable: false }
+  { key: 'updated_at', label: 'Updated', sortable: true },
+  { key: 'tags', label: 'Tags', sortable: true }
 ];
 
 function changeSort(key) {
@@ -107,6 +114,10 @@ function extractTags(metadata) {
     return [];
   }
   return metadata.tags.filter((tag) => tag);
+}
+
+function getTags(document) {
+  return extractTags(document.doc_metadata);
 }
 </script>
 

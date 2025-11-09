@@ -317,6 +317,50 @@ body {
   gap: 4px;
 }
 
+/* 表单字段通用样式 */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-field label {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.form-field label::after {
+  content: ' ';
+}
+
+.form-field input,
+.form-field textarea,
+.form-field select {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  background-color: #ffffff;
+  color: #111827;
+}
+
+.form-field--error input,
+.form-field--error textarea,
+.form-field--error select {
+  border-color: #ef4444;
+}
+
+.form-field--error select {
+  color: #ef4444;
+}
+
+.form-field__error {
+  color: #ef4444;
+  font-size: 13px;
+  margin: 0;
+}
+
 /* 模式标题 */
 .form-toggle__title {
   font-weight: 600;
