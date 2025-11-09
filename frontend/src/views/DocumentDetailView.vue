@@ -32,14 +32,6 @@
       </div>
     </div>
 
-    <div v-if="tags.length" class="document-detail__tags">
-      <span v-for="tag in tags" :key="tag" class="tag">{{ tag }}</span>
-    </div>
-    <p v-else class="document-detail__empty">
-      No tags attached to this document.
-    </p>
-
-
     <article class="document-detail__content document-detail__chunks">
       <header class="document-detail__chunks-header">
         <h3>Chunks</h3>
@@ -78,15 +70,6 @@
           <p v-if="editErrors.title" class="form-field__error">
             {{ editErrors.title }}
           </p>
-        </div>
-        <div class="form-field">
-          <label for="edit-tags">Tags</label>
-          <input
-            id="edit-tags"
-            v-model.trim="editForm.tags"
-            type="text"
-            placeholder="comma separated"
-          />
         </div>
       </div>
       <template #footer>
@@ -138,8 +121,7 @@ const isDeleting = ref(false);
 const isSaving = ref(false);
 
 const editForm = reactive({
-  title: '',
-  tags: ''
+  title: ''
 });
 
 const editErrors = reactive({
@@ -148,11 +130,6 @@ const editErrors = reactive({
 
 const document = computed(() => documentsStore.activeDocument);
 const chunks = computed(() => documentsStore.activeChunks || []);
-const tags = computed(() => {
-  if (!document.value?.doc_metadata?.tags) return [];
-  return document.value.doc_metadata.tags.filter((tag) => tag);
-});
-
 const domainName = computed(() => {
   const domain = domainsStore.items.find(
     (item) => item.id === document.value?.domain_id
@@ -173,7 +150,6 @@ watch(
   (value) => {
     if (!value) return;
     editForm.title = value.title;
-    editForm.tags = tags.value.join(', ');
   },
   { immediate: true }
 );
@@ -199,14 +175,6 @@ function closeDelete() {
   isDeleteOpen.value = false;
 }
 
-function parseTags(raw) {
-  if (!raw) return [];
-  return raw
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
 function formatChunkLength(chunk) {
   if (!chunk || typeof chunk.content !== 'string') return 0;
   return chunk.content.length;
@@ -225,7 +193,6 @@ async function save() {
       documentId: document.value.id,
       domainId: document.value.domain_id,
       title: editForm.title,
-      tags: parseTags(editForm.tags),
       metadata: document.value.doc_metadata
     });
     await documentsStore.loadDocument(route.params.id);
@@ -283,21 +250,6 @@ async function remove() {
 .mono {
   font-family: 'Fira Code', 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
-}
-
-.document-detail__tags {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.tag {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: #1d4ed8;
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 12px;
 }
 
 .document-detail__empty {

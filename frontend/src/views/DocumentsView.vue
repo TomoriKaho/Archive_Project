@@ -89,16 +89,6 @@
               </p>
             </div>
 
-            <div class="form-field">
-              <label for="tags">Tags (comma separated)</label>
-              <input
-                id="tags"
-                v-model.trim="textForm.tags"
-                type="text"
-                placeholder="research, ai"
-              />
-            </div>
-
             <div
               class="form-field"
               :class="{ 'form-field--error': textErrors.content }"
@@ -149,15 +139,6 @@
               <p v-if="csvErrors.title" class="form-field__error">
                 {{ csvErrors.title }}
               </p>
-            </div>
-            <div class="form-field">
-              <label for="csv-tags">Tags (comma separated)</label>
-              <input
-                id="csv-tags"
-                v-model.trim="csvForm.tags"
-                type="text"
-                placeholder="research, ai"
-              />
             </div>
             <div class="upload-zone" @dragover.prevent @drop.prevent="onDrop">
               <p>Drag & drop your CSV here or click to browse.</p>
@@ -217,7 +198,6 @@ const tabs = [
 const textForm = reactive({
   domainId: '',
   title: '',
-  tags: '',
   content: ''
 });
 
@@ -229,8 +209,7 @@ const textErrors = reactive({
 
 const csvForm = reactive({
   domainId: '',
-  title: '',
-  tags: ''
+  title: ''
 });
 
 const csvErrors = reactive({
@@ -277,14 +256,12 @@ function closeModal() {
 function resetForms() {
   textForm.domainId = '';
   textForm.title = '';
-  textForm.tags = '';
   textForm.content = '';
   textErrors.domainId = '';
   textErrors.title = '';
   textErrors.content = '';
   csvForm.domainId = '';
   csvForm.title = '';
-  csvForm.tags = '';
   csvErrors.domainId = '';
   csvErrors.title = '';
   csvErrors.file = '';
@@ -346,14 +323,6 @@ function validateCsvForm() {
   return !csvErrors.domainId && !csvErrors.title && fileValid;
 }
 
-function parseTags(raw) {
-  if (!raw) return [];
-  return raw
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
 async function submit() {
   if (activeTab.value === 'text') {
     if (!validateText()) return;
@@ -362,7 +331,6 @@ async function submit() {
       await documentsStore.createDocument({
         domainId: Number(textForm.domainId),
         title: textForm.title,
-        tags: parseTags(textForm.tags),
         content: textForm.content
       });
       closeModal();
@@ -376,7 +344,6 @@ async function submit() {
       await documentsStore.uploadCsv({
         domainId: Number(csvForm.domainId),
         title: csvForm.title,
-        tags: parseTags(csvForm.tags),
         file: csvFile.value
       });
       closeModal();

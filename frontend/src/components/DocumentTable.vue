@@ -21,7 +21,7 @@
       </thead>
       <tbody>
         <tr v-if="documents.length === 0">
-          <td colspan="6" class="empty">No documents found.</td>
+          <td colspan="5" class="empty">No documents found.</td>
         </tr>
         <tr v-for="document in documents" :key="document.id">
           <td v-for="column in columns" :key="column.key">
@@ -36,14 +36,6 @@
             </template>
             <template v-else-if="column.key === 'updated_at'">
               {{ formatDate(document.updated_at) }}
-            </template>
-            <template v-else-if="column.key === 'tags'">
-              <div v-if="getTags(document).length" class="tag-list">
-                <span v-for="tag in getTags(document)" :key="tag" class="tag">
-                  {{ tag }}
-                </span>
-              </div>
-              <span v-else>—</span>
             </template>
           </td>
           <td class="actions">
@@ -86,8 +78,7 @@ const columns = [
   { key: 'title', label: 'Name', sortable: true },
   { key: 'domain', label: 'Domain', sortable: true },
   { key: 'created_at', label: 'Created', sortable: true },
-  { key: 'updated_at', label: 'Updated', sortable: true },
-  { key: 'tags', label: 'Tags', sortable: true }
+  { key: 'updated_at', label: 'Updated', sortable: true }
 ];
 
 function changeSort(key) {
@@ -109,16 +100,6 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString();
 }
 
-function extractTags(metadata) {
-  if (!metadata || !Array.isArray(metadata.tags)) {
-    return [];
-  }
-  return metadata.tags.filter((tag) => tag);
-}
-
-function getTags(document) {
-  return extractTags(document.doc_metadata);
-}
 </script>
 
 <style scoped>
@@ -152,20 +133,6 @@ th button {
   text-align: center;
   color: #9ca3af;
   padding: 32px 16px;
-}
-
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tag {
-  background-color: rgba(59, 130, 246, 0.1);
-  color: #1d4ed8;
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 12px;
 }
 
 .actions a {
