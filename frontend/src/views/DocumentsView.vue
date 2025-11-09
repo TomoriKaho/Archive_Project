@@ -18,14 +18,33 @@
     </header>
 
     <div class="documents__controls">
-      <div class="form-field">
+      <div class="form-field documents__search-field">
         <label for="search">Search</label>
-        <input
-          id="search"
-          v-model="search"
-          type="search"
-          placeholder="Search documents"
-        />
+        <div class="documents__search-bar">
+          <input
+            id="search"
+            v-model="search"
+            type="search"
+            placeholder="Search documents"
+            @keyup.enter="applySearch"
+          />
+          <button
+            class="button button--primary"
+            type="button"
+            @click="applySearch"
+          >
+            Search
+          </button>
+          <button
+            v-if="isSearchApplied"
+            class="button button--ghost documents__clear-search"
+            type="button"
+            aria-label="Clear search filter"
+            @click="clearSearch"
+          >
+            ×
+          </button>
+        </div>
       </div>
       <div class="form-field">
         <label for="domain-filter">Domain</label>
@@ -173,7 +192,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import BaseModal from '@/components/BaseModal.vue';
 import BaseTabs from '@/components/BaseTabs.vue';
@@ -184,11 +203,15 @@ import { useDomainsStore } from '@/store/domains';
 const documentsStore = useDocumentsStore();
 const domainsStore = useDomainsStore();
 
-const search = ref('');
-const selectedDomainFilter = ref('');
+const search = ref(documentsStore.filters.search ?? '');
+const selectedDomainFilter = ref(
+  documentsStore.filters.domain_id ? String(documentsStore.filters.domain_id) : ''
+);
 const isModalOpen = ref(false);
 const activeTab = ref('text');
 const isSubmitting = ref(false);
+
+const isSearchApplied = computed(() => Boolean(documentsStore.filters.search));
 
 const tabs = [
   { value: 'text', label: 'Plain Text' },
@@ -227,14 +250,6 @@ onMounted(() => {
 });
 
 watch(
-  () => search.value,
-  () => {
-    documentsStore.setSearch(search.value);
-    documentsStore.loadDocuments();
-  }
-);
-
-watch(
   () => selectedDomainFilter.value,
   (value) => {
     const domainId = value ? Number(value) : null;
@@ -246,6 +261,28 @@ watch(
 
 function openNewDocument() {
   isModalOpen.value = true;
+}
+
+function applySearch() {
+  const term = search.value.trim();
+  if (!term) {
+    clearSearch();
+    return;
+  }
+  if (term === documentsStore.filters.search) {
+    return;
+  }
+  documentsStore.setSearch(term);
+  documentsStore.loadDocuments({ search: term });
+}
+
+function clearSearch() {
+  if (!documentsStore.filters.search && !search.value) {
+    return;
+  }
+  search.value = '';
+  documentsStore.setSearch('');
+  documentsStore.loadDocuments();
 }
 
 function closeModal() {
@@ -374,6 +411,26 @@ function onSort({ sortBy, sortDirection }) {
   margin-bottom: 24px;
   display: flex;
   gap: 16px;
+}
+
+.documents__search-field {
+  flex: 1;
+}
+
+.documents__search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.documents__search-bar input {
+  flex: 1;
+}
+
+.documents__clear-search {
+  font-size: 18px;
+  line-height: 1;
+  padding: 10px 14px;
 }
 
 .upload-zone {
