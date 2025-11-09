@@ -25,7 +25,13 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 # Create a new chat
 @router.post("/", response_model=ChatOut, status_code=status.HTTP_201_CREATED)
 def create_chat(payload: ChatCreate, db: Session = Depends(get_db)):
-    return ChatRepository(db).create(**payload.model_dump())
+    data = payload.model_dump()
+    data["domain_ids"] = (
+        sorted({int(domain_id) for domain_id in data["domain_ids"]})
+        if data.get("domain_ids")
+        else None
+    )
+    return ChatRepository(db).create(**data)
 
 # List chats for a user with pagination
 @router.get("/", response_model=list[ChatOut])
@@ -39,7 +45,18 @@ def update_chat(chat_id: int, payload: ChatUpdate, db: Session = Depends(get_db)
     chat = repo.get(chat_id)
     if not chat:
         raise HTTPException(404, "chat not found")
-    return repo.update(chat, **payload.model_dump(exclude_none=True))
+    updates: dict = {}
+    if payload.title is not None:
+        updates["title"] = payload.title
+    if payload.domain_ids is not None:
+        updates["domain_ids"] = (
+            sorted({int(domain_id) for domain_id in payload.domain_ids})
+            if payload.domain_ids
+            else None
+        )
+    if not updates:
+        return chat
+    return repo.update(chat, **updates)
 
 # Delete a chat by ID
 @router.delete("/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -79,7 +96,19 @@ def create_message(
 
     if payload.role == "user":
         top_k = payload.top_k or DEFAULT_TOP_K
-        domain_ids = sorted(set(payload.domain_ids)) if payload.domain_ids else None
+        raw_domain_ids = payload.domain_ids
+        if raw_domain_ids is None:
+            domain_ids = (
+                sorted({int(domain_id) for domain_id in chat.domain_ids})
+                if chat.domain_ids
+                else None
+            )
+        else:
+            domain_ids = (
+                sorted({int(domain_id) for domain_id in raw_domain_ids})
+                if raw_domain_ids
+                else None
+            )
         try:
             answer_text, references = answer(
                 content,

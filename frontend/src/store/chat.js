@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import {
   fetchConversations,
   createConversation,
+  updateConversation as updateConversationRequest,
   deleteConversation,
   fetchConversationMessages,
   sendConversationMessage
@@ -74,18 +75,24 @@ export const useChatStore = defineStore('chat', {
         if (!authStore.user) {
           throw new Error('You must be logged in to start a conversation.');
         }
-        const { name, prompt } = payload;
+        const { name, prompt, domain_ids: rawDomainIds } = payload;
+        const domainIds = Array.isArray(rawDomainIds)
+          ? rawDomainIds.map((value) => Number(value))
+          : [];
         const { data } = await createConversation({
           user_id: authStore.user.id,
-          title: name?.trim() || null
+          title: name?.trim() || null,
+          domain_ids: domainIds.length ? domainIds : null
         });
         await this.loadConversations();
         this.activeConversationId = data.id;
         this.messages = [];
         if (prompt?.trim()) {
-          await this.sendMessage(data.id, {
-            content: prompt.trim()
-          });
+          const messagePayload = { content: prompt.trim() };
+          if (domainIds.length) {
+            messagePayload.domain_ids = domainIds;
+          }
+          await this.sendMessage(data.id, messagePayload);
         } else {
           await this.loadMessages(data.id);
         }
@@ -127,8 +134,10 @@ export const useChatStore = defineStore('chat', {
         if (payload.top_k) {
           body.top_k = payload.top_k;
         }
-        if (payload.domain_ids) {
-          body.domain_ids = payload.domain_ids;
+        if (Object.prototype.hasOwnProperty.call(payload, 'domain_ids')) {
+          body.domain_ids = Array.isArray(payload.domain_ids)
+            ? payload.domain_ids.map((value) => Number(value))
+            : payload.domain_ids;
         }
         const { data } = await sendConversationMessage(conversationId, body);
         if (data?.user) {
@@ -155,6 +164,39 @@ export const useChatStore = defineStore('chat', {
         throw error;
       } finally {
         this.isSending = false;
+      }
+    },
+    async updateConversation(conversationId, payload) {
+      if (!conversationId) return null;
+      try {
+        const body = {};
+        if (Object.prototype.hasOwnProperty.call(payload, 'title')) {
+          body.title = payload.title;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'domain_ids')) {
+          body.domain_ids = Array.isArray(payload.domain_ids)
+            ? payload.domain_ids.map((value) => Number(value))
+            : payload.domain_ids;
+        }
+        const { data } = await updateConversationRequest(conversationId, body);
+        const index = this.conversations.findIndex((item) => item.id === conversationId);
+        if (index !== -1) {
+          this.conversations.splice(index, 1, data);
+        }
+        if (this.activeConversationId === conversationId) {
+          this.activeConversationId = data.id;
+        }
+        useUiStore().showToast({
+          type: 'success',
+          message: 'Conversation updated.'
+        });
+        return data;
+      } catch (error) {
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Unable to update conversation.'
+        });
+        throw error;
       }
     },
     async removeConversation(conversationId) {

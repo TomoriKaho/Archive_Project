@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ChatView from '@/views/ChatView.vue';
 import { useChatStore } from '@/store/chat';
+import { useDomainsStore } from '@/store/domains';
 
 const BaseModalStub = {
   name: 'BaseModal',
@@ -26,6 +27,8 @@ describe('ChatView', () => {
     const chatStore = useChatStore(pinia);
     chatStore.loadConversations = vi.fn().mockResolvedValue(undefined);
     chatStore.startConversation = vi.fn().mockResolvedValue(undefined);
+    const domainsStore = useDomainsStore(pinia);
+    domainsStore.loadDomains = vi.fn().mockResolvedValue(undefined);
 
     const wrapper = mount(ChatView, {
       global: {
@@ -47,7 +50,8 @@ describe('ChatView', () => {
 
     expect(chatStore.startConversation).toHaveBeenCalledWith({
       name: 'Research Thread',
-      prompt: 'Let us discuss.'
+      prompt: 'Let us discuss.',
+      domain_ids: []
     });
   });
 });
