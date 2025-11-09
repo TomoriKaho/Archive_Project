@@ -10,6 +10,10 @@ export function createConversation(payload) {
   return apiClient.post('/chats', payload);
 }
 
+export function updateConversation(conversationId, payload) {
+  return apiClient.patch(`/chats/${conversationId}`, payload);
+}
+
 export function deleteConversation(conversationId) {
   return apiClient.delete(`/chats/${conversationId}`);
 }
