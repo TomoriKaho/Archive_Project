@@ -31,6 +31,9 @@ OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3.1:8b")
 DEFAULT_TOP_K = int(os.getenv("RAG_TOP_K", "10"))
 """Default number of chunks retrieved when no explicit top_k is provided."""
 
+EVIDENCE_TOP_K = int(os.getenv("RAG_EVIDENCE_TOPK", "6"))
+"""Number of evidence chunks inserted into the context envelope."""
+
 RAG_OLLAMA_TIMEOUT = int(os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
 """HTTP timeout applied to Ollama chat requests."""
 
@@ -120,15 +123,30 @@ def build_context(chunks: list[Chunk]) -> str:
     return "\n\n".join(lines)
 
 
-def chat(system: str, user: str, stream: bool = False) -> str:
-    """Call Ollama's chat API and return the assistant message content."""
+def chat(
+    system: str | None = None,
+    user: str | None = None,
+    *,
+    messages: Sequence[dict[str, str]] | None = None,
+    stream: bool = False,
+) -> str:
+    """调用 Ollama 聊天接口，支持自定义消息序列。"""
 
-    payload = {
-        "model": OLLAMA_CHAT_MODEL,
-        "messages": [
+    if messages:
+        final_messages = [
+            {"role": msg.get("role", "user"), "content": msg.get("content", "")}
+            for msg in messages
+        ]
+    else:
+        if system is None or user is None:
+            raise ValueError("system 与 user 参数不能为空")
+        final_messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
-        ],
+        ]
+    payload = {
+        "model": OLLAMA_CHAT_MODEL,
+        "messages": final_messages,
         "stream": stream,
     }
     req = request.Request(

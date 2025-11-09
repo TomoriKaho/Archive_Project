@@ -14,12 +14,8 @@ from app.repositories.document_repo import DocumentRepository
 from app.repositories.message_repo import MessageRepository
 from app.schemas.message import MessageOut
 from app.schemas.rag import AskRequest, AskResponse, PreviewItem, Reference
-from app.services.rag_service import (
-    DEFAULT_TOP_K,
-    answer,
-    index_chunks,
-    retrieve_with_scores,
-)
+from app.services.rag_conversation import answer_with_history
+from app.services.rag_service import DEFAULT_TOP_K, index_chunks, retrieve_with_scores
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +70,8 @@ def ask_in_chat(
     domain_ids = sorted(set(payload.domain_ids)) if payload.domain_ids else None
     top_k = payload.top_k or DEFAULT_TOP_K
     try:
-        answer_text, references = answer(
+        answer_text, references = answer_with_history(
+            chat_id,
             question,
             domain_ids,
             db=db,

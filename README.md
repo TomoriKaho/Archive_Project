@@ -56,6 +56,7 @@ OLLAMA_URL=http://localhost:11434
 OLLAMA_EMBED_MODEL=qwen3-embedding:8b
 OLLAMA_CHAT_MODEL=llama3.1:8b
 RAG_TOP_K=10
+RAG_EVIDENCE_TOPK=6
 RAG_OLLAMA_TIMEOUT=60
 ```
 
@@ -160,6 +161,10 @@ docker logs -f qdrant
 ## 五、RAG 相关（可选）
 
 > 若暂未启用 RAG，可跳过本节。需要时：
+
+### RAG 证据贴入的超参数
+
+- `RAG_EVIDENCE_TOPK`：控制上下文包内可展示的证据片段数量，默认值为 6，可按需求调整。
 
 ```bash
 # 启动/准备 Ollama（本机）

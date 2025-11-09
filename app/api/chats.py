@@ -15,7 +15,8 @@ from app.schemas.message import (
     MessageReference,
     MessageUpdate,
 )
-from app.services.rag_service import DEFAULT_TOP_K, answer
+from app.services.rag_conversation import answer_with_history
+from app.services.rag_service import DEFAULT_TOP_K
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,8 @@ def create_message(
         top_k = payload.top_k or DEFAULT_TOP_K
         domain_ids = sorted(set(payload.domain_ids)) if payload.domain_ids else None
         try:
-            answer_text, references = answer(
+            answer_text, references = answer_with_history(
+                chat_id,
                 content,
                 domain_ids,
                 db=db,
