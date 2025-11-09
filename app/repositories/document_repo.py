@@ -9,9 +9,16 @@ from sqlalchemy import Select, func, select  # 引入select构造查询
 from sqlalchemy.orm import Session  # 使用Session执行SQL
 
 from .base import Repository  # 基类提供通用CRUD
-from app.models.entities import Document  # 引入Document模型
+from app.models.entities import Document, Domain  # 引入Document模型
 
 logger = logging.getLogger(__name__)  # 初始化模块级日志记录器
+
+
+def _escape_like_pattern(value: str) -> str:
+    """对LIKE模式中的特殊字符进行转义，确保搜索作为字面量处理。"""
+    return (
+        value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    )
 
 
 class DocumentRepository(Repository[Document]):
@@ -48,16 +55,30 @@ class DocumentRepository(Repository[Document]):
         sort_by: str,
         order: str,
         domain_id: int | None = None,
+        search: str | None = None,
     ) -> Sequence[Document]:
         """支持分页与排序的通用查询。"""
         stmt = select(Document)  # 基础查询
         if domain_id is not None:
             stmt = stmt.where(Document.domain_id == domain_id)  # 按domain过滤
-        sort_column = Document.created_at if sort_by == "created_at" else Document.title  # 选择排序字段
-        sort_expression = (
-            sort_column.asc() if order == "asc" else sort_column.desc()
-        )  # 根据排序方向生成表达式
-        stmt = stmt.order_by(sort_expression).offset(offset).limit(limit)  # 应用排序与分页
+        if search:
+            escaped = _escape_like_pattern(search)
+            stmt = stmt.where(Document.title.ilike(f"%{escaped}%", escape="\\"))
+        if sort_by == "domain":
+            stmt = stmt.join(Domain, Document.domain_id == Domain.id)
+            sort_column = Domain.name
+        elif sort_by == "title":
+            sort_column = Document.title
+        elif sort_by == "updated_at":
+            sort_column = Document.updated_at
+        else:
+            sort_column = Document.created_at
+        sort_expression = sort_column.asc() if order == "asc" else sort_column.desc()
+        stmt = (
+            stmt.order_by(sort_expression, Document.id.asc())
+            .offset(offset)
+            .limit(limit)
+        )  # 应用排序与分页
         logger.info(
             "list_with_filters domain=%s limit=%s offset=%s sort_by=%s order=%s",
             domain_id,
@@ -93,11 +114,16 @@ class DocumentRepository(Repository[Document]):
         return self.count_with_filters()  # 复用带过滤统计
         # 设计说明：复用逻辑避免两份实现。
 
-    def count_with_filters(self, domain_id: int | None = None) -> int:
+    def count_with_filters(
+        self, *, domain_id: int | None = None, search: str | None = None
+    ) -> int:
         """根据过滤条件统计文档数量。"""
         stmt = select(func.count()).select_from(Document)  # 构造COUNT(*)
         if domain_id is not None:
             stmt = stmt.where(Document.domain_id == domain_id)  # 按domain过滤
+        if search:
+            escaped = _escape_like_pattern(search)
+            stmt = stmt.where(Document.title.ilike(f"%{escaped}%", escape="\\"))
         total = self.db.execute(stmt).scalar_one()  # 执行统计
         logger.info("count_with_filters domain=%s total=%s", domain_id, total)  # 输出统计信息
         return total  # 返回计数

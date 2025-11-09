@@ -18,14 +18,33 @@
     </header>
 
     <div class="documents__controls">
-      <div class="form-field">
+      <div class="form-field documents__search-field">
         <label for="search">Search</label>
-        <input
-          id="search"
-          v-model="search"
-          type="search"
-          placeholder="Search documents"
-        />
+        <div class="documents__search-bar">
+          <input
+            id="search"
+            v-model="search"
+            type="search"
+            placeholder="Search documents"
+            @keyup.enter="applySearch"
+          />
+          <button
+            class="button button--primary"
+            type="button"
+            @click="applySearch"
+          >
+            Search
+          </button>
+          <button
+            v-if="isSearchApplied"
+            class="button button--ghost documents__clear-search"
+            type="button"
+            aria-label="Clear search filter"
+            @click="clearSearch"
+          >
+            ×
+          </button>
+        </div>
       </div>
       <div class="form-field">
         <label for="domain-filter">Domain</label>
@@ -89,16 +108,6 @@
               </p>
             </div>
 
-            <div class="form-field">
-              <label for="tags">Tags (comma separated)</label>
-              <input
-                id="tags"
-                v-model.trim="textForm.tags"
-                type="text"
-                placeholder="research, ai"
-              />
-            </div>
-
             <div
               class="form-field"
               :class="{ 'form-field--error': textErrors.content }"
@@ -150,15 +159,6 @@
                 {{ csvErrors.title }}
               </p>
             </div>
-            <div class="form-field">
-              <label for="csv-tags">Tags (comma separated)</label>
-              <input
-                id="csv-tags"
-                v-model.trim="csvForm.tags"
-                type="text"
-                placeholder="research, ai"
-              />
-            </div>
             <div class="upload-zone" @dragover.prevent @drop.prevent="onDrop">
               <p>Drag & drop your CSV here or click to browse.</p>
               <input
@@ -192,7 +192,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import BaseModal from '@/components/BaseModal.vue';
 import BaseTabs from '@/components/BaseTabs.vue';
@@ -203,11 +203,15 @@ import { useDomainsStore } from '@/store/domains';
 const documentsStore = useDocumentsStore();
 const domainsStore = useDomainsStore();
 
-const search = ref('');
-const selectedDomainFilter = ref('');
+const search = ref(documentsStore.filters.search ?? '');
+const selectedDomainFilter = ref(
+  documentsStore.filters.domain_id ? String(documentsStore.filters.domain_id) : ''
+);
 const isModalOpen = ref(false);
 const activeTab = ref('text');
 const isSubmitting = ref(false);
+
+const isSearchApplied = computed(() => Boolean(documentsStore.filters.search));
 
 const tabs = [
   { value: 'text', label: 'Plain Text' },
@@ -217,7 +221,6 @@ const tabs = [
 const textForm = reactive({
   domainId: '',
   title: '',
-  tags: '',
   content: ''
 });
 
@@ -229,8 +232,7 @@ const textErrors = reactive({
 
 const csvForm = reactive({
   domainId: '',
-  title: '',
-  tags: ''
+  title: ''
 });
 
 const csvErrors = reactive({
@@ -248,14 +250,6 @@ onMounted(() => {
 });
 
 watch(
-  () => search.value,
-  () => {
-    documentsStore.setSearch(search.value);
-    documentsStore.loadDocuments();
-  }
-);
-
-watch(
   () => selectedDomainFilter.value,
   (value) => {
     const domainId = value ? Number(value) : null;
@@ -269,6 +263,28 @@ function openNewDocument() {
   isModalOpen.value = true;
 }
 
+function applySearch() {
+  const term = search.value.trim();
+  if (!term) {
+    clearSearch();
+    return;
+  }
+  if (term === documentsStore.filters.search) {
+    return;
+  }
+  documentsStore.setSearch(term);
+  documentsStore.loadDocuments({ search: term });
+}
+
+function clearSearch() {
+  if (!documentsStore.filters.search && !search.value) {
+    return;
+  }
+  search.value = '';
+  documentsStore.setSearch('');
+  documentsStore.loadDocuments();
+}
+
 function closeModal() {
   isModalOpen.value = false;
   resetForms();
@@ -277,14 +293,12 @@ function closeModal() {
 function resetForms() {
   textForm.domainId = '';
   textForm.title = '';
-  textForm.tags = '';
   textForm.content = '';
   textErrors.domainId = '';
   textErrors.title = '';
   textErrors.content = '';
   csvForm.domainId = '';
   csvForm.title = '';
-  csvForm.tags = '';
   csvErrors.domainId = '';
   csvErrors.title = '';
   csvErrors.file = '';
@@ -346,14 +360,6 @@ function validateCsvForm() {
   return !csvErrors.domainId && !csvErrors.title && fileValid;
 }
 
-function parseTags(raw) {
-  if (!raw) return [];
-  return raw
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
 async function submit() {
   if (activeTab.value === 'text') {
     if (!validateText()) return;
@@ -362,7 +368,6 @@ async function submit() {
       await documentsStore.createDocument({
         domainId: Number(textForm.domainId),
         title: textForm.title,
-        tags: parseTags(textForm.tags),
         content: textForm.content
       });
       closeModal();
@@ -376,7 +381,6 @@ async function submit() {
       await documentsStore.uploadCsv({
         domainId: Number(csvForm.domainId),
         title: csvForm.title,
-        tags: parseTags(csvForm.tags),
         file: csvFile.value
       });
       closeModal();
@@ -407,6 +411,26 @@ function onSort({ sortBy, sortDirection }) {
   margin-bottom: 24px;
   display: flex;
   gap: 16px;
+}
+
+.documents__search-field {
+  flex: 1;
+}
+
+.documents__search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.documents__search-bar input {
+  flex: 1;
+}
+
+.documents__clear-search {
+  font-size: 18px;
+  line-height: 1;
+  padding: 10px 14px;
 }
 
 .upload-zone {

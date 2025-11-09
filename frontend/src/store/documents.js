@@ -28,12 +28,14 @@ export const useDocumentsStore = defineStore('documents', {
     async loadDocuments(params = {}) {
       this.isLoading = true;
       try {
-        const sortBy = params.sort_by || this.filters.sort_by;
-        const order = params.order || this.filters.order;
+        const sortBy = params.sort_by ?? this.filters.sort_by;
+        const order = params.order ?? this.filters.order;
         const domainId =
           params.domain_id !== undefined
             ? params.domain_id
             : this.filters.domain_id;
+        const searchTerm =
+          params.search !== undefined ? params.search : this.filters.search;
         const query = {
           sort_by: sortBy,
           order,
@@ -43,6 +45,13 @@ export const useDocumentsStore = defineStore('documents', {
         if (domainId) {
           query.domain_id = domainId;
         }
+        if (searchTerm) {
+          query.search = searchTerm;
+        }
+        this.filters.sort_by = sortBy;
+        this.filters.order = order;
+        this.filters.domain_id = domainId ?? null;
+        this.filters.search = searchTerm ?? '';
         const { data } = await fetchDocuments(query);
         this.items = data.items || data;
         this.total = data.total || data.length;
@@ -57,7 +66,7 @@ export const useDocumentsStore = defineStore('documents', {
       }
     },
     setSearch(search) {
-      this.filters.search = search;
+      this.filters.search = search ?? '';
     },
     setSorting({ sortBy, sortDirection }) {
       this.filters.sort_by = sortBy;
@@ -89,12 +98,10 @@ export const useDocumentsStore = defineStore('documents', {
     },
     async createDocument(payload) {
       try {
-        const { domainId, title, content, tags } = payload;
-        const docMetadata = tags?.length ? { tags } : {};
+        const { domainId, title, content } = payload;
         const body = {
           title,
-          content,
-          doc_metadata: docMetadata
+          content
         };
         const { data } = await createTextDocument(domainId, body);
         useUiStore().showToast({
@@ -111,15 +118,12 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       }
     },
-    async uploadCsv({ domainId, title, tags, file }) {
+    async uploadCsv({ domainId, title, file }) {
       try {
         const formData = new FormData();
         formData.append('title', title);
         formData.append('mode', 'csv');
         formData.append('file', file);
-        if (tags?.length) {
-          formData.append('doc_metadata', JSON.stringify({ tags }));
-        }
         await uploadCsvDocument(domainId, formData);
         useUiStore().showToast({
           type: 'success',
@@ -134,18 +138,12 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       }
     },
-    async saveDocument({ documentId, domainId, title, tags, metadata }) {
+    async saveDocument({ documentId, domainId, title, metadata }) {
       try {
-        const baseMetadata = metadata ? { ...metadata } : {};
-        if (tags?.length) {
-          baseMetadata.tags = tags;
-        } else {
-          delete baseMetadata.tags;
+        const body = { title };
+        if (metadata !== undefined && metadata !== null) {
+          body.doc_metadata = metadata;
         }
-        const body = {
-          title,
-          doc_metadata: baseMetadata
-        };
         const { data } = await updateDocument(domainId, documentId, body);
         useUiStore().showToast({
           type: 'success',
