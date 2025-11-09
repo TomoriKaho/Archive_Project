@@ -10,13 +10,24 @@ import {
 import { useUiStore } from './ui';
 import { useAuthStore } from './auth';
 
+function normalizeDomainIds(rawValue) {
+  if (!Array.isArray(rawValue)) {
+    return [];
+  }
+  const cleaned = rawValue
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  return Array.from(new Set(cleaned)).sort((a, b) => a - b);
+}
+
 export const useChatStore = defineStore('chat', {
   state: () => ({
     conversations: [],
     activeConversationId: null,
     messages: [],
     isLoading: false,
-    isSending: false
+    isSending: false,
+    conversationDomains: {}
   }),
   getters: {
     activeConversation(state) {
@@ -25,6 +36,13 @@ export const useChatStore = defineStore('chat', {
           (conv) => conv.id === state.activeConversationId
         ) || null
       );
+    },
+    getConversationDomains: (state) => (conversationId) => {
+      if (!conversationId) {
+        return [];
+      }
+      const selection = state.conversationDomains[conversationId];
+      return Array.isArray(selection) ? [...selection] : [];
     }
   },
   actions: {
@@ -34,10 +52,29 @@ export const useChatStore = defineStore('chat', {
         const authStore = useAuthStore();
         if (!authStore.user) {
           this.conversations = [];
+          this.conversationDomains = {};
+          this.activeConversationId = null;
+          this.messages = [];
           return;
         }
         const { data } = await fetchConversations(authStore.user.id);
+        const previousDomains = this.conversationDomains;
+        const nextDomains = {};
+        data.forEach((conversation) => {
+          const existing = previousDomains[conversation.id];
+          nextDomains[conversation.id] = Array.isArray(existing)
+            ? normalizeDomainIds(existing)
+            : [];
+        });
+        this.conversationDomains = nextDomains;
         this.conversations = data;
+        if (
+          this.activeConversationId &&
+          !data.some((conversation) => conversation.id === this.activeConversationId)
+        ) {
+          this.activeConversationId = null;
+          this.messages = [];
+        }
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
@@ -76,23 +113,18 @@ export const useChatStore = defineStore('chat', {
           throw new Error('You must be logged in to start a conversation.');
         }
         const { name, prompt, domain_ids: rawDomainIds } = payload;
-        const domainIds = Array.isArray(rawDomainIds)
-          ? rawDomainIds.map((value) => Number(value))
-          : [];
+        const domainIds = normalizeDomainIds(rawDomainIds);
         const { data } = await createConversation({
           user_id: authStore.user.id,
           title: name?.trim() || null,
           domain_ids: domainIds.length ? domainIds : null
         });
         await this.loadConversations();
+        this.setConversationDomains(data.id, domainIds, { notify: false });
         this.activeConversationId = data.id;
         this.messages = [];
         if (prompt?.trim()) {
-          const messagePayload = { content: prompt.trim() };
-          if (domainIds.length) {
-            messagePayload.domain_ids = domainIds;
-          }
-          await this.sendMessage(data.id, messagePayload);
+          await this.sendMessage(data.id, { content: prompt.trim() });
         } else {
           await this.loadMessages(data.id);
         }
@@ -135,9 +167,15 @@ export const useChatStore = defineStore('chat', {
           body.top_k = payload.top_k;
         }
         if (Object.prototype.hasOwnProperty.call(payload, 'domain_ids')) {
-          body.domain_ids = Array.isArray(payload.domain_ids)
-            ? payload.domain_ids.map((value) => Number(value))
-            : payload.domain_ids;
+          const normalizedDomains = normalizeDomainIds(payload.domain_ids);
+          if (normalizedDomains.length) {
+            body.domain_ids = normalizedDomains;
+          }
+        } else {
+          const selection = this.getConversationDomains(conversationId);
+          if (selection.length) {
+            body.domain_ids = [...selection];
+          }
         }
         const { data } = await sendConversationMessage(conversationId, body);
         if (data?.user) {
@@ -166,17 +204,28 @@ export const useChatStore = defineStore('chat', {
         this.isSending = false;
       }
     },
+    setConversationDomains(conversationId, domainIds, options = {}) {
+      if (!conversationId) return;
+      const normalized = normalizeDomainIds(domainIds);
+      this.conversationDomains = {
+        ...this.conversationDomains,
+        [conversationId]: normalized
+      };
+      if (options.notify) {
+        useUiStore().showToast({
+          type: 'success',
+          message: normalized.length
+            ? 'Domain filter updated.'
+            : 'Domain filter cleared.'
+        });
+      }
+    },
     async updateConversation(conversationId, payload) {
       if (!conversationId) return null;
       try {
         const body = {};
         if (Object.prototype.hasOwnProperty.call(payload, 'title')) {
           body.title = payload.title;
-        }
-        if (Object.prototype.hasOwnProperty.call(payload, 'domain_ids')) {
-          body.domain_ids = Array.isArray(payload.domain_ids)
-            ? payload.domain_ids.map((value) => Number(value))
-            : payload.domain_ids;
         }
         const { data } = await updateConversationRequest(conversationId, body);
         const index = this.conversations.findIndex((item) => item.id === conversationId);

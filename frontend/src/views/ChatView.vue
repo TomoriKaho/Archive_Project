@@ -99,7 +99,7 @@
             @click="applyActiveDomains"
             :disabled="!canApplyDomainSelection"
           >
-            {{ isSavingDomains ? 'Saving…' : 'Apply' }}
+            Apply
           </button>
         </footer>
       </section>
@@ -258,7 +258,6 @@ const newConversationErrors = reactive({
 });
 
 const activeDomainSelection = ref([]);
-const isSavingDomains = ref(false);
 
 const domainOptions = computed(() =>
   domainsStore.items
@@ -289,20 +288,22 @@ const hasActiveDomainSelection = computed(
   () => activeDomainSelection.value.length > 0
 );
 
+const storedDomainSelection = computed(() =>
+  chatStore.getConversationDomains(chatStore.activeConversationId)
+);
+
 const domainSelectionChanged = computed(
   () =>
-    !!chatStore.activeConversation &&
+    !!chatStore.activeConversationId &&
     !areDomainSelectionsEqual(
-      chatStore.activeConversation.domain_ids,
+      storedDomainSelection.value,
       activeDomainSelection.value
     )
 );
 
 const canApplyDomainSelection = computed(
   () =>
-    !!chatStore.activeConversationId &&
-    domainSelectionChanged.value &&
-    !isSavingDomains.value
+    !!chatStore.activeConversationId && domainSelectionChanged.value
 );
 
 const activeDomainStatusText = computed(() => {
@@ -345,13 +346,9 @@ watch(
 );
 
 watch(
-  () => chatStore.activeConversation,
-  (conversation) => {
-    if (!conversation) {
-      activeDomainSelection.value = [];
-      return;
-    }
-    activeDomainSelection.value = normalizeDomainIds(conversation.domain_ids);
+  storedDomainSelection,
+  (selection) => {
+    activeDomainSelection.value = normalizeDomainIds(selection);
   },
   { immediate: true }
 );
@@ -435,22 +432,15 @@ function clearActiveDomainSelection() {
   activeDomainSelection.value = [];
 }
 
-async function applyActiveDomains() {
+function applyActiveDomains() {
   if (!chatStore.activeConversationId || !domainSelectionChanged.value) {
     return;
   }
-  isSavingDomains.value = true;
-  try {
-    await chatStore.updateConversation(chatStore.activeConversationId, {
-      domain_ids: activeDomainSelection.value
-    });
-  } catch (error) {
-    activeDomainSelection.value = normalizeDomainIds(
-      chatStore.activeConversation?.domain_ids
-    );
-  } finally {
-    isSavingDomains.value = false;
-  }
+  chatStore.setConversationDomains(
+    chatStore.activeConversationId,
+    activeDomainSelection.value,
+    { notify: true }
+  );
 }
 
 function promptRemoveConversation(id) {

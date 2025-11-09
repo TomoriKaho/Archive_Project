@@ -14,11 +14,13 @@ class ChatCreate(ORMModel):
     )
 
 
+
 class ChatUpdate(ORMModel):
     title: str | None = None
     domain_ids: List[int] | None = Field(
         default=None, description="更新会话绑定的 domain 列表，空数组表示重置"
     )
+
 
 
 class ChatOut(ORMModel):

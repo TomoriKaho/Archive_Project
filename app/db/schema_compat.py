@@ -93,3 +93,5 @@ def ensure_document_uuid_column(engine: Engine) -> bool:
 
         logger.info("documents.uuid column successfully backfilled")
         return True
+
+

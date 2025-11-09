@@ -26,11 +26,6 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 @router.post("/", response_model=ChatOut, status_code=status.HTTP_201_CREATED)
 def create_chat(payload: ChatCreate, db: Session = Depends(get_db)):
     data = payload.model_dump()
-    data["domain_ids"] = (
-        sorted({int(domain_id) for domain_id in data["domain_ids"]})
-        if data.get("domain_ids")
-        else None
-    )
     return ChatRepository(db).create(**data)
 
 # List chats for a user with pagination
@@ -45,15 +40,7 @@ def update_chat(chat_id: int, payload: ChatUpdate, db: Session = Depends(get_db)
     chat = repo.get(chat_id)
     if not chat:
         raise HTTPException(404, "chat not found")
-    updates: dict = {}
-    if payload.title is not None:
-        updates["title"] = payload.title
-    if payload.domain_ids is not None:
-        updates["domain_ids"] = (
-            sorted({int(domain_id) for domain_id in payload.domain_ids})
-            if payload.domain_ids
-            else None
-        )
+    updates = payload.model_dump(exclude_unset=True)
     if not updates:
         return chat
     return repo.update(chat, **updates)
@@ -97,18 +84,11 @@ def create_message(
     if payload.role == "user":
         top_k = payload.top_k or DEFAULT_TOP_K
         raw_domain_ids = payload.domain_ids
-        if raw_domain_ids is None:
-            domain_ids = (
-                sorted({int(domain_id) for domain_id in chat.domain_ids})
-                if chat.domain_ids
-                else None
-            )
-        else:
-            domain_ids = (
-                sorted({int(domain_id) for domain_id in raw_domain_ids})
-                if raw_domain_ids
-                else None
-            )
+        domain_ids = (
+            sorted({int(domain_id) for domain_id in raw_domain_ids})
+            if raw_domain_ids
+            else None
+        )
         try:
             answer_text, references = answer(
                 content,
