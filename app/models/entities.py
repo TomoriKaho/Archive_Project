@@ -53,6 +53,9 @@ class Chat(Base):  # 定义聊天会话实体
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 聊天主键
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), nullable=False)  # 外键指向用户，删除用户时级联删除聊天保持一致性
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # 聊天标题可为空，便于前端自定义
+    domain_ids: Mapped[Optional[list[int]]] = mapped_column(  # 会话限定检索的domain列表，留空代表不限制
+        JSON, nullable=True, default=None
+    )
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间自动填充
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间自动更新
     user: Mapped["User"] = relationship("User", back_populates="chats", passive_deletes=True)  # 反向关系方便从聊天访问所属用户
