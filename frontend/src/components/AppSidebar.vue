@@ -1,7 +1,9 @@
 <template>
   <aside :class="['sidebar', { 'sidebar--collapsed': props.collapsed }]">
-    <div class="sidebar__brand">Archive AI</div>
-    <ul class="sidebar__menu">
+    <div class="sidebar__brand" :class="{ 'sidebar__brand--collapsed': props.collapsed }">
+      <span class="sidebar__brand-text">Archive AI</span>
+    </div>
+    <ul v-if="!props.collapsed" class="sidebar__menu">
       <li
         v-for="item in navigation"
         :key="item.name"
@@ -16,7 +18,7 @@
         </RouterLink>
       </li>
     </ul>
-    <div class="sidebar__footer">
+    <div v-if="!props.collapsed" class="sidebar__footer">
       <button class="sidebar__menu-button" type="button" @click="logout">
         Logout
       </button>
@@ -88,12 +90,22 @@ function logout() {
 }
 
 .sidebar--collapsed {
-  width: 72px;
+  width: 160px;
   overflow: hidden;
 }
 
-.sidebar--collapsed .sidebar__brand {
-  text-align: center;
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+}
+
+.sidebar__brand-text {
+  white-space: nowrap;
+}
+
+.sidebar__brand--collapsed {
+  justify-content: center;
+  padding: 24px 16px;
 }
 
 .sidebar--collapsed .sidebar__menu-button {
