@@ -2,6 +2,7 @@
   <aside :class="['sidebar', { 'sidebar--collapsed': props.collapsed }]">
     <div class="sidebar__brand" :class="{ 'sidebar__brand--collapsed': props.collapsed }">
       <span class="sidebar__brand-text">Archive AI</span>
+      <span class="sidebar__brand-indicator" aria-hidden="true"></span>
     </div>
     <ul v-if="!props.collapsed" class="sidebar__menu">
       <li
@@ -90,11 +91,12 @@ function logout() {
 }
 
 .sidebar--collapsed {
-  width: 160px;
+  width: 20px;
   overflow: hidden;
 }
 
 .sidebar__brand {
+  position: relative;
   display: flex;
   align-items: center;
 }
@@ -105,7 +107,32 @@ function logout() {
 
 .sidebar__brand--collapsed {
   justify-content: center;
-  padding: 24px 16px;
+  padding: 24px 0;
+}
+
+.sidebar--collapsed .sidebar__brand-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sidebar__brand-indicator {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar__brand-indicator {
+  display: inline-flex;
+  width: 6px;
+  height: 24px;
+  border-radius: 999px;
+  background-color: currentColor;
 }
 
 .sidebar--collapsed .sidebar__menu-button {
