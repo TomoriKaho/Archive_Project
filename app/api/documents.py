@@ -41,14 +41,30 @@ router = APIRouter(tags=["documents"])  # 声明文档相关路由
 logger = logging.getLogger(__name__)  # 初始化模块级日志
 
 
+def _strip_tags(metadata: dict | None) -> dict:
+    """移除元数据中遗留的标签键。"""
+    if not metadata:
+        return {}
+    if "tags" not in metadata:
+        return metadata
+    return {key: value for key, value in metadata.items() if key != "tags"}
+
+
+def _build_document_response(document) -> DocumentOut:
+    """将数据库实体转换为不含标签信息的响应模型。"""
+    schema = DocumentOut.model_validate(document)
+    schema.doc_metadata.pop("tags", None)
+    return schema
+
+
 @router.get("/documents", response_model=DocumentListResponse)
 def list_documents(
     domain_id: Optional[int] = Query(default=None, description="按domain过滤，缺省返回全量"),  # 可选domain过滤
     limit: int = Query(20, ge=1, le=100, description="单页数量，最大100以避免全表扫描"),  # 限制单次查询量
     offset: int = Query(0, ge=0, description="分页偏移量，从0开始"),  # 偏移量
-    sort_by: Literal["created_at", "title", "domain", "updated_at", "tags"] = Query(
+    sort_by: Literal["created_at", "title", "domain", "updated_at"] = Query(
         "created_at",
-        description="排序字段，可选created_at、title、domain、updated_at或tags",
+        description="排序字段，可选created_at、title、domain或updated_at",
     ),  # 枚举校验排序字段
     order: Literal["asc", "desc"] = Query(
         "desc",
@@ -76,7 +92,7 @@ def list_documents(
         total,
     )  # 记录分页查询
     return DocumentListResponse(
-        items=[DocumentOut.model_validate(item) for item in items],
+        items=[_build_document_response(item) for item in items],
         total=total,
         limit=limit,
         offset=offset,
@@ -93,7 +109,7 @@ def get_document_by_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=404, detail="document not found")  # 未命中返回404
     logger.info("get_document_by_uuid uuid=%s", doc_uuid)  # 打印访问日志
-    return doc  # 返回文档
+    return _build_document_response(doc)  # 返回文档
 
 
 @router.delete("/documents/by-uuid/{doc_uuid}", status_code=status.HTTP_204_NO_CONTENT)
@@ -198,6 +214,7 @@ async def create_document(
         title = payload.title
         raw_content = payload.content
         doc_metadata = payload.doc_metadata or {}
+    doc_metadata = _strip_tags(doc_metadata)
     data = {"title": title, "doc_metadata": doc_metadata, "domain_id": domain_id}
     document = doc_repo.create(**data)  # 创建文档记录
     chunk_texts = make_chunks(
@@ -232,7 +249,7 @@ async def create_document(
         len(chunk_texts),
         indexed,
     )  # 记录创建详情
-    return document  # 返回文档信息
+    return _build_document_response(document)  # 返回文档信息
 
 
 @router.get("/domains/{domain_id}/documents", response_model=List[DocumentOut])
@@ -242,13 +259,14 @@ def list_documents_by_domain(domain_id: int, db: Session = Depends(get_db)):
     if not domain_repo.get(domain_id):
         raise HTTPException(status_code=404, detail="domain not found")
     logger.info("list_documents_by_domain domain=%s", domain_id)
-    return DocumentRepository(db).list_with_filters(
+    documents = DocumentRepository(db).list_with_filters(
         limit=50,
         offset=0,
         sort_by="created_at",
         order="desc",
         domain_id=domain_id,
     )
+    return [_build_document_response(doc) for doc in documents]
 
 
 def _collect_chunks(db: Session, document_id: int) -> List[ChunkOut]:
@@ -268,7 +286,7 @@ def get_document(domain_id: int, doc_id: int, db: Session = Depends(get_db)):
     if not doc or doc.domain_id != domain_id:
         raise HTTPException(status_code=404, detail="document not found")
     logger.info("get_document domain=%s doc_id=%s", domain_id, doc_id)
-    return doc
+    return _build_document_response(doc)
 
 
 @router.patch("/domains/{domain_id}/documents/{doc_id}", response_model=DocumentOut)
@@ -281,9 +299,12 @@ def update_document(domain_id: int, doc_id: int, payload: DocumentUpdate, db: Se
     doc = repo.get(doc_id)
     if not doc or doc.domain_id != domain_id:
         raise HTTPException(status_code=404, detail="document not found")
-    updated = repo.update(doc, **payload.model_dump(exclude_none=True))
+    update_data = payload.model_dump(exclude_none=True)
+    if "doc_metadata" in update_data:
+        update_data["doc_metadata"] = _strip_tags(update_data["doc_metadata"])
+    updated = repo.update(doc, **update_data)
     logger.info("update_document domain=%s doc_id=%s", domain_id, doc_id)
-    return updated
+    return _build_document_response(updated)
 
 
 @router.delete("/domains/{domain_id}/documents/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)

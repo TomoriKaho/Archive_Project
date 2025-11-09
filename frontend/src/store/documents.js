@@ -89,12 +89,10 @@ export const useDocumentsStore = defineStore('documents', {
     },
     async createDocument(payload) {
       try {
-        const { domainId, title, content, tags } = payload;
-        const docMetadata = tags?.length ? { tags } : {};
+        const { domainId, title, content } = payload;
         const body = {
           title,
-          content,
-          doc_metadata: docMetadata
+          content
         };
         const { data } = await createTextDocument(domainId, body);
         useUiStore().showToast({
@@ -111,15 +109,12 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       }
     },
-    async uploadCsv({ domainId, title, tags, file }) {
+    async uploadCsv({ domainId, title, file }) {
       try {
         const formData = new FormData();
         formData.append('title', title);
         formData.append('mode', 'csv');
         formData.append('file', file);
-        if (tags?.length) {
-          formData.append('doc_metadata', JSON.stringify({ tags }));
-        }
         await uploadCsvDocument(domainId, formData);
         useUiStore().showToast({
           type: 'success',
@@ -134,18 +129,12 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       }
     },
-    async saveDocument({ documentId, domainId, title, tags, metadata }) {
+    async saveDocument({ documentId, domainId, title, metadata }) {
       try {
-        const baseMetadata = metadata ? { ...metadata } : {};
-        if (tags?.length) {
-          baseMetadata.tags = tags;
-        } else {
-          delete baseMetadata.tags;
+        const body = { title };
+        if (metadata !== undefined && metadata !== null) {
+          body.doc_metadata = metadata;
         }
-        const body = {
-          title,
-          doc_metadata: baseMetadata
-        };
         const { data } = await updateDocument(domainId, documentId, body);
         useUiStore().showToast({
           type: 'success',

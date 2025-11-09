@@ -6,6 +6,11 @@ import LoginView from '@/views/LoginView.vue';
 import { useAuthStore } from '@/store/auth';
 
 vi.mock('vue-router', () => ({
+  createRouter: () => ({
+    beforeEach: vi.fn(),
+    afterEach: vi.fn()
+  }),
+  createWebHistory: vi.fn(),
   useRouter: () => ({
     push: vi.fn(),
     currentRoute: {

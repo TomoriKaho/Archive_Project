@@ -60,8 +60,6 @@ class DocumentRepository(Repository[Document]):
             sort_column = Document.title
         elif sort_by == "updated_at":
             sort_column = Document.updated_at
-        elif sort_by == "tags":
-            sort_column = func.coalesce(Document.doc_metadata["tags"].astext, "")
         else:
             sort_column = Document.created_at
         sort_expression = sort_column.asc() if order == "asc" else sort_column.desc()
