@@ -93,3 +93,44 @@ def ensure_document_uuid_column(engine: Engine) -> bool:
 
         logger.info("documents.uuid column successfully backfilled")
         return True
+
+
+def ensure_chat_domain_ids_column(engine: Engine) -> bool:
+    """Ensure ``chats.domain_ids`` exists for legacy databases.
+
+    Earlier deployments persisted conversations without the optional
+    ``domain_ids`` JSON column that the refreshed chat experience depends on.
+    When the ORM loads chats from such databases SQLAlchemy emits queries that
+    reference the missing column, causing the entire chat view to fail with a
+    ``psycopg.errors.UndefinedColumn`` error.  Similar to
+    :func:`ensure_document_uuid_column`, we defensively patch the schema at
+    runtime so instances continue to operate even if migrations were not
+    executed yet.
+
+    The function returns ``True`` when a fix was applied and ``False`` when the
+    schema was already up-to-date.
+    """
+
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+
+        if not _table_exists(inspector, "chats"):
+            logger.debug("chats table does not exist; skipping domain_ids check")
+            return False
+
+        column_names = _get_column_names(inspector, "chats")
+        if "domain_ids" in column_names:
+            logger.debug("chats.domain_ids already present; no action required")
+            return False
+
+        logger.warning(
+            "Detected legacy chats table without domain_ids column; applying in-place upgrade."
+        )
+
+        column_type = "JSON" if connection.dialect.name != "sqlite" else "TEXT"
+        connection.execute(
+            text(f"ALTER TABLE chats ADD COLUMN domain_ids {column_type}")
+        )
+
+        logger.info("chats.domain_ids column successfully added")
+        return True
