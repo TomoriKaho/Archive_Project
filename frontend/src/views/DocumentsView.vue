@@ -62,7 +62,7 @@
     </div>
 
     <DocumentTable
-      :documents="documentsStore.items"
+      :documents="documentsStore.displayItems"
       :domains="domainsStore.items"
       :sort-by="documentsStore.filters.sort_by"
       :sort-direction="documentsStore.filters.order"

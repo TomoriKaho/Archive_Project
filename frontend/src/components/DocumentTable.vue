@@ -23,7 +23,7 @@
         <tr v-if="documents.length === 0">
           <td colspan="5" class="empty">No documents found.</td>
         </tr>
-        <tr v-for="document in documents" :key="document.id">
+        <tr v-for="document in documents" :key="document.id || document.tempId">
           <td v-for="column in columns" :key="column.key">
             <template v-if="column.key === 'title'">
               {{ document.title }}
@@ -39,7 +39,11 @@
             </template>
           </td>
           <td class="actions">
+            <span v-if="document.isUploading" class="uploading">
+              正在上传…
+            </span>
             <RouterLink
+              v-else
               :to="{ name: 'document-detail', params: { id: document.uuid } }"
               >View</RouterLink
             >
@@ -135,9 +139,21 @@ th button {
   padding: 32px 16px;
 }
 
+.actions {
+  min-width: 120px;
+}
+
 .actions a {
   color: #1f2937;
   font-weight: 600;
   text-decoration: none;
+}
+
+.uploading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2563eb;
+  font-weight: 600;
 }
 </style>
