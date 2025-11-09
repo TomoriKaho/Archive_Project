@@ -5,14 +5,37 @@ import { useUiStore } from './ui';
 export const useUsersStore = defineStore('users', {
   state: () => ({
     items: [],
-    isLoading: false
+    total: 0,
+    isLoading: false,
+    filters: {
+      sort_by: 'created_at',
+      order: 'desc',
+      limit: 20,
+      offset: 0
+    }
   }),
   actions: {
     async loadUsers(params = {}) {
       this.isLoading = true;
       try {
-        const { data } = await fetchUsers(params);
+        const sortBy = params.sort_by || this.filters.sort_by;
+        const order = params.order || this.filters.order;
+        const limit = params.limit ?? this.filters.limit;
+        const offset = params.offset ?? this.filters.offset;
+        const query = {
+          ...params,
+          sort_by: sortBy,
+          order,
+          limit,
+          offset
+        };
+        const { data } = await fetchUsers(query);
         this.items = data.items || data;
+        this.total = data.total ?? data.items?.length ?? data.length ?? 0;
+        this.filters.sort_by = sortBy;
+        this.filters.order = order;
+        this.filters.limit = data.limit ?? limit;
+        this.filters.offset = data.offset ?? offset;
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
@@ -22,6 +45,10 @@ export const useUsersStore = defineStore('users', {
       } finally {
         this.isLoading = false;
       }
+    },
+    setSorting({ sortBy, sortDirection }) {
+      this.filters.sort_by = sortBy;
+      this.filters.order = sortDirection;
     },
     async saveUser(userId, payload) {
       try {
@@ -41,7 +68,12 @@ export const useUsersStore = defineStore('users', {
         }
         await updateUser(userId, body);
         useUiStore().showToast({ type: 'success', message: 'User updated.' });
-        await this.loadUsers();
+        await this.loadUsers({
+          sort_by: this.filters.sort_by,
+          order: this.filters.order,
+          limit: this.filters.limit,
+          offset: this.filters.offset
+        });
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
@@ -57,7 +89,12 @@ export const useUsersStore = defineStore('users', {
           type: 'success',
           message: 'User deleted.'
         });
-        await this.loadUsers();
+        await this.loadUsers({
+          sort_by: this.filters.sort_by,
+          order: this.filters.order,
+          limit: this.filters.limit,
+          offset: this.filters.offset
+        });
       } catch (error) {
         useUiStore().showToast({
           type: 'error',

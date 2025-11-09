@@ -1,7 +1,7 @@
 import { apiClient } from './api';
 
-export function fetchDomains() {
-  return apiClient.get('/domains');
+export function fetchDomains(params = {}) {
+  return apiClient.get('/domains', { params });
 }
 
 export function createDomain(payload) {

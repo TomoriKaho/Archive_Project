@@ -3,6 +3,8 @@ from __future__ import annotations  # 支持前向引用
 
 import logging  # 引入日志方便记录安全敏感操作
 import os  # 用于读取环境变量
+from typing import Literal
+
 from dotenv import load_dotenv, find_dotenv  # 用于加载环境变量
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status  # FastAPI 路由与异常
 from sqlalchemy.orm import Session  # SQLAlchemy 会话类型
@@ -74,13 +76,35 @@ async def list_users(  # 定义管理员分页查询用户接口
     limit: int = Query(20, ge=1, le=100, description="返回条目数"),  # 默认20条并限制最大100
     offset: int = Query(0, ge=0, description="偏移量"),  # 指定分页偏移
     q: str | None = Query(None, description="邮箱或姓名关键词"),  # 可选的模糊搜索关键词
+    sort_by: Literal["created_at", "name", "email", "admin", "updated_at"] = Query(
+        "created_at", description="排序字段"
+    ),
+    order: Literal["asc", "desc"] = Query("desc", description="排序方向"),
     db: Session = Depends(get_db),  # 注入数据库会话
 ) -> UserListResponse:  # 返回分页结构
     """管理员分页检索用户，可按关键词模糊查询。"""  # 接口说明
     repo = UserRepository(db)  # 初始化仓储
-    items, total = repo.list_with_total(limit=limit, offset=offset, keyword=q)  # 执行查询
-    logger.info("查询用户列表", extra={"limit": limit, "offset": offset, "keyword": q})  # 记录查询条件
-    return UserListResponse(items=[UserOut.model_validate(u) for u in items], total=total, limit=limit, offset=offset)  # 构造响应
+    items, total = repo.list_with_total(
+        limit=limit, offset=offset, keyword=q, sort_by=sort_by, order=order
+    )  # 执行查询
+    logger.info(
+        "查询用户列表",
+        extra={
+            "limit": limit,
+            "offset": offset,
+            "keyword": q,
+            "sort_by": sort_by,
+            "order": order,
+        },
+    )  # 记录查询条件
+    return UserListResponse(
+        items=[UserOut.model_validate(u) for u in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        sort_by=sort_by,
+        order=order,
+    )  # 构造响应
 
 
 @router.get(

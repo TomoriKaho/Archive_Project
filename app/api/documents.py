@@ -46,9 +46,9 @@ def list_documents(
     domain_id: Optional[int] = Query(default=None, description="按domain过滤，缺省返回全量"),  # 可选domain过滤
     limit: int = Query(20, ge=1, le=100, description="单页数量，最大100以避免全表扫描"),  # 限制单次查询量
     offset: int = Query(0, ge=0, description="分页偏移量，从0开始"),  # 偏移量
-    sort_by: Literal["created_at", "title"] = Query(
+    sort_by: Literal["created_at", "title", "domain", "updated_at", "tags"] = Query(
         "created_at",
-        description="排序字段，可选created_at或title",
+        description="排序字段，可选created_at、title、domain、updated_at或tags",
     ),  # 枚举校验排序字段
     order: Literal["asc", "desc"] = Query(
         "desc",

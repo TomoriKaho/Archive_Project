@@ -5,11 +5,11 @@ import logging  # 引入日志记录便于排查
 from typing import Sequence  # 使用Sequence表达查询结果集合
 from uuid import UUID  # UUID用于按无序标识查询
 
-from sqlalchemy import Select, func, select  # 引入select构造查询
+from sqlalchemy import Select, String, cast, func, select  # 引入select构造查询
 from sqlalchemy.orm import Session  # 使用Session执行SQL
 
 from .base import Repository  # 基类提供通用CRUD
-from app.models.entities import Document  # 引入Document模型
+from app.models.entities import Document, Domain  # 引入Document模型
 
 logger = logging.getLogger(__name__)  # 初始化模块级日志记录器
 
@@ -53,11 +53,35 @@ class DocumentRepository(Repository[Document]):
         stmt = select(Document)  # 基础查询
         if domain_id is not None:
             stmt = stmt.where(Document.domain_id == domain_id)  # 按domain过滤
-        sort_column = Document.created_at if sort_by == "created_at" else Document.title  # 选择排序字段
-        sort_expression = (
-            sort_column.asc() if order == "asc" else sort_column.desc()
-        )  # 根据排序方向生成表达式
-        stmt = stmt.order_by(sort_expression).offset(offset).limit(limit)  # 应用排序与分页
+        if sort_by == "domain":
+            stmt = stmt.join(Domain, Document.domain_id == Domain.id)
+            sort_column = Domain.name
+        elif sort_by == "title":
+            sort_column = Document.title
+        elif sort_by == "updated_at":
+            sort_column = Document.updated_at
+        elif sort_by == "tags":
+            bind = None
+            try:  # SQLAlchemy 2.x 推荐通过 get_bind() 获取底层 Engine
+                bind = self.db.get_bind()
+            except Exception:  # pragma: no cover - 理论上不会发生，但保持健壮性
+                bind = None
+            dialect = bind.dialect.name if bind is not None else ""
+
+            tag_field = Document.doc_metadata["tags"]
+            if dialect == "postgresql":
+                tag_text = tag_field.astext
+            else:
+                tag_text = func.json_extract(Document.doc_metadata, "$.tags")
+            sort_column = func.coalesce(cast(tag_text, String), "")
+        else:
+            sort_column = Document.created_at
+        sort_expression = sort_column.asc() if order == "asc" else sort_column.desc()
+        stmt = (
+            stmt.order_by(sort_expression, Document.id.asc())
+            .offset(offset)
+            .limit(limit)
+        )  # 应用排序与分页
         logger.info(
             "list_with_filters domain=%s limit=%s offset=%s sort_by=%s order=%s",
             domain_id,
