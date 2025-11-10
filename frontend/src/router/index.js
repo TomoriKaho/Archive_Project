@@ -67,8 +67,10 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
-  if (!authStore.initialized) {
-    authStore.initialize();
+  try {
+    await authStore.initialize();
+  } catch (error) {
+    // Initialization failures will be surfaced through auth store toasts; continue navigation
   }
 
   if (!to.meta.public && !authStore.isAuthenticated) {

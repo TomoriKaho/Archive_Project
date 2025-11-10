@@ -260,9 +260,11 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 
 import BaseModal from '@/components/BaseModal.vue';
+import { useAuthStore } from '@/store/auth';
 import { useChatStore } from '@/store/chat';
 import { useDomainsStore } from '@/store/domains';
 
+const authStore = useAuthStore();
 const chatStore = useChatStore();
 const domainsStore = useDomainsStore();
 const message = ref('');
@@ -377,7 +379,18 @@ const canSend = computed(
 );
 
 onMounted(async () => {
-  await chatStore.loadConversations();
+  try {
+    await authStore.initialize();
+  } catch (error) {
+    // Initialization errors will trigger global handlers (e.g. toasts)
+  }
+
+  try {
+    await chatStore.loadConversations();
+  } catch (error) {
+    // Error messaging handled in store
+  }
+
   if (!domainsStore.items.length) {
     try {
       await domainsStore.loadDomains();

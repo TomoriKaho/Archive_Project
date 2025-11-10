@@ -13,26 +13,52 @@ export const useAuthStore = defineStore('auth', {
     token: null,
     user: null,
     status: 'idle',
-    initialized: false
+    initialized: false,
+    initializationPromise: null
   }),
   getters: {
     isAuthenticated: (state) => Boolean(state.token),
     isAdmin: (state) => Boolean(state.user?.is_admin)
   },
   actions: {
-    initialize() {
-      if (this.initialized) return;
-      const token = getStoredToken();
-      if (token) {
-        this.token = token;
-        configureApi(this);
-        this.refreshUser().catch(() => {
-          this.logout();
-        });
-      } else {
-        configureApi(this);
+    async initialize() {
+      if (this.initialized) {
+        return;
       }
-      this.initialized = true;
+
+      if (this.initializationPromise) {
+        return this.initializationPromise;
+      }
+
+      this.initializationPromise = (async () => {
+        const token = getStoredToken();
+        this.token = token || null;
+        configureApi(this);
+
+        if (!token) {
+          return;
+        }
+
+        try {
+          await this.refreshUser();
+        } catch (error) {
+          // refreshUser will handle token errors and trigger logout when needed
+          if (!this.isAuthenticated) {
+            return;
+          }
+          throw error;
+        }
+      })()
+        .catch((error) => {
+          // Surface initialization issues to callers so navigation guards can react
+          throw error;
+        })
+        .finally(() => {
+          this.initialized = true;
+          this.initializationPromise = null;
+        });
+
+      return this.initializationPromise;
     },
     async login(credentials) {
       this.status = 'loading';
