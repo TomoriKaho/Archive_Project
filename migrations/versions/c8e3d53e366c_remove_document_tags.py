@@ -1,7 +1,7 @@
 """remove tag metadata from documents
 
-Revision ID: 9b4c38b6fa0e
-Revises: 6d1bb8e5d3b1
+Revision ID: c8e3d53e366c
+Revises: 8dca4f9d1b2d
 Create Date: 2025-10-16 00:00:00.000000
 
 """
@@ -13,8 +13,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = "9b4c38b6fa0e"
-down_revision: Union[str, None] = "6d1bb8e5d3b1"
+revision: str = "c8e3d53e366c"
+down_revision: Union[str, None] = "8dca4f9d1b2d"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 
