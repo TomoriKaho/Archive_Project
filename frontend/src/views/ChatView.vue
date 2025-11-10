@@ -46,7 +46,7 @@
       </ul>
     </aside>
 
-    <div class="chat__main">
+    <div v-if="hasActiveConversation" class="chat__main">
       <header class="chat__main-header">
         <p class="chat__filter-summary">{{ activeConversationFilterText }}</p>
         <button
@@ -64,7 +64,7 @@
 
       <div class="chat__messages" ref="messagesContainer">
         <p v-if="chatStore.messages.length === 0" class="chat__empty">
-          Select a conversation or start a new one.
+          No messages yet. Start the conversation by sending a message.
         </p>
         <div
           v-for="message in chatStore.messages"
@@ -98,6 +98,17 @@
           Send
         </button>
       </form>
+    </div>
+
+    <div v-else class="chat__placeholder">
+      <h3 class="chat__placeholder-title">No conversation selected</h3>
+      <p class="chat__placeholder-text">
+        {{
+          hasConversations
+            ? 'Choose a conversation from the list or start a new one to begin.'
+            : 'Create a new conversation to start chatting.'
+        }}
+      </p>
     </div>
 
     <BaseModal v-model="isNewConversationOpen" title="Start New Conversation">
@@ -298,6 +309,10 @@ function areDomainSelectionsEqual(first, second) {
   return left.every((value, index) => value === right[index]);
 }
 
+const hasActiveConversation = computed(() => !!chatStore.activeConversationId);
+
+const hasConversations = computed(() => chatStore.conversations.length > 0);
+
 const hasActiveDomainSelection = computed(
   () => activeDomainSelection.value.length > 0
 );
@@ -321,7 +336,7 @@ const appliedDomainNames = computed(() => {
 });
 
 const activeConversationFilterText = computed(() => {
-  if (!chatStore.activeConversationId) {
+  if (!hasActiveConversation.value) {
     return 'Select a conversation to configure domain filters.';
   }
   if (!domainsStore.items.length) {
@@ -335,7 +350,7 @@ const activeConversationFilterText = computed(() => {
 
 const domainSelectionChanged = computed(
   () =>
-    !!chatStore.activeConversationId &&
+    hasActiveConversation.value &&
     !areDomainSelectionsEqual(
       storedDomainSelection.value,
       activeDomainSelection.value
@@ -343,11 +358,11 @@ const domainSelectionChanged = computed(
 );
 
 const canApplyDomainSelection = computed(
-  () => !!chatStore.activeConversationId && domainSelectionChanged.value
+  () => hasActiveConversation.value && domainSelectionChanged.value
 );
 
 const activeDomainStatusText = computed(() => {
-  if (!chatStore.activeConversationId) {
+  if (!hasActiveConversation.value) {
     return 'Select a conversation to manage domains';
   }
   if (hasActiveDomainSelection.value) {
@@ -358,7 +373,7 @@ const activeDomainStatusText = computed(() => {
 });
 
 const canSend = computed(
-  () => message.value.trim().length > 0 && !!chatStore.activeConversationId
+  () => message.value.trim().length > 0 && hasActiveConversation.value
 );
 
 onMounted(async () => {
@@ -696,6 +711,28 @@ async function removeConversation() {
 
 .chat__empty {
   color: #9ca3af;
+}
+
+.chat__placeholder {
+  border-left: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.chat__placeholder-title {
+  font-size: 20px;
+  color: #374151;
+}
+
+.chat__placeholder-text {
+  font-size: 15px;
+  max-width: 320px;
 }
 
 .chat__message {
