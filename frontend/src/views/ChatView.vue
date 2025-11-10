@@ -47,62 +47,20 @@
     </aside>
 
     <div class="chat__main">
-      <section
-        v-if="domainOptions.length"
-        class="chat__domain-filter"
-        aria-label="Conversation domain filter"
-      >
-        <header class="chat__domain-filter-header">
-          <div>
-            <h3>Domain filter</h3>
-            <p class="chat__domain-filter-hint">
-              Leave unselected to search across every domain.
-            </p>
-          </div>
-          <button
-            class="button button--ghost"
-            type="button"
-            @click="clearActiveDomainSelection"
-            :disabled="!hasActiveDomainSelection"
-          >
-            Clear selection
-          </button>
-        </header>
-        <div class="chat__domain-options">
-          <label
-            v-for="domain in domainOptions"
-            :key="`active-${domain.id}`"
-            class="chat__domain-option"
-          >
-            <input
-              type="checkbox"
-              :value="domain.id"
-              :checked="activeDomainSelection.includes(domain.id)"
-              @change="toggleActiveDomain(domain.id)"
-            />
-            <span>{{ domain.name }}</span>
-          </label>
-        </div>
-        <footer class="chat__domain-filter-footer">
-          <span class="chat__domain-filter-status">
-            {{ activeDomainStatusText }}
-            <span
-              v-if="domainSelectionChanged"
-              class="chat__domain-filter-dirty"
-            >
-              Unsaved changes — apply to update this conversation
-            </span>
+      <header class="chat__main-header">
+        <p class="chat__filter-summary">{{ activeConversationFilterText }}</p>
+        <button
+          v-if="domainOptions.length"
+          class="button button--ghost chat__filter-trigger"
+          type="button"
+          @click="openDomainFilter"
+        >
+          Manage domain filter
+          <span v-if="domainSelectionChanged" class="chat__filter-indicator">
+            •
           </span>
-          <button
-            class="button"
-            type="button"
-            @click="applyActiveDomains"
-            :disabled="!canApplyDomainSelection"
-          >
-            Apply
-          </button>
-        </footer>
-      </section>
+        </button>
+      </header>
 
       <div class="chat__messages" ref="messagesContainer">
         <p v-if="chatStore.messages.length === 0" class="chat__empty">
@@ -168,7 +126,8 @@
       <div v-if="domainOptions.length" class="form-field">
         <label>Domain filter (optional)</label>
         <p class="form-field__hint">
-          Pick domains to constrain retrieval. Leave empty to include all domains.
+          Pick domains to constrain retrieval. Leave empty to include all
+          domains.
         </p>
         <div class="chat__domain-options">
           <label
@@ -208,6 +167,62 @@
       </template>
     </BaseModal>
 
+    <BaseModal
+      v-if="domainOptions.length"
+      v-model="isDomainFilterOpen"
+      title="Domain filter"
+    >
+      <p class="chat__domain-filter-hint">
+        Leave unselected to search across every domain.
+      </p>
+      <div class="chat__domain-options">
+        <label
+          v-for="domain in domainOptions"
+          :key="`active-${domain.id}`"
+          class="chat__domain-option"
+        >
+          <input
+            type="checkbox"
+            :value="domain.id"
+            :checked="activeDomainSelection.includes(domain.id)"
+            @change="toggleActiveDomain(domain.id)"
+          />
+          <span>{{ domain.name }}</span>
+        </label>
+      </div>
+      <template #footer>
+        <div class="chat__domain-filter-footer">
+          <span class="chat__domain-filter-status">
+            {{ activeDomainStatusText }}
+            <span
+              v-if="domainSelectionChanged"
+              class="chat__domain-filter-dirty"
+            >
+              Unsaved changes — apply to update this conversation
+            </span>
+          </span>
+          <div class="chat__domain-filter-actions">
+            <button
+              class="button button--ghost"
+              type="button"
+              @click="clearActiveDomainSelection"
+              :disabled="!hasActiveDomainSelection"
+            >
+              Clear selection
+            </button>
+            <button
+              class="button"
+              type="button"
+              @click="applyActiveDomains"
+              :disabled="!canApplyDomainSelection"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      </template>
+    </BaseModal>
+
     <BaseModal v-model="isDeleteConversationOpen" title="Delete Conversation">
       <p>
         Are you sure you want to delete this conversation? This action cannot be
@@ -241,6 +256,7 @@ const chatStore = useChatStore();
 const domainsStore = useDomainsStore();
 const message = ref('');
 const messagesContainer = ref(null);
+const isDomainFilterOpen = ref(false);
 
 const deletingConversationId = ref(null);
 const confirmingConversationId = ref(null);
@@ -260,9 +276,7 @@ const newConversationErrors = reactive({
 const activeDomainSelection = ref([]);
 
 const domainOptions = computed(() =>
-  domainsStore.items
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
+  domainsStore.items.slice().sort((a, b) => a.name.localeCompare(b.name))
 );
 
 function normalizeDomainIds(value) {
@@ -292,6 +306,33 @@ const storedDomainSelection = computed(() =>
   chatStore.getConversationDomains(chatStore.activeConversationId)
 );
 
+const domainNamesById = computed(() => {
+  return domainsStore.items.reduce((map, domain) => {
+    map.set(Number(domain.id), domain.name);
+    return map;
+  }, new Map());
+});
+
+const appliedDomainNames = computed(() => {
+  const selection = normalizeDomainIds(storedDomainSelection.value);
+  return selection
+    .map((id) => domainNamesById.value.get(id))
+    .filter((name) => !!name);
+});
+
+const activeConversationFilterText = computed(() => {
+  if (!chatStore.activeConversationId) {
+    return 'Select a conversation to configure domain filters.';
+  }
+  if (!domainsStore.items.length) {
+    return 'Domain filters unavailable.';
+  }
+  if (appliedDomainNames.value.length === 0) {
+    return 'Filter: All domains';
+  }
+  return `Filter: ${appliedDomainNames.value.join(', ')}`;
+});
+
 const domainSelectionChanged = computed(
   () =>
     !!chatStore.activeConversationId &&
@@ -302,8 +343,7 @@ const domainSelectionChanged = computed(
 );
 
 const canApplyDomainSelection = computed(
-  () =>
-    !!chatStore.activeConversationId && domainSelectionChanged.value
+  () => !!chatStore.activeConversationId && domainSelectionChanged.value
 );
 
 const activeDomainStatusText = computed(() => {
@@ -348,6 +388,13 @@ watch(
     activeDomainSelection.value = normalizeDomainIds(selection);
   },
   { immediate: true }
+);
+
+watch(
+  () => chatStore.activeConversationId,
+  () => {
+    isDomainFilterOpen.value = false;
+  }
 );
 
 function formatDate(value) {
@@ -399,6 +446,11 @@ async function sendMessage() {
   });
 }
 
+function openDomainFilter() {
+  if (!domainOptions.value.length) return;
+  isDomainFilterOpen.value = true;
+}
+
 function toggleNewConversationDomain(domainId) {
   const id = Number(domainId);
   if (Number.isNaN(id)) return;
@@ -441,6 +493,7 @@ function applyActiveDomains() {
     activeDomainSelection.value,
     { notify: true }
   );
+  isDomainFilterOpen.value = false;
 }
 
 function promptRemoveConversation(id) {
@@ -481,6 +534,32 @@ async function removeConversation() {
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
   display: flex;
   flex-direction: column;
+}
+
+.chat__main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px 0;
+}
+
+.chat__filter-summary {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.chat__filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+}
+
+.chat__filter-indicator {
+  color: #f97316;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .chat__header {
@@ -555,27 +634,6 @@ async function removeConversation() {
   overflow: hidden;
 }
 
-.chat__domain-filter {
-  border-bottom: 1px solid #e5e7eb;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.chat__domain-filter-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.chat__domain-filter-header h3 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  font-weight: 600;
-}
-
 .chat__domain-filter-hint {
   margin: 0;
   color: #6b7280;
@@ -607,6 +665,11 @@ async function removeConversation() {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.chat__domain-filter-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .chat__domain-filter-status {
