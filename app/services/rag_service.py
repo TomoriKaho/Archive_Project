@@ -235,7 +235,7 @@ def answer(
         messages.append(
             {
                 "role": "system",
-                "content": f"以下是你需要回答的问题，请你根据问题的语言，用对应的语言回答：\n\n",
+                "content": f"以下是你需要回答的问题，请结合资料证据与会话历史，替换问题中的代词，并回答对应的问题：\n\n",
             }
         )
         messages.append({"role": "user", "content": question})
