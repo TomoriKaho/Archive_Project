@@ -16,10 +16,20 @@ export function createTextDocument(domainId, payload) {
   return apiClient.post(`/domains/${domainId}/documents`, payload);
 }
 
-export function uploadCsvDocument(domainId, formData) {
-  return apiClient.post(`/domains/${domainId}/documents`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  });
+export function uploadCsvDocument(domainId, formData, config = {}) {
+  const headers = {
+    'Content-Type': 'multipart/form-data',
+    ...(config.headers || {})
+  };
+
+  return apiClient.post(
+    `/domains/${domainId}/documents`,
+    formData,
+    {
+      ...config,
+      headers
+    }
+  );
 }
 
 export function updateDocument(domainId, documentId, payload) {

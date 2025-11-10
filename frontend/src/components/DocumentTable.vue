@@ -23,7 +23,7 @@
         <tr v-if="documents.length === 0">
           <td colspan="5" class="empty">No documents found.</td>
         </tr>
-        <tr v-for="document in documents" :key="document.id">
+        <tr v-for="document in documents" :key="document.id || document.tempId">
           <td v-for="column in columns" :key="column.key">
             <template v-if="column.key === 'title'">
               {{ document.title }}
@@ -39,7 +39,19 @@
             </template>
           </td>
           <td class="actions">
+            <div v-if="document.isUploading" class="uploading">
+              <span>{{ document.isCancelling ? '正在取消…' : '正在上传…' }}</span>
+              <button
+                v-if="!document.isCancelling"
+                class="uploading__cancel"
+                type="button"
+                @click="requestCancel(document)"
+              >
+                取消
+              </button>
+            </div>
             <RouterLink
+              v-else
               :to="{ name: 'document-detail', params: { id: document.uuid } }"
               >View</RouterLink
             >
@@ -72,7 +84,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:sort']);
+const emit = defineEmits(['update:sort', 'cancel-upload']);
 
 const columns = [
   { key: 'title', label: 'Name', sortable: true },
@@ -87,6 +99,11 @@ function changeSort(key) {
     direction = props.sortDirection === 'asc' ? 'desc' : 'asc';
   }
   emit('update:sort', { sortBy: key, sortDirection: direction });
+}
+
+function requestCancel(document) {
+  if (!document?.tempId) return;
+  emit('cancel-upload', document.tempId);
 }
 
 function resolveDomainName(domainId) {
@@ -135,9 +152,34 @@ th button {
   padding: 32px 16px;
 }
 
+.actions {
+  min-width: 120px;
+}
+
 .actions a {
   color: #1f2937;
   font-weight: 600;
   text-decoration: none;
+}
+
+.uploading {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.uploading__cancel {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.uploading__cancel:hover {
+  text-decoration: underline;
 }
 </style>

@@ -62,11 +62,12 @@
     </div>
 
     <DocumentTable
-      :documents="documentsStore.items"
+      :documents="documentsStore.displayItems"
       :domains="domainsStore.items"
       :sort-by="documentsStore.filters.sort_by"
       :sort-direction="documentsStore.filters.order"
       @update:sort="onSort"
+      @cancel-upload="onCancelUpload"
     />
 
     <BaseModal v-model="isModalOpen" title="Create Document">
@@ -327,9 +328,9 @@ function validateCsvFile(file) {
     csvErrors.file = 'Only CSV files are allowed.';
     return false;
   }
-  const maxSize = 5 * 1024 * 1024;
+  const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) {
-    csvErrors.file = 'File exceeds 5MB limit.';
+    csvErrors.file = 'File exceeds 10MB limit.';
     return false;
   }
   return true;
@@ -377,13 +378,14 @@ async function submit() {
   } else {
     if (!validateCsvForm()) return;
     isSubmitting.value = true;
+    const uploadPromise = documentsStore.uploadCsv({
+      domainId: Number(csvForm.domainId),
+      title: csvForm.title,
+      file: csvFile.value
+    });
+    closeModal();
     try {
-      await documentsStore.uploadCsv({
-        domainId: Number(csvForm.domainId),
-        title: csvForm.title,
-        file: csvFile.value
-      });
-      closeModal();
+      await uploadPromise;
     } finally {
       isSubmitting.value = false;
     }
@@ -396,6 +398,14 @@ function onSort({ sortBy, sortDirection }) {
     sort_by: sortBy,
     order: sortDirection
   });
+}
+
+async function onCancelUpload(tempId) {
+  try {
+    await documentsStore.cancelPendingUpload(tempId);
+  } catch (error) {
+    console.error('Failed to cancel upload', error);
+  }
 }
 </script>
 

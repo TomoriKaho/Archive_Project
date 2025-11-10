@@ -14,6 +14,7 @@ export const useDocumentsStore = defineStore('documents', {
   state: () => ({
     items: [],
     total: 0,
+    pendingUploads: [],
     filters: {
       search: '',
       sort_by: 'created_at',
@@ -24,6 +25,14 @@ export const useDocumentsStore = defineStore('documents', {
     activeDocument: null,
     activeChunks: []
   }),
+  getters: {
+    displayItems(state) {
+      return [...state.pendingUploads, ...state.items];
+    },
+    totalWithPending(state) {
+      return state.total + state.pendingUploads.length;
+    }
+  },
   actions: {
     async loadDocuments(params = {}) {
       this.isLoading = true;
@@ -53,8 +62,9 @@ export const useDocumentsStore = defineStore('documents', {
         this.filters.domain_id = domainId ?? null;
         this.filters.search = searchTerm ?? '';
         const { data } = await fetchDocuments(query);
-        this.items = data.items || data;
-        this.total = data.total || data.length;
+        const items = data.items || data;
+        this.items = items;
+        this.total = data.total || items.length;
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
@@ -118,19 +128,165 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       }
     },
+    addPendingUpload({ domainId, title }) {
+      const tempId = `pending-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+      const placeholder = {
+        id: tempId,
+        tempId,
+        uuid: null,
+        title,
+        domain_id: domainId,
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        isUploading: true,
+        isCancelling: false,
+        cancelUpload: null
+      };
+      this.pendingUploads = [placeholder, ...this.pendingUploads];
+      return placeholder;
+    },
+    removePendingUpload(tempId) {
+      this.pendingUploads = this.pendingUploads.filter(
+        (item) => item.tempId !== tempId
+      );
+    },
+    async cancelPendingUpload(tempId) {
+      const pendingItem = this.pendingUploads.find(
+        (item) => item.tempId === tempId
+      );
+
+      if (!pendingItem || pendingItem.isCancelling) {
+        return;
+      }
+
+      if (typeof pendingItem.cancelUpload !== 'function') {
+        this.removePendingUpload(tempId);
+        return;
+      }
+
+      pendingItem.isCancelling = true;
+      try {
+        await pendingItem.cancelUpload();
+      } catch (error) {
+        pendingItem.isCancelling = false;
+        useUiStore().showToast({
+          type: 'error',
+          message: '无法取消上传。'
+        });
+        throw error;
+      }
+    },
+    async waitForUploadCompletion({ tempId, domainId, title, attempt = 0 }) {
+      const pendingItem = this.pendingUploads.find((item) => item.tempId === tempId);
+      if (!pendingItem) {
+        return;
+      }
+
+      const MAX_ATTEMPTS = 24;
+      const POLL_INTERVAL = 5000;
+
+      try {
+        const { data } = await fetchDocuments({
+          domain_id: domainId,
+          search: title,
+          sort_by: 'created_at',
+          order: 'desc',
+          limit: 10
+        });
+        const items = data.items || data;
+        const match = items.find((item) => item.title === title);
+        if (match) {
+          this.removePendingUpload(tempId);
+          useUiStore().showToast({
+            type: 'success',
+            message: `${title} 文档上传成功。`
+          });
+          await this.loadDocuments();
+          return;
+        }
+      } catch (pollError) {
+        console.error('Failed to poll document status', pollError);
+      }
+
+      if (attempt + 1 >= MAX_ATTEMPTS) {
+        this.removePendingUpload(tempId);
+        useUiStore().showToast({
+          type: 'warning',
+          message: '无法确认文档上传状态，请稍后刷新页面。'
+        });
+        await this.loadDocuments();
+        return;
+      }
+
+      setTimeout(() => {
+        this.waitForUploadCompletion({
+          tempId,
+          domainId,
+          title,
+          attempt: attempt + 1
+        });
+      }, POLL_INTERVAL);
+    },
     async uploadCsv({ domainId, title, file }) {
+      const controller = new AbortController();
+      const pendingUpload = this.addPendingUpload({ domainId, title });
+      pendingUpload.cancelUpload = async () => {
+        controller.abort();
+      };
       try {
         const formData = new FormData();
         formData.append('title', title);
         formData.append('mode', 'csv');
         formData.append('file', file);
-        await uploadCsvDocument(domainId, formData);
+        await uploadCsvDocument(domainId, formData, {
+          signal: controller.signal
+        });
         useUiStore().showToast({
           type: 'success',
-          message: 'CSV uploaded successfully.'
+          message: `${title} 文档上传成功。`
         });
+        this.removePendingUpload(pendingUpload.tempId);
         await this.loadDocuments();
       } catch (error) {
+        const isCanceled =
+          error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
+        const isTimeout = error?.code === 'ECONNABORTED';
+        const isNetworkIssue =
+          !error?.response &&
+          (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error');
+
+        if (isCanceled) {
+          this.removePendingUpload(pendingUpload.tempId);
+          useUiStore().showToast({
+            type: 'info',
+            message: `${title} 文档上传已取消。`
+          });
+          return;
+        }
+
+        if (isTimeout || isNetworkIssue) {
+          useUiStore().showToast({
+            type: 'info',
+            message: '文档较大，正在后台继续处理。完成后将出现在文档列表中。'
+          });
+          pendingUpload.isCancelling = false;
+          pendingUpload.cancelUpload = async () => {
+            this.removePendingUpload(pendingUpload.tempId);
+            useUiStore().showToast({
+              type: 'info',
+              message: `${title} 文档上传已取消。`
+            });
+          };
+          this.waitForUploadCompletion({
+            tempId: pendingUpload.tempId,
+            domainId,
+            title
+          });
+          return;
+        }
+        this.removePendingUpload(pendingUpload.tempId);
         useUiStore().showToast({
           type: 'error',
           message: 'Failed to upload CSV.'
