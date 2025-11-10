@@ -190,7 +190,8 @@ def answer(
         return _NO_CONTEXT_MESSAGE, [], []
 
     context = build_context(chunks)
-    system_prompt = "你是一名严谨的档案解读助手，只依据给定资料回答问题。"
+    system_prompt = """你是一名严谨的档案解读助手，请依据给定资料回答问题。同时我们还会提供会话历史作为参考。
+    规则：不得凭空捏造；若缺证据请明确“不确定”；回答时根据用户问题的语言来使用对应的语言回答。你只需要回答最后一个问题，不要回答会话历史中的问题。"""
     if memory_chunks:
         window = CHUNK_MEMORY_WINDOW_MULTIPLIER * limit if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0 else 0
         selected_memory = list(memory_chunks)
