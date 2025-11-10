@@ -118,7 +118,7 @@ def create_message(
             )
         except RuntimeError as exc:
             logger.exception("rag answer failed: chat_id=%s", chat_id)
-            answer_text = "抱歉，我暂时无法回答该问题。"
+            answer_text = "抱歉，我暂时无法回答该问题，请确认qdrant服务是否正常运行，或稍后再试。"
             references = []
             chunks = []
         assistant_message = repo.create(chat_id=chat_id, role="assistant", content=answer_text)
