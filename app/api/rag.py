@@ -14,9 +14,12 @@ from app.repositories.document_repo import DocumentRepository
 from app.repositories.message_repo import MessageRepository
 from app.schemas.message import MessageOut
 from app.schemas.rag import AskRequest, AskResponse, PreviewItem, Reference
+from app.services.rag_constants import CHUNK_MEMORY_PREFIX
 from app.services.rag_service import (
+    CHUNK_MEMORY_WINDOW_MULTIPLIER,
     DEFAULT_TOP_K,
     answer,
+    chunk_to_memory_text,
     index_chunks,
     retrieve_with_scores,
 )
@@ -71,19 +74,51 @@ def ask_in_chat(
     if not question:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="question cannot be empty")
     message_repo.create(chat_id=chat_id, role="user", content=question)
+    prompt_messages = message_repo.list_for_prompt(chat_id)
+    history_payload = [
+        {"role": m.role, "content": m.content}
+        for m in prompt_messages
+    ]
+    memory_messages = message_repo.list_memory(chat_id)
+    memory_chunks = [
+        m.content[len(CHUNK_MEMORY_PREFIX) :]
+        for m in memory_messages
+        if m.content.startswith(CHUNK_MEMORY_PREFIX)
+    ]
     domain_ids = sorted(set(payload.domain_ids)) if payload.domain_ids else None
     top_k = payload.top_k or DEFAULT_TOP_K
     try:
-        answer_text, references = answer(
+        answer_text, references, chunks = answer(
             question,
             domain_ids,
             db=db,
             top_k=top_k,
+            history=history_payload,
+            memory_chunks=memory_chunks,
         )
     except RuntimeError as exc:
         logger.exception("rag answer failed: chat_id=%s", chat_id)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     assistant = message_repo.create(chat_id=chat_id, role="assistant", content=answer_text)
+    if chunks:
+        persisted_memory = list(memory_messages)
+        for chunk in chunks:
+            memory_text = chunk_to_memory_text(chunk)
+            stored = message_repo.create(
+                chat_id=chat_id,
+                role="system",
+                content=f"{CHUNK_MEMORY_PREFIX}{memory_text}",
+            )
+            persisted_memory.append(stored)
+        window = (
+            CHUNK_MEMORY_WINDOW_MULTIPLIER * top_k
+            if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0
+            else 0
+        )
+        if window and len(persisted_memory) > window:
+            overflow = len(persisted_memory) - window
+            to_delete = [m.id for m in persisted_memory[:overflow]]
+            message_repo.delete_many(to_delete)
     base = MessageOut.model_validate(assistant)
     return AskResponse(
         **base.model_dump(),

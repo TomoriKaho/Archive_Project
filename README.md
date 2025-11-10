@@ -57,6 +57,7 @@ OLLAMA_EMBED_MODEL=qwen3-embedding:8b
 OLLAMA_CHAT_MODEL=llama3.1:8b
 RAG_TOP_K=10
 RAG_OLLAMA_TIMEOUT=60
+RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER=3
 ```
 
 > 使 `.env` 生效（仅当前 shell）：
@@ -180,6 +181,9 @@ curl -X POST http://localhost:8000/chats/7/messages \
      -H "Authorization: Bearer $token" \
      -d '{"role":"user","content":"Ask something","top_k":8,"domain_ids":[3]}'
 ```
+
+> `RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER` 决定多轮对话中保留的历史检索片段数量，
+> 其值会与 `top_k` 相乘，控制滑动窗口的大小。
 
 ---
 

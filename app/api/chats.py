@@ -15,7 +15,13 @@ from app.schemas.message import (
     MessageReference,
     MessageUpdate,
 )
-from app.services.rag_service import DEFAULT_TOP_K, answer
+from app.services.rag_constants import CHUNK_MEMORY_PREFIX
+from app.services.rag_service import (
+    CHUNK_MEMORY_WINDOW_MULTIPLIER,
+    DEFAULT_TOP_K,
+    answer,
+    chunk_to_memory_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -89,18 +95,52 @@ def create_message(
             if raw_domain_ids
             else None
         )
+        prompt_messages = repo.list_for_prompt(chat_id)
+        history_payload = [
+            {"role": m.role, "content": m.content}
+            for m in prompt_messages
+        ]
+        memory_messages = repo.list_memory(chat_id)
+        memory_chunks = [
+            m.content[len(CHUNK_MEMORY_PREFIX) :]
+            for m in memory_messages
+            if m.content.startswith(CHUNK_MEMORY_PREFIX)
+        ]
+
         try:
-            answer_text, references = answer(
+            answer_text, references, chunks = answer(
                 content,
                 domain_ids,
                 db=db,
                 top_k=top_k,
+                history=history_payload,
+                memory_chunks=memory_chunks,
             )
         except RuntimeError as exc:
             logger.exception("rag answer failed: chat_id=%s", chat_id)
             answer_text = "抱歉，我暂时无法回答该问题。"
             references = []
+            chunks = []
         assistant_message = repo.create(chat_id=chat_id, role="assistant", content=answer_text)
+        if chunks:
+            persisted_memory = list(memory_messages)
+            for chunk in chunks:
+                memory_text = chunk_to_memory_text(chunk)
+                stored = repo.create(
+                    chat_id=chat_id,
+                    role="system",
+                    content=f"{CHUNK_MEMORY_PREFIX}{memory_text}",
+                )
+                persisted_memory.append(stored)
+            window = (
+                CHUNK_MEMORY_WINDOW_MULTIPLIER * top_k
+                if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0
+                else 0
+            )
+            if window and len(persisted_memory) > window:
+                overflow = len(persisted_memory) - window
+                to_delete = [m.id for m in persisted_memory[:overflow]]
+                repo.delete_many(to_delete)
         reference_models = [
             MessageReference(chunk_id=chunk_id, score=score) for chunk_id, score in references
         ]

@@ -34,6 +34,9 @@ DEFAULT_TOP_K = int(os.getenv("RAG_TOP_K", "10"))
 RAG_OLLAMA_TIMEOUT = int(os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
 """HTTP timeout applied to Ollama chat requests."""
 
+CHUNK_MEMORY_WINDOW_MULTIPLIER = int(os.getenv("RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER", "3"))
+"""Number of historical chunk batches kept in memory, expressed as a multiplier of top_k."""
+
 _NO_CONTEXT_MESSAGE = "当前知识库中没有足够的信息回答该问题。"
 
 
@@ -120,15 +123,20 @@ def build_context(chunks: list[Chunk]) -> str:
     return "\n\n".join(lines)
 
 
-def chat(system: str, user: str, stream: bool = False) -> str:
+def chunk_to_memory_text(chunk: Chunk) -> str:
+    """Render a single chunk as persisted memory text."""
+
+    domain_id = chunk.document.domain_id if chunk.document else None
+    header = f"[chunk#{chunk.id} document#{chunk.document_id} domain#{domain_id}]"
+    return f"{header}\n{chunk.content}"
+
+
+def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
     """Call Ollama's chat API and return the assistant message content."""
 
     payload = {
         "model": OLLAMA_CHAT_MODEL,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        "messages": list(messages),
         "stream": stream,
     }
     req = request.Request(
@@ -171,21 +179,53 @@ def answer(
     *,
     db: Session,
     top_k: int | None = None,
-) -> tuple[str, list[tuple[int, float]]]:
-    """Run the complete RAG flow and return assistant answer plus references."""
+    history: Sequence[dict[str, str]] | None = None,
+    memory_chunks: Sequence[str] | None = None,
+) -> tuple[str, list[tuple[int, float]], list[Chunk]]:
+    """Run the complete RAG flow and return assistant answer plus references and chunks."""
 
     limit = top_k or DEFAULT_TOP_K
     chunks, references = retrieve_with_scores(question, limit, domain_ids, db=db)
     if not references:
-        return _NO_CONTEXT_MESSAGE, []
+        return _NO_CONTEXT_MESSAGE, [], []
+
     context = build_context(chunks)
-    user_prompt = (
-        "请结合以下资料回答用户的问题。如果资料不足，请明确说明不知道。\n\n"
-        f"资料:\n{context}\n\n问题: {question}\n答复:"
-    )
     system_prompt = "你是一名严谨的档案解读助手，只依据给定资料回答问题。"
-    answer_text = chat(system_prompt, user_prompt)
+    if memory_chunks:
+        window = CHUNK_MEMORY_WINDOW_MULTIPLIER * limit if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0 else 0
+        selected_memory = list(memory_chunks)
+        if window:
+            selected_memory = selected_memory[-window:]
+        if selected_memory:
+            joined_memory = "\n\n".join(selected_memory)
+            system_prompt = (
+                f"{system_prompt}\n\n以下是先前检索到的资料片段，请仅在与当前问题相关时引用：\n\n"
+                f"{joined_memory}"
+            )
+
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    if context:
+        messages.append(
+            {
+                "role": "system",
+                "content": f"以下是与当前问题相关的资料：\n\n{context}",
+            }
+        )
+    history_items = list(history or [])
+    if history_items:
+        for item in history_items:
+            role = item.get("role")
+            content = (item.get("content") or "").strip()
+            if role not in {"user", "assistant", "system"}:
+                continue
+            if not content:
+                continue
+            messages.append({"role": role, "content": content})
+    if not history_items or (history_items and history_items[-1].get("role") != "user"):
+        messages.append({"role": "user", "content": question})
+
+    answer_text = chat(messages)
     final_text = answer_text.strip() if answer_text else ""
     if not final_text:
         final_text = _NO_CONTEXT_MESSAGE
-    return final_text, references
+    return final_text, references, chunks
