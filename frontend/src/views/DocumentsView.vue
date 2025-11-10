@@ -66,7 +66,9 @@
       :domains="domainsStore.items"
       :sort-by="documentsStore.filters.sort_by"
       :sort-direction="documentsStore.filters.order"
+      :cancelable-upload-temp-id="documentsStore.activeUploadTempId"
       @update:sort="onSort"
+      @cancel-upload="cancelActiveUpload"
     />
 
     <BaseModal v-model="isModalOpen" title="Create Document">
@@ -192,7 +194,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 
 import BaseModal from '@/components/BaseModal.vue';
 import BaseTabs from '@/components/BaseTabs.vue';
@@ -244,9 +246,23 @@ const csvErrors = reactive({
 const csvFile = ref(null);
 const fileInput = ref(null);
 
+const handleBeforeUnload = () => {
+  documentsStore.cancelActiveUpload({ silent: true });
+};
+
 onMounted(() => {
   documentsStore.loadDocuments();
   domainsStore.loadDomains();
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', handleBeforeUnload);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+  }
+  documentsStore.cancelActiveUpload({ silent: true });
 });
 
 watch(
@@ -288,6 +304,13 @@ function clearSearch() {
 function closeModal() {
   isModalOpen.value = false;
   resetForms();
+}
+
+function cancelActiveUpload(tempId) {
+  if (tempId && tempId !== documentsStore.activeUploadTempId) {
+    return;
+  }
+  documentsStore.cancelActiveUpload();
 }
 
 function resetForms() {

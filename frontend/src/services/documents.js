@@ -16,9 +16,14 @@ export function createTextDocument(domainId, payload) {
   return apiClient.post(`/domains/${domainId}/documents`, payload);
 }
 
-export function uploadCsvDocument(domainId, formData) {
+export function uploadCsvDocument(domainId, formData, config = {}) {
+  const headers = {
+    'Content-Type': 'multipart/form-data',
+    ...(config.headers ?? {})
+  };
   return apiClient.post(`/domains/${domainId}/documents`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    ...config,
+    headers
   });
 }
 

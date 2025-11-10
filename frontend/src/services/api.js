@@ -6,7 +6,7 @@ const TOKEN_STORAGE_KEY =
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000
+  timeout: 0
 });
 
 let interceptorsConfigured = false;

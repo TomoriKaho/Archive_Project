@@ -41,6 +41,14 @@
           <td class="actions">
             <span v-if="document.isUploading" class="uploading">
               正在上传…
+              <button
+                v-if="document.tempId === cancelableUploadTempId"
+                type="button"
+                class="uploading__cancel"
+                @click="emitCancel(document.tempId)"
+              >
+                取消
+              </button>
             </span>
             <RouterLink
               v-else
@@ -73,10 +81,14 @@ const props = defineProps({
   sortDirection: {
     type: String,
     default: 'desc'
+  },
+  cancelableUploadTempId: {
+    type: String,
+    default: null
   }
 });
 
-const emit = defineEmits(['update:sort']);
+const emit = defineEmits(['update:sort', 'cancel-upload']);
 
 const columns = [
   { key: 'title', label: 'Name', sortable: true },
@@ -91,6 +103,10 @@ function changeSort(key) {
     direction = props.sortDirection === 'asc' ? 'desc' : 'asc';
   }
   emit('update:sort', { sortBy: key, sortDirection: direction });
+}
+
+function emitCancel(tempId) {
+  emit('cancel-upload', tempId);
 }
 
 function resolveDomainName(domainId) {
@@ -155,5 +171,18 @@ th button {
   gap: 6px;
   color: #2563eb;
   font-weight: 600;
+}
+
+.uploading__cancel {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+
+.uploading__cancel:hover {
+  text-decoration: underline;
 }
 </style>

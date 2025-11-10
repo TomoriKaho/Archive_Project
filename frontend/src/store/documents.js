@@ -10,11 +10,16 @@ import {
 } from '@/services/documents';
 import { useUiStore } from './ui';
 
+const isCanceledError = (error) =>
+  error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
+
 export const useDocumentsStore = defineStore('documents', {
   state: () => ({
     items: [],
     total: 0,
     pendingUploads: [],
+    activeUploadTempId: null,
+    activeUploadController: null,
     filters: {
       search: '',
       sort_by: 'created_at',
@@ -150,6 +155,38 @@ export const useDocumentsStore = defineStore('documents', {
         (item) => item.tempId !== tempId
       );
     },
+    setActiveUpload({ tempId, controller }) {
+      this.activeUploadTempId = tempId;
+      this.activeUploadController = controller;
+    },
+    clearActiveUpload(tempId) {
+      if (tempId && this.activeUploadTempId && this.activeUploadTempId !== tempId) {
+        return;
+      }
+      this.activeUploadTempId = null;
+      this.activeUploadController = null;
+    },
+    cancelActiveUpload({ silent = false } = {}) {
+      const controller = this.activeUploadController;
+      const tempId = this.activeUploadTempId;
+      if (!controller && !tempId) {
+        return false;
+      }
+      if (controller) {
+        controller.abort();
+      }
+      this.clearActiveUpload(tempId);
+      if (tempId) {
+        this.removePendingUpload(tempId);
+      }
+      if (!silent) {
+        useUiStore().showToast({
+          type: 'info',
+          message: '上传已取消。'
+        });
+      }
+      return true;
+    },
     async waitForUploadCompletion({ tempId, domainId, title, attempt = 0 }) {
       const pendingItem = this.pendingUploads.find((item) => item.tempId === tempId);
       if (!pendingItem) {
@@ -203,12 +240,16 @@ export const useDocumentsStore = defineStore('documents', {
     },
     async uploadCsv({ domainId, title, file }) {
       const pendingUpload = this.addPendingUpload({ domainId, title });
+      const abortController = new AbortController();
+      this.setActiveUpload({ tempId: pendingUpload.tempId, controller: abortController });
       try {
         const formData = new FormData();
         formData.append('title', title);
         formData.append('mode', 'csv');
         formData.append('file', file);
-        await uploadCsvDocument(domainId, formData);
+        await uploadCsvDocument(domainId, formData, {
+          signal: abortController.signal
+        });
         useUiStore().showToast({
           type: 'success',
           message: `${title} 文档上传成功。`
@@ -216,6 +257,9 @@ export const useDocumentsStore = defineStore('documents', {
         this.removePendingUpload(pendingUpload.tempId);
         await this.loadDocuments();
       } catch (error) {
+        if (isCanceledError(error)) {
+          return;
+        }
         const isTimeout = error?.code === 'ECONNABORTED';
         const isNetworkIssue =
           !error?.response &&
@@ -239,6 +283,8 @@ export const useDocumentsStore = defineStore('documents', {
           message: 'Failed to upload CSV.'
         });
         throw error;
+      } finally {
+        this.clearActiveUpload(pendingUpload.tempId);
       }
     },
     async saveDocument({ documentId, domainId, title, metadata }) {
