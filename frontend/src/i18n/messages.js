@@ -107,7 +107,7 @@ export const messages = {
       quickLinks: {
         title: '快捷入口',
         documents: '管理文档',
-        chat: '打开对话',
+        chat: '开始对话',
         domains: '域管理',
         users: '用户管理'
       }
@@ -515,9 +515,9 @@ export const messages = {
       quickLinks: {
         title: 'Quick Links',
         documents: 'Manage Documents',
-        chat: 'Open Chat',
-        domains: 'Domains',
-        users: 'Users'
+        chat: 'Start Conversation',
+        domains: 'Manage Domains',
+        users: 'Manage Users'
       }
     },
     documents: {

@@ -33,6 +33,104 @@
       </div>
 
       <div class="card">
+        <h3>{{ t('dashboard.quickLinks.title') }}</h3>
+        <div class="quick-links">
+          <RouterLink class="quick-link" :to="{ name: 'chat' }">
+            <span class="quick-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M2.25 12.75c0 1.2.912 2.25 2.1 2.25H6v3l3-3h5.4c1.188 0 2.1-1.05 2.1-2.25V5.25C16.5 4.05 15.588 3 14.4 3H4.35C3.162 3 2.25 4.05 2.25 5.25v7.5z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M17.25 8.25h1.65c1.188 0 2.1 1.05 2.1 2.25v5.25c0 1.2-.912 2.25-2.1 2.25H18v3l-3-3"
+                />
+              </svg>
+            </span>
+            <span>{{ t('dashboard.quickLinks.chat') }}</span>
+          </RouterLink>
+          <RouterLink
+            v-if="isAdmin"
+            class="quick-link"
+            :to="{ name: 'domains' }"
+          >
+            <span class="quick-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 21a9 9 0 100-18 9 9 0 000 18zm3.75-9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 3v2.25M12 18.75V21"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M3 12h2.25M18.75 12H21"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M5.197 5.197l1.591 1.591M17.212 17.212l1.591 1.591"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M5.197 18.803l1.591-1.591M17.212 6.788l1.591-1.591"
+                />
+              </svg>
+            </span>
+            <span>{{ t('dashboard.quickLinks.domains') }}</span>
+          </RouterLink>
+          <RouterLink class="quick-link" :to="{ name: 'documents' }">
+            <span class="quick-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M9 5.25V4.5A1.5 1.5 0 0110.5 3h6A1.5 1.5 0 0118 4.5v15a1.5 1.5 0 01-1.5 1.5h-6A1.5 1.5 0 019 19.5v-.75"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M9 5.25H6A1.5 1.5 0 004.5 6.75v10.5A1.5 1.5 0 006 18.75h3"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 8.25h3.75M12 12h3.75M12 15.75h3.75"
+                />
+              </svg>
+            </span>
+            <span>{{ t('dashboard.quickLinks.documents') }}</span>
+          </RouterLink>
+          <RouterLink v-if="isAdmin" class="quick-link" :to="{ name: 'users' }">
+            <span class="quick-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M18.75 21a4.5 4.5 0 00-9 0"
+                />
+              </svg>
+            </span>
+            <span>{{ t('dashboard.quickLinks.users') }}</span>
+          </RouterLink>
+        </div>
+      </div>
+
+      <div class="card">
         <h3>{{ t('dashboard.recentActivity.title') }}</h3>
         <ul class="activity-list">
           <li v-if="recentDocuments.length === 0" class="activity-list__empty">
@@ -49,27 +147,6 @@
             >
           </li>
         </ul>
-      </div>
-
-      <div class="card">
-        <h3>{{ t('dashboard.quickLinks.title') }}</h3>
-        <div class="quick-links">
-          <RouterLink class="quick-link" :to="{ name: 'documents' }"
-            >{{ t('dashboard.quickLinks.documents') }}</RouterLink
-          >
-          <RouterLink class="quick-link" :to="{ name: 'chat' }"
-            >{{ t('dashboard.quickLinks.chat') }}</RouterLink
-          >
-          <RouterLink
-            v-if="isAdmin"
-            class="quick-link"
-            :to="{ name: 'domains' }"
-            >{{ t('dashboard.quickLinks.domains') }}</RouterLink
-          >
-          <RouterLink v-if="isAdmin" class="quick-link" :to="{ name: 'users' }"
-            >{{ t('dashboard.quickLinks.users') }}</RouterLink
-          >
-        </div>
       </div>
     </div>
   </section>
@@ -199,10 +276,11 @@ function formatDate(value) {
 }
 
 .quick-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 12px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
   border-radius: 10px;
   background: #f3f4f6;
   color: #1f2937;
@@ -213,5 +291,21 @@ function formatDate(value) {
 
 .quick-link:hover {
   background: #e5e7eb;
+}
+
+.quick-link__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.quick-link__icon svg {
+  width: 20px;
+  height: 20px;
 }
 </style>
