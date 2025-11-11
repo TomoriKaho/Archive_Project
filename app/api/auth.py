@@ -29,7 +29,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])  # 定义认证路由分组
     response_model=UserOut,
     status_code=status.HTTP_201_CREATED,
     responses={
-        400: {"description": "邮箱重复", "content": {"application/json": {"example": {"detail": "邮箱已存在"}}}},
+        409: {"description": "邮箱重复", "content": {"application/json": {"example": {"detail": "邮箱已存在"}}}},
     },
 )
 async def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:  # 定义注册接口
@@ -37,7 +37,7 @@ async def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOu
     repo = UserRepository(db)  # 实例化仓储便于数据操作
     if repo.get_by_email(payload.email):  # 检查邮箱是否已存在
         logger.info("注册失败：邮箱重复", extra={"email": payload.email})  # 记录失败日志
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="邮箱已存在")  # 抛出400错误
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="邮箱已存在")  # 抛出409冲突错误
     if is_password_compromised(payload.password):  # 检查密码是否安全
         logger.warning("注册失败：密码不符合复杂度要求", extra={"email": payload.email})  # 记录安全事件
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=PASSWORD_POLICY_MESSAGE)  # 提示用户

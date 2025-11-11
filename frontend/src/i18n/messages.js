@@ -80,7 +80,7 @@ export const messages = {
       },
       toast: {
         loginSuccess: '登录成功。',
-        loginError: '无法登录，请检查凭据。',
+        loginError: '登录失败，请检查邮箱或密码是否正确。',
         registerSuccess: '账号已创建，请登录。',
         registerError: '无法注册，请稍后重试。',
         registerEmailTaken: '邮箱已注册，请使用其他邮箱。',
@@ -474,7 +474,7 @@ export const messages = {
       },
       toast: {
         loginSuccess: 'Logged in successfully.',
-        loginError: 'Unable to login. Check your credentials.',
+        loginError: 'Unable to login. Please check your email or password.',
         registerSuccess: 'Account created. Please login.',
         registerError: 'Unable to register. Please try again.',
         registerEmailTaken: 'Email is already registered. Please sign in or use another email.',
