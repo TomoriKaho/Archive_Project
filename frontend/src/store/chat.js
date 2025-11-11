@@ -225,7 +225,9 @@ export const useChatStore = defineStore('chat', {
       try {
         const body = {};
         if (Object.prototype.hasOwnProperty.call(payload, 'title')) {
-          body.title = payload.title;
+          const title = payload.title ?? '';
+          const normalizedTitle = title.trim();
+          body.title = normalizedTitle || null;
         }
         const { data } = await updateConversationRequest(conversationId, body);
         const index = this.conversations.findIndex((item) => item.id === conversationId);

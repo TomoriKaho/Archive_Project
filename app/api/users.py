@@ -46,18 +46,22 @@ router = APIRouter(prefix="/users", tags=["users"])  # 定义用户路由分组
 async def create_user(payload: AdminUserCreate, db: Session = Depends(get_db)) -> UserOut:  # 定义管理员创建用户接口
     """管理员创建新用户，可指定是否为管理员。"""  # 接口说明
     repo = UserRepository(db)  # 初始化仓储
-    if repo.get_by_email(payload.email):  # 检查邮箱是否存在
-        logger.info("创建用户失败：邮箱重复", extra={"email": payload.email})  # 记录失败日志
+    email = payload.email.strip().lower()
+    if repo.get_by_email(email):  # 检查邮箱是否存在
+        logger.info("创建用户失败：邮箱重复", extra={"email": email})  # 记录失败日志
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="邮箱已存在")  # 抛出400
     if is_password_compromised(payload.password):  # 检查密码是否在泄露名单
-        logger.warning("创建用户失败：密码不符合复杂度要求", extra={"email": payload.email})  # 记录安全事件
+        logger.warning("创建用户失败：密码不符合复杂度要求", extra={"email": email})  # 记录安全事件
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=PASSWORD_POLICY_MESSAGE)  # 拒绝使用
+    full_name = payload.full_name.strip() if payload.full_name else None
+    if full_name == "":
+        full_name = None
     hashed = hash_password(payload.password)  # 将明文密码哈希化
     user = repo.create_user(  # 写入数据库
-        email=payload.email,
+        email=email,
         hashed_password=hashed,
         is_admin=payload.is_admin,
-        full_name=payload.full_name,
+        full_name=full_name,
     )
     logger.info("管理员创建用户成功", extra={"user_id": user.id})  # 记录成功日志
     return UserOut.model_validate(user)  # 返回用户信息
@@ -66,10 +70,9 @@ async def create_user(payload: AdminUserCreate, db: Session = Depends(get_db)) -
 @router.get(
     "",
     response_model=UserListResponse,
-    dependencies=[Depends(get_current_admin)],
     responses={
         401: {"description": "未认证", "content": {"application/json": {"example": {"detail": "无效的认证凭证"}}}},
-        403: {"description": "权限不足", "content": {"application/json": {"example": {"detail": "需要管理员权限"}}}},
+        403: {"description": "权限不足", "content": {"application/json": {"example": {"detail": "需要管理员权限或本人访问"}}}},
     },
 )
 async def list_users(  # 定义管理员分页查询用户接口
@@ -80,10 +83,21 @@ async def list_users(  # 定义管理员分页查询用户接口
         "created_at", description="排序字段"
     ),
     order: Literal["asc", "desc"] = Query("desc", description="排序方向"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),  # 注入数据库会话
 ) -> UserListResponse:  # 返回分页结构
     """管理员分页检索用户，可按关键词模糊查询。"""  # 接口说明
     repo = UserRepository(db)  # 初始化仓储
+    if not current_user.is_admin:
+        viewer = repo.get(current_user.id) or current_user
+        return UserListResponse(
+            items=[UserOut.model_validate(viewer)],
+            total=1,
+            limit=1,
+            offset=0,
+            sort_by="created_at",
+            order="desc",
+        )
     items, total = repo.list_with_total(
         limit=limit, offset=offset, keyword=q, sort_by=sort_by, order=order
     )  # 执行查询
@@ -153,21 +167,43 @@ async def update_user(
     user = repo.get(user_id)  # 查询待更新用户
     if not user:  # 未找到
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")  # 抛出404
-    update_data = {}  # 收集需要更新的字段
+    changed = False
+    if payload.email is not None:  # 更新邮箱
+        email = payload.email.strip().lower()
+        existing = repo.get_by_email(email)
+        if existing and existing.id != user_id:
+            logger.info(
+                "更新用户失败：邮箱重复",
+                extra={"target": user_id, "email": email},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="邮箱已存在"
+            )
+        if email != user.email:
+            user.email = email
+            changed = True
     if payload.full_name is not None:  # 提供新姓名
-        update_data["full_name"] = payload.full_name  # 写入
+        full_name = payload.full_name.strip()
+        normalized_name = full_name or None
+        if normalized_name != user.full_name:
+            user.full_name = normalized_name
+            changed = True
     if payload.password is not None:  # 提供新密码
         if is_password_compromised(payload.password):  # 校验密码安全性
             logger.warning("拒绝使用不符合复杂度的密码更新账号", extra={"user_id": user_id})  # 记录安全日志
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=PASSWORD_POLICY_MESSAGE)  # 拒绝
-        update_data["hashed_password"] = hash_password(payload.password)  # 哈希后更新
+        user.hashed_password = hash_password(payload.password)  # 哈希后更新
+        changed = True
     if current_user.is_admin and payload.is_admin is not None:  # 仅管理员可改权限
-        update_data["is_admin"] = payload.is_admin  # 设置权限
-    if not update_data:  # 若无可更新字段
+        if user.is_admin != payload.is_admin:
+            user.is_admin = payload.is_admin  # 设置权限
+            changed = True
+    if not changed:  # 若无可更新字段
         return UserOut.model_validate(user)  # 直接返回原数据
-    updated = repo.update(user, **update_data)  # 执行更新
+    repo.db.add(user)
+    repo.db.flush()
     logger.info("用户资料已更新", extra={"user_id": user_id, "by": current_user.id})  # 记录成功
-    return UserOut.model_validate(updated)  # 返回最新信息
+    return UserOut.model_validate(user)  # 返回最新信息
 
 
 @router.delete(

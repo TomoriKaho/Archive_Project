@@ -55,9 +55,17 @@ class UserRepository(Repository[User]):  # 用户仓储实现
         stmt = select(User).where(User.email == email)  # 构造精确匹配查询
         return self.db.execute(stmt).scalar_one_or_none()  # 执行并返回单条或None
 
-    def create_user(self, email: str, hashed_password: str, is_admin: bool = False, full_name: str | None = None) -> User:  # 创建用户方法
+    def create_user(
+        self, email: str, hashed_password: str, is_admin: bool = False, full_name: str | None = None
+    ) -> User:  # 创建用户方法
         """创建用户记录，注意密码应为哈希值。"""  # 方法描述
-        return self.create(email=email, hashed_password=hashed_password, is_admin=is_admin, full_name=full_name)  # 调用父类create
+        normalized_email = email.strip().lower()
+        return self.create(
+            email=normalized_email,
+            hashed_password=hashed_password,
+            is_admin=is_admin,
+            full_name=full_name,
+        )  # 调用父类create
 
 
 # 设计说明：仓储层集中实现分页与搜索逻辑，保证路由层不直接操作SQLAlchemy细节，便于测试与维护。

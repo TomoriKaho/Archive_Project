@@ -15,6 +15,7 @@ export const messages = {
       chat: '对话',
       domains: '领域管理',
       users: '用户管理',
+      profile: '个人资料',
       logout: '退出登录'
     },
     common: {
@@ -71,6 +72,7 @@ export const messages = {
         loginLink: '立即登录',
         validation: {
           nameRequired: '请输入姓名。',
+          nameTooLong: '姓名长度不能超过 30 个字符。',
           emailRequired: '请输入邮箱地址。',
           emailInvalid: '请输入有效的邮箱地址。',
           passwordRequired: '请输入密码。',
@@ -288,6 +290,11 @@ export const messages = {
       form: {
         nameLabel: '姓名',
         namePlaceholder: '姓名（可选）',
+        nameTooLong: '姓名长度不能超过 30 个字符。',
+        emailLabel: '邮箱',
+        emailPlaceholder: 'ni@example.com',
+        emailRequired: '请输入邮箱地址。',
+        emailInvalid: '请输入有效的邮箱地址。',
         passwordLabel: '新密码',
         passwordPlaceholder: '留空则保持当前密码',
         passwordHint: '留空将保留当前密码。'
@@ -313,9 +320,8 @@ export const messages = {
         title: '会话',
         new: '新建',
         untitled: '未命名会话',
-        deleteAria: '删除会话',
-        delete: '删除',
-        deleting: '正在删除…'
+        editAria: '编辑会话',
+        edit: '重命名'
       },
       filter: {
         manage: '管理领域筛选',
@@ -369,6 +375,12 @@ export const messages = {
         message: '确认删除该会话？此操作无法撤销，所有消息将被移除。',
         confirm: '删除会话'
       },
+      edit: {
+        title: '编辑会话',
+        nameLabel: '会话标题',
+        namePlaceholder: '可选，留空自动命名',
+        deleteWarning: '删除此会话将移除全部消息，操作不可恢复，是否继续？'
+      },
       errors: {
         notAuthenticated: '请先登录以创建会话。'
       },
@@ -409,6 +421,7 @@ export const messages = {
       chat: 'Chat',
       domains: 'Domains',
       users: 'Users',
+      profile: 'Profile',
       logout: 'Log out'
     },
     common: {
@@ -465,6 +478,7 @@ export const messages = {
         loginLink: 'Sign in',
         validation: {
           nameRequired: 'Name is required.',
+          nameTooLong: 'Name must be 30 characters or fewer.',
           emailRequired: 'Email is required.',
           emailInvalid: 'Enter a valid email address.',
           passwordRequired: 'Password is required.',
@@ -682,6 +696,11 @@ export const messages = {
       form: {
         nameLabel: 'Name',
         namePlaceholder: 'Name (optional)',
+        nameTooLong: 'Name must be 30 characters or fewer.',
+        emailLabel: 'Email',
+        emailPlaceholder: 'user@example.com',
+        emailRequired: 'Email is required.',
+        emailInvalid: 'Enter a valid email address.',
         passwordLabel: 'New password',
         passwordPlaceholder: 'Leave blank to keep current password',
         passwordHint: 'Leave blank to keep the existing password.'
@@ -707,9 +726,8 @@ export const messages = {
         title: 'Conversations',
         new: 'New',
         untitled: 'Untitled conversation',
-        deleteAria: 'Delete conversation',
-        delete: 'Delete',
-        deleting: 'Deleting…'
+        editAria: 'Edit conversation',
+        edit: 'Rename'
       },
       filter: {
         manage: 'Manage domain filter',
@@ -762,6 +780,12 @@ export const messages = {
         title: 'Delete Conversation',
         message: 'Are you sure you want to delete this conversation? This action cannot be undone and will remove all messages inside it.',
         confirm: 'Delete conversation'
+      },
+      edit: {
+        title: 'Edit Conversation',
+        nameLabel: 'Conversation Title',
+        namePlaceholder: 'Title (optional)',
+        deleteWarning: 'Deleting this conversation will remove all messages. This action cannot be undone. Continue?'
       },
       errors: {
         notAuthenticated: 'You must be logged in to start a conversation.'

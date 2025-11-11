@@ -13,7 +13,11 @@ class UserCreate(ORMModel):  # 注册时使用的输入模型
     """注册或自助创建用户时的入参。"""  # 文档说明
     email: EmailStr = Field(..., description="邮箱地址，作为登录名")  # 邮箱必填并格式校验
     password: str = Field(..., min_length=8, description="明文密码，将在服务端转换为哈希存储")  # 密码最少8位确保安全
-    full_name: Optional[str] = Field(None, description="可选的用户昵称或全名")  # 可选全名字段
+    full_name: Optional[str] = Field(
+        None,
+        description="可选的用户昵称或全名",
+        max_length=30,
+    )  # 可选全名字段，限制长度防止过长
 
 
 class AdminUserCreate(UserCreate):  # 管理员创建用户的模型
@@ -23,7 +27,14 @@ class AdminUserCreate(UserCreate):  # 管理员创建用户的模型
 
 class UserUpdate(ORMModel):  # 更新用户信息的模型
     """用于PATCH部分更新用户资料。"""  # 文档说明
-    full_name: Optional[str] = Field(None, description="新的全名，为None则不修改")  # 可选更新全名
+    email: Optional[EmailStr] = Field(
+        None, description="新的邮箱地址，保持唯一性"
+    )  # 可选更新邮箱
+    full_name: Optional[str] = Field(
+        None,
+        description="新的全名，为None则不修改",
+        max_length=30,
+    )  # 可选更新全名
     password: Optional[str] = Field(None, min_length=8, description="新的明文密码")  # 可选更新密码
     is_admin: Optional[bool] = Field(None, description="是否提升为管理员，仅管理员可修改")  # 管理员控制权限
 
@@ -32,7 +43,7 @@ class UserOut(ORMModel):  # 对外返回的用户信息模型
     """响应中返回的用户概要信息。"""  # 文档说明
     id: int = Field(..., description="用户ID")  # 主键ID
     email: EmailStr = Field(..., description="邮箱")  # 邮箱
-    full_name: Optional[str] = Field(None, description="全名")  # 全名
+    full_name: Optional[str] = Field(None, description="全名", max_length=30)  # 全名
     is_admin: bool = Field(..., description="是否管理员")  # 管理员标志
     created_at: datetime = Field(..., description="创建时间")  # 创建时间戳
     updated_at: datetime = Field(..., description="更新时间")  # 更新时间戳

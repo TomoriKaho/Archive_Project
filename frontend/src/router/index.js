@@ -55,7 +55,7 @@ const router = createRouter({
       path: '/users',
       name: 'users',
       component: () => import('@/views/UsersView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'Users' }
+      meta: { requiresAuth: true, titleKey: 'Users' }
     },
     {
       path: '/:pathMatch(.*)*',

@@ -66,7 +66,10 @@
       v-model="isModalOpen"
       :title="modalTitle"
     >
-      <div class="form-field">
+      <div
+        class="form-field"
+        :class="{ 'form-field--error': editingErrors.full_name }"
+      >
         <label for="user-name">{{ t('users.form.nameLabel') }}</label>
         <input
           id="user-name"
@@ -74,9 +77,28 @@
           type="text"
           :placeholder="t('users.form.namePlaceholder')"
         />
+        <p v-if="editingErrors.full_name" class="form-field__error">
+          {{ editingErrors.full_name }}
+        </p>
       </div>
 
-      <div class="form-field">
+      <div
+        class="form-field"
+        :class="{ 'form-field--error': editingErrors.email }"
+      >
+        <label for="user-email">{{ t('users.form.emailLabel') }}</label>
+        <input
+          id="user-email"
+          v-model.trim="editingForm.email"
+          type="email"
+          :placeholder="t('users.form.emailPlaceholder')"
+        />
+        <p v-if="editingErrors.email" class="form-field__error">
+          {{ editingErrors.email }}
+        </p>
+      </div>
+
+      <div v-if="canManageRoles" class="form-field">
         <label class="toggle">
           <input type="checkbox" v-model="editingForm.is_admin" />
           <span>
@@ -177,9 +199,15 @@ const saving = ref(false);
 const deleting = ref(false);
 
 const editingForm = reactive({
+  email: '',
   full_name: '',
   is_admin: false,
   password: ''
+});
+
+const editingErrors = reactive({
+  full_name: '',
+  email: ''
 });
 
 onMounted(async () => {
@@ -237,7 +265,10 @@ const isEditingSelf = computed(
   () => editingUser.value?.id === currentUserId.value
 );
 
+const canManageRoles = computed(() => authStore.isAdmin);
+
 function populateForm(user) {
+  editingForm.email = user.email ?? '';
   editingForm.full_name = user.full_name ?? '';
   editingForm.is_admin = !!user.is_admin;
   editingForm.password = '';
@@ -249,6 +280,8 @@ function openEditUser(userId) {
   editingUserId.value = userId;
   populateForm(user);
   showDeleteConfirm.value = false;
+  editingErrors.full_name = '';
+  editingErrors.email = '';
   isModalOpen.value = true;
 }
 
@@ -264,16 +297,52 @@ function closeModal() {
   isModalOpen.value = false;
   editingUserId.value = null;
   showDeleteConfirm.value = false;
+  editingErrors.full_name = '';
+  editingErrors.email = '';
+  editingForm.email = '';
   editingForm.full_name = '';
   editingForm.is_admin = false;
   editingForm.password = '';
 }
 
+function validateUserForm() {
+  editingErrors.full_name = '';
+  editingErrors.email = '';
+
+  const name = editingForm.full_name.trim();
+  if (name && name.length > 30) {
+    editingErrors.full_name = t('users.form.nameTooLong');
+  }
+
+  const email = editingForm.email.trim();
+  if (!email) {
+    editingErrors.email = t('users.form.emailRequired');
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    editingErrors.email = t('users.form.emailInvalid');
+  }
+
+  return !editingErrors.full_name && !editingErrors.email;
+}
+
 async function saveUser() {
   if (!editingUser.value) return;
+  if (!validateUserForm()) {
+    return;
+  }
   saving.value = true;
   try {
-    await usersStore.saveUser(editingUser.value.id, { ...editingForm });
+    const payload = {
+      email: editingForm.email,
+      full_name: editingForm.full_name,
+      password: editingForm.password
+    };
+    if (canManageRoles.value) {
+      payload.is_admin = editingForm.is_admin;
+    }
+    await usersStore.saveUser(editingUser.value.id, payload);
+    if (isEditingSelf.value) {
+      await authStore.refreshUser();
+    }
     closeModal();
   } finally {
     saving.value = false;
@@ -400,6 +469,12 @@ th button {
   font-weight: 600;
 }
 
+.form-field--error input[type='text'],
+.form-field--error input[type='email'],
+.form-field--error input[type='password'] {
+  border-color: #f87171;
+}
+
 .form-field input[type='text'],
 .form-field input[type='password'] {
   width: 100%;
@@ -409,8 +484,21 @@ th button {
   font-size: 15px;
 }
 
+.form-field input[type='email'] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
 .form-field__hint {
   color: #6b7280;
+  font-size: 13px;
+}
+
+.form-field__error {
+  color: #b91c1c;
   font-size: 13px;
 }
 

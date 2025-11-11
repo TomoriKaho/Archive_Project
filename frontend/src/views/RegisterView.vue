@@ -102,7 +102,14 @@ const errors = reactive({
 const isSubmitting = ref(false);
 
 function validate() {
-  errors.name = form.name ? '' : t('auth.register.validation.nameRequired');
+  const trimmedName = form.name.trim();
+  if (!trimmedName) {
+    errors.name = t('auth.register.validation.nameRequired');
+  } else if (trimmedName.length > 30) {
+    errors.name = t('auth.register.validation.nameTooLong');
+  } else {
+    errors.name = '';
+  }
 
   const emailRegex = /[^\s@]+@[^\s@]+\.[^\s@]+/;
   if (!form.email) {
@@ -140,8 +147,9 @@ async function onSubmit() {
   if (!validate()) return;
   isSubmitting.value = true;
   try {
+    const trimmedName = form.name.trim();
     await authStore.register({
-      name: form.name,
+      name: trimmedName,
       email: form.email,
       password: form.password
     });

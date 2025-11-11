@@ -54,6 +54,12 @@ export const useUsersStore = defineStore('users', {
     async saveUser(userId, payload) {
       try {
         const body = {};
+        if (Object.prototype.hasOwnProperty.call(payload, 'email')) {
+          const email = payload.email?.trim();
+          if (email) {
+            body.email = email.toLowerCase();
+          }
+        }
         if (Object.prototype.hasOwnProperty.call(payload, 'full_name')) {
           const name = payload.full_name ?? '';
           body.full_name = name.trim();

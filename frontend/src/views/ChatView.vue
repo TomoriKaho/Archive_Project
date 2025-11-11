@@ -31,16 +31,11 @@
           <button
             v-if="conversation.id"
             type="button"
-            class="chat__conversation-delete"
-            :disabled="conversation.id === deletingConversationId"
-            @click.stop="promptRemoveConversation(conversation.id)"
-            :aria-label="t('chat.sidebar.deleteAria')"
+            class="chat__conversation-edit"
+            @click.stop="openEditConversation(conversation.id)"
+            :aria-label="t('chat.sidebar.editAria')"
           >
-            {{
-              conversation.id === deletingConversationId
-                ? t('chat.sidebar.deleting')
-                : t('chat.sidebar.delete')
-            }}
+            {{ t('chat.sidebar.edit') }}
           </button>
         </li>
       </ul>
@@ -249,26 +244,79 @@
     </BaseModal>
 
     <BaseModal
-      v-model="isDeleteConversationOpen"
-      :title="t('chat.delete.title')"
+      v-if="editingConversationId"
+      v-model="isEditConversationOpen"
+      :title="t('chat.edit.title')"
     >
-      <p>{{ t('chat.delete.message') }}</p>
+      <div
+        class="form-field"
+        :class="{ 'form-field--error': editConversationErrors.title }"
+      >
+        <label for="edit-conversation-name">{{ t('chat.edit.nameLabel') }}</label>
+        <input
+          id="edit-conversation-name"
+          v-model.trim="editConversationForm.title"
+          type="text"
+          :placeholder="t('chat.edit.namePlaceholder')"
+        />
+        <p v-if="editConversationErrors.title" class="form-field__error">
+          {{ editConversationErrors.title }}
+        </p>
+      </div>
+
+      <div
+        v-if="showConversationDeleteConfirm"
+        class="chat__conversation-delete-warning"
+        role="alert"
+      >
+        <p>{{ t('chat.edit.deleteWarning') }}</p>
+      </div>
+
       <template #footer>
-        <button class="button" type="button" @click="closeDeleteConversation">
-          {{ t('common.cancel') }}
-        </button>
-        <button
-          class="button button--danger"
-          type="button"
-          :disabled="deletingConversationId !== null"
-          @click="removeConversation"
-        >
+        <button class="button" type="button" @click="onEditConversationBackOrCancel">
           {{
-            deletingConversationId
-              ? t('common.deleting')
-              : t('chat.delete.confirm')
+            showConversationDeleteConfirm
+              ? t('common.back')
+              : t('common.cancel')
           }}
         </button>
+
+        <template v-if="showConversationDeleteConfirm">
+          <button
+            class="button button--danger"
+            type="button"
+            :disabled="isRemovingConversation"
+            @click="confirmRemoveConversation"
+          >
+            {{
+              isRemovingConversation
+                ? t('common.deleting')
+                : t('chat.delete.confirm')
+            }}
+          </button>
+        </template>
+        <template v-else>
+          <button
+            class="button button--primary"
+            type="button"
+            :disabled="isSavingConversation"
+            @click="saveConversationEdits"
+          >
+            {{
+              isSavingConversation
+                ? t('common.saving')
+                : t('common.saveChanges')
+            }}
+          </button>
+          <button
+            class="button button--danger"
+            type="button"
+            :disabled="isRemovingConversation"
+            @click="requestRemoveConversation"
+          >
+            {{ t('chat.delete.confirm') }}
+          </button>
+        </template>
       </template>
     </BaseModal>
   </section>
@@ -291,9 +339,17 @@ const message = ref('');
 const messagesContainer = ref(null);
 const isDomainFilterOpen = ref(false);
 
-const deletingConversationId = ref(null);
-const confirmingConversationId = ref(null);
-const isDeleteConversationOpen = ref(false);
+const isEditConversationOpen = ref(false);
+const editingConversationId = ref(null);
+const editConversationForm = reactive({
+  title: ''
+});
+const editConversationErrors = reactive({
+  title: ''
+});
+const isSavingConversation = ref(false);
+const isRemovingConversation = ref(false);
+const showConversationDeleteConfirm = ref(false);
 
 const isNewConversationOpen = ref(false);
 const newConversationForm = reactive({
@@ -448,6 +504,28 @@ watch(
 );
 
 watch(
+  () => chatStore.conversations.slice(),
+  (conversations) => {
+    if (!editingConversationId.value) return;
+    const updated = conversations.find(
+      (conversation) => conversation.id === editingConversationId.value
+    );
+    if (!updated) {
+      resetEditConversationState();
+      isEditConversationOpen.value = false;
+      return;
+    }
+    editConversationForm.title = updated.title ?? '';
+  }
+);
+
+watch(isEditConversationOpen, (value) => {
+  if (!value) {
+    resetEditConversationState();
+  }
+});
+
+watch(
   () => chatStore.activeConversationId,
   () => {
     isDomainFilterOpen.value = false;
@@ -557,25 +635,71 @@ function applyActiveDomains() {
   isDomainFilterOpen.value = false;
 }
 
-function promptRemoveConversation(id) {
-  confirmingConversationId.value = id;
-  isDeleteConversationOpen.value = true;
+function resetEditConversationState() {
+  editingConversationId.value = null;
+  editConversationForm.title = '';
+  editConversationErrors.title = '';
+  showConversationDeleteConfirm.value = false;
+  isSavingConversation.value = false;
+  isRemovingConversation.value = false;
 }
 
-function closeDeleteConversation() {
-  isDeleteConversationOpen.value = false;
-  confirmingConversationId.value = null;
+function openEditConversation(id) {
+  const conversation = chatStore.conversations.find((item) => item.id === id);
+  if (!conversation) return;
+  editingConversationId.value = id;
+  editConversationForm.title = conversation.title ?? '';
+  editConversationErrors.title = '';
+  showConversationDeleteConfirm.value = false;
+  isEditConversationOpen.value = true;
 }
 
-async function removeConversation() {
-  const id = confirmingConversationId.value;
-  if (!id || deletingConversationId.value) return;
-  deletingConversationId.value = id;
+function onEditConversationBackOrCancel() {
+  if (showConversationDeleteConfirm.value) {
+    showConversationDeleteConfirm.value = false;
+    return;
+  }
+  isEditConversationOpen.value = false;
+}
+
+function requestRemoveConversation() {
+  showConversationDeleteConfirm.value = true;
+}
+
+function validateEditConversation() {
+  editConversationErrors.title = '';
+  const title = editConversationForm.title.trim();
+  if (!title) {
+    editConversationErrors.title = t('chat.new.validation.nameRequired');
+  }
+  return !editConversationErrors.title;
+}
+
+async function saveConversationEdits() {
+  if (!editingConversationId.value) return;
+  if (!validateEditConversation()) return;
+  isSavingConversation.value = true;
   try {
-    await chatStore.removeConversation(id);
+    await chatStore.updateConversation(editingConversationId.value, {
+      title: editConversationForm.title.trim()
+    });
+    isEditConversationOpen.value = false;
   } finally {
-    deletingConversationId.value = null;
-    closeDeleteConversation();
+    isSavingConversation.value = false;
+  }
+}
+
+async function confirmRemoveConversation() {
+  if (!editingConversationId.value || isRemovingConversation.value) {
+    return;
+  }
+  isRemovingConversation.value = true;
+  try {
+    await chatStore.removeConversation(editingConversationId.value);
+    showConversationDeleteConfirm.value = false;
+    isEditConversationOpen.value = false;
+  } finally {
+    isRemovingConversation.value = false;
   }
 }
 </script>
@@ -661,22 +785,26 @@ async function removeConversation() {
   color: #ffffff;
 }
 
-.chat__conversation-delete {
+.chat__conversation-edit {
   border: none;
   background: transparent;
-  color: #ef4444;
+  color: #1f2937;
   font-weight: 600;
   cursor: pointer;
   padding: 8px 4px;
 }
 
-.chat__conversation-delete:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
 .chat__conversation-name {
   font-weight: 600;
+}
+
+.chat__conversation-delete-warning {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 16px;
+  color: #991b1b;
+  margin-top: 8px;
 }
 
 .chat__conversation-date {

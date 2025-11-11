@@ -67,12 +67,17 @@ const adminNavigation = [
     labelKey: 'navigation.domains',
     to: { name: 'domains' },
     path: '/domains'
-  },
-  { name: 'users', labelKey: 'navigation.users', to: { name: 'users' }, path: '/users' }
+  }
 ];
 
 const navigation = computed(() => {
   const items = [...baseNavigation];
+  items.push({
+    name: 'users',
+    labelKey: authStore.isAdmin ? 'navigation.users' : 'navigation.profile',
+    to: { name: 'users' },
+    path: '/users'
+  });
   if (authStore.isAdmin) {
     items.push(...adminNavigation);
   }
