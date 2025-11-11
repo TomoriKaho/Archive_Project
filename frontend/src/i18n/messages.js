@@ -1,9 +1,9 @@
 export const messages = {
   zh: {
     app: {
-      name: '归档智能',
-      switchToEnglish: '切换为英文',
-      switchToChinese: '切换为中文'
+      name: '人工智能档案库',
+      switchToEnglish: 'Switch to English',
+      switchToChinese: 'Switch to Chinese'
     },
     roles: {
       admin: '管理员',
@@ -83,6 +83,7 @@ export const messages = {
         loginError: '无法登录，请检查凭据。',
         registerSuccess: '账号已创建，请登录。',
         registerError: '无法注册，请稍后重试。',
+        registerEmailTaken: '邮箱已注册，请使用其他邮箱。',
         logout: '您已退出登录。'
       }
     },
@@ -395,8 +396,8 @@ export const messages = {
   en: {
     app: {
       name: 'Archive AI',
-      switchToEnglish: 'Switch to English',
-      switchToChinese: 'Switch to Chinese'
+      switchToEnglish: '切换为英文',
+      switchToChinese: '切换为中文'
     },
     roles: {
       admin: 'Admin',
@@ -476,6 +477,7 @@ export const messages = {
         loginError: 'Unable to login. Check your credentials.',
         registerSuccess: 'Account created. Please login.',
         registerError: 'Unable to register. Please try again.',
+        registerEmailTaken: 'Email is already registered. Please sign in or use another email.',
         logout: 'You have been logged out.'
       }
     },

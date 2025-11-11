@@ -9,13 +9,13 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { layout: 'auth', public: true, titleKey: 'routes.login' }
+      meta: { layout: 'auth', public: true, titleKey: 'Login' }
     },
     {
       path: '/register',
       name: 'register',
       component: () => import('@/views/RegisterView.vue'),
-      meta: { layout: 'auth', public: true, titleKey: 'routes.register' }
+      meta: { layout: 'auth', public: true, titleKey: 'Register' }
     },
     {
       path: '/',
@@ -25,43 +25,43 @@ const router = createRouter({
       path: '/dashboard',
       name: 'dashboard',
       component: () => import('@/views/DashboardView.vue'),
-      meta: { requiresAuth: true, titleKey: 'routes.dashboard' }
+      meta: { requiresAuth: true, titleKey: 'Dashboard' }
     },
     {
       path: '/documents',
       name: 'documents',
       component: () => import('@/views/DocumentsView.vue'),
-      meta: { requiresAuth: true, titleKey: 'routes.documents' }
+      meta: { requiresAuth: true, titleKey: 'Documents' }
     },
     {
       path: '/documents/:id',
       name: 'document-detail',
       component: () => import('@/views/DocumentDetailView.vue'),
-      meta: { requiresAuth: true, titleKey: 'routes.documentDetail' }
+      meta: { requiresAuth: true, titleKey: 'Document Detail' }
     },
     {
       path: '/chat',
       name: 'chat',
       component: () => import('@/views/ChatView.vue'),
-      meta: { requiresAuth: true, titleKey: 'routes.chat' }
+      meta: { requiresAuth: true, titleKey: 'Chat' }
     },
     {
       path: '/domains',
       name: 'domains',
       component: () => import('@/views/DomainsView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'routes.domains' }
+      meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'Domains' }
     },
     {
       path: '/users',
       name: 'users',
       component: () => import('@/views/UsersView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'routes.users' }
+      meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'Users' }
     },
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),
-      meta: { requiresAuth: true, titleKey: 'routes.notFound' }
+      meta: { requiresAuth: true, titleKey: 'Not Found' }
     }
   ]
 });

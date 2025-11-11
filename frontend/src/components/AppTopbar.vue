@@ -12,7 +12,10 @@
     </div>
     <div class="topbar__actions">
       <button class="topbar__locale" type="button" @click="toggleLocale">
-        {{ locale.value === 'zh' ? t('app.switchToEnglish') : t('app.switchToChinese') }}
+        {{ isChineseLocale
+          ? t('app.switchToEnglish')
+          : t('app.switchToChinese')
+        }}
       </button>
       <div class="topbar__user" v-if="user">
         <div class="topbar__profile">
@@ -50,6 +53,8 @@ const { locale } = storeToRefs(i18nStore);
 const { t } = useI18n();
 
 const user = computed(() => authStore.user);
+
+const isChineseLocale = computed(() => locale.value?.startsWith('zh'));
 
 const displayName = computed(() => user.value?.full_name || user.value?.email);
 

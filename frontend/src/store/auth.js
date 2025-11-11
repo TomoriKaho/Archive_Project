@@ -102,11 +102,21 @@ export const useAuthStore = defineStore('auth', {
         });
         router.push({ name: 'login' });
       } catch (error) {
-        useUiStore().showToast({
-          type: 'error',
-          message:
+        const uiStore = useUiStore();
+        const status = error.response?.status;
+        let message =
+          error.response?.data?.message ||
+          i18n.global.t('auth.toast.registerError');
+
+        if (status === 409) {
+          message =
             error.response?.data?.message ||
-            i18n.global.t('auth.toast.registerError')
+            i18n.global.t('auth.toast.registerEmailTaken');
+        }
+
+        uiStore.showToast({
+          type: 'error',
+          message
         });
         throw error;
       } finally {
