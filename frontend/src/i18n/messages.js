@@ -13,7 +13,7 @@ export const messages = {
       dashboard: '仪表盘',
       documents: '文档管理',
       chat: '开始对话',
-      domains: '领域管理',
+      domains: '域管理',
       users: '用户管理',
       profile: '个人资料',
       logout: '退出登录'
@@ -108,7 +108,7 @@ export const messages = {
         title: '快捷入口',
         documents: '管理文档',
         chat: '打开对话',
-        domains: '领域管理',
+        domains: '域管理',
         users: '用户管理'
       }
     },
@@ -126,8 +126,8 @@ export const messages = {
       },
       filters: {
         domain: {
-          label: '领域',
-          all: '全部领域'
+          label: '域',
+          all: '全部域'
         }
       },
       modal: {
@@ -138,8 +138,8 @@ export const messages = {
         csv: 'CSV 上传'
       },
       form: {
-        domainLabel: '领域',
-        domainPlaceholder: '请选择领域',
+        domainLabel: '域',
+        domainPlaceholder: '请选择域',
         titleLabel: '标题',
         titlePlaceholder: '文档标题',
         contentLabel: '内容',
@@ -151,7 +151,7 @@ export const messages = {
         selectedFile: '已选择：{name}'
       },
       validation: {
-        domainRequired: '请选择领域。',
+        domainRequired: '请选择域。',
         titleRequired: '标题为必填项。',
         contentRequired: '内容不能为空。',
         csvRequired: '请选择要上传的 CSV 文件。',
@@ -161,13 +161,13 @@ export const messages = {
       table: {
         columns: {
           name: '名称',
-          domain: '领域',
+          domain: '域',
           created: '创建时间',
           updated: '更新时间'
         },
         empty: '未找到文档。'
       },
-      unknownDomain: '领域 #{id}',
+      unknownDomain: '域 #{id}',
       uploading: '正在上传…',
       toast: {
         loadError: '加载文档失败。',
@@ -186,12 +186,12 @@ export const messages = {
       }
     },
     documentDetail: {
-      domainLabel: '领域：{name}',
+      domainLabel: '域：{name}',
       meta: {
         created: '创建时间',
         updated: '更新时间',
         uuid: 'UUID',
-        domainId: '领域 ID'
+        domainId: '域 ID'
       },
       content: {
         title: '文档内容',
@@ -232,10 +232,10 @@ export const messages = {
       loadingDocument: '正在加载文档…'
     },
     domains: {
-      title: '领域',
-      subtitle: '管理用于文档导入的领域。',
+      title: '域',
+      subtitle: '管理用于文档导入的来源。',
       actions: {
-        new: '新建领域'
+        new: '新建域'
       },
       table: {
         name: '名称',
@@ -243,33 +243,33 @@ export const messages = {
         created: '创建时间',
         updated: '更新时间'
       },
-      empty: '未找到领域。',
+      empty: '未找到域。',
       form: {
         nameLabel: '名称',
         descriptionLabel: '描述',
         descriptionPlaceholder: '可选描述',
-        hint: '领域创建后默认启用。',
+        hint: '域创建后默认启用。',
         validation: {
-          nameRequired: '请输入领域名称。'
+          nameRequired: '请输入域名称。'
         }
       },
       modal: {
-        editTitle: '编辑领域',
-        newTitle: '新建领域'
+        editTitle: '编辑域',
+        newTitle: '新建域'
       },
       delete: {
-        title: '删除领域',
-        message: '删除领域将移除该领域及其相关文档，此操作无法撤销。是否继续？',
-        confirm: '删除领域'
+        title: '删除域',
+        message: '删除域将移除该域及其相关文档，此操作无法撤销。是否继续？',
+        confirm: '删除域'
       },
       toast: {
-        loadError: '加载领域失败。',
-        createSuccess: '领域创建成功。',
-        createError: '创建领域失败。',
-        updateSuccess: '领域更新成功。',
-        updateError: '更新领域失败。',
-        deleteSuccess: '领域已删除。',
-        deleteError: '删除领域失败。'
+        loadError: '加载域失败。',
+        createSuccess: '域创建成功。',
+        createError: '创建域失败。',
+        updateSuccess: '域更新成功。',
+        updateError: '更新域失败。',
+        deleteSuccess: '域已删除。',
+        deleteError: '删除域失败。'
       }
     },
     users: {
@@ -324,21 +324,21 @@ export const messages = {
         edit: '编辑'
       },
       filter: {
-        manage: '管理领域筛选',
-        title: '领域筛选',
-        hint: '不选择任何领域即表示搜索全部领域。',
+        manage: '管理域筛选',
+        title: '域筛选',
+        hint: '不选择任何域即表示搜索全部域。',
         clearSelection: '清除选择',
         apply: '应用',
-        noConversation: '请选择会话以配置领域筛选。',
-        unavailable: '暂无法使用领域筛选。',
-        allDomains: '筛选：所有领域',
+        noConversation: '请选择会话以配置域筛选。',
+        unavailable: '暂无法使用域筛选。',
+        allDomains: '筛选：所有域',
         applied: '筛选：{domains}',
         separator: '、',
         unsaved: '已修改，应用后生效',
         status: {
-          noConversation: '选择会话以管理领域',
-          count: '已选择 {count} 个领域',
-          all: '已选择所有领域'
+          noConversation: '选择会话以管理域',
+          count: '已选择 {count} 个域',
+          all: '已选择所有域'
         }
       },
       messages: {
@@ -364,8 +364,8 @@ export const messages = {
         namePlaceholder: '可选，留空自动命名',
         promptLabel: '初始提示（可选）',
         promptPlaceholder: '可选的系统提示',
-        domainLabel: '领域筛选（可选）',
-        domainHint: '选择限定检索的领域，留空表示包含全部领域。',
+        domainLabel: '域筛选（可选）',
+        domainHint: '选择限定检索的域，留空表示包含全部域。',
         start: '开始会话',
         starting: '正在开始…',
         validation: {
@@ -392,8 +392,8 @@ export const messages = {
         createSuccess: '会话已创建。',
         createError: '无法创建会话。',
         sendError: '发送消息失败。',
-        domainApplied: '已更新领域筛选。',
-        domainCleared: '已清除领域筛选。',
+        domainApplied: '已更新域筛选。',
+        domainCleared: '已清除域筛选。',
         updateSuccess: '会话已更新。',
         updateError: '无法更新会话。',
         deleteError: '无法删除会话。',
