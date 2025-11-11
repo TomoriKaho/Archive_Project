@@ -32,6 +32,11 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 @router.post("/", response_model=ChatOut, status_code=status.HTTP_201_CREATED)
 def create_chat(payload: ChatCreate, db: Session = Depends(get_db)):
     data = payload.model_dump()
+    title = data.get("title")
+    if not title or not title.strip():
+        data["title"] = "新会话"
+    else:
+        data["title"] = title.strip()
     return ChatRepository(db).create(**data)
 
 # List chats for a user with pagination

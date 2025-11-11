@@ -49,7 +49,7 @@ const router = createRouter({
       path: '/domains',
       name: 'domains',
       component: () => import('@/views/DomainsView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'Domains' }
+      meta: { requiresAuth: true, titleKey: 'Domains' }
     },
     {
       path: '/users',

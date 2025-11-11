@@ -192,8 +192,29 @@ def answer(
     context = build_context(chunks)
     system_prompt = """你是一名严谨的档案解读助手，请依据给定资料回答问题。同时我们还会提供会话历史作为参考。
     规则：1.不得凭空捏造, 若缺证据请明确“不确定”；
-         2.回答时根据用户问题的语言来使用对应的语言回答；
-         3.你只需要回答最后一个问题，不要回答会话历史中的问题。"""
+    2.请替换问题中的代词以确保回答清晰；
+    3.你只需要回答最后一个问题，不要回答会话历史中的问题。"""
+    history_items = list(history or [])
+    user_system_prompts: list[str] = []
+    filtered_history: list[dict[str, str]] = []
+    for item in history_items:
+        role = item.get("role")
+        content = (item.get("content") or "").strip()
+        if role not in {"user", "assistant", "system"}:
+            continue
+        if not content:
+            continue
+        if role == "system":
+            user_system_prompts.append(content)
+            continue
+        filtered_history.append({"role": role, "content": content})
+
+    if user_system_prompts:
+        joined_user_prompts = "\n".join(user_system_prompts)
+        system_prompt = (
+            f"{system_prompt}\n\n以下是用户在创建会话时提供的初始指示，请务必逐条严格遵守：\n"
+            f"{joined_user_prompts}"
+        )
     if memory_chunks:
         window = CHUNK_MEMORY_WINDOW_MULTIPLIER * limit if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0 else 0
         selected_memory = list(memory_chunks)
@@ -214,28 +235,20 @@ def answer(
                 "content": f"以下是与当前问题相关的资料：\n\n{context}",
             }
         )
-    
-    history_items = list(history or [])
-    if history_items:
+
+    if filtered_history:
         messages.append(
             {
                 "role": "system",
                 "content": f"以下是会话历史：\n\n",
             }
         )
-        for item in history_items:
-            role = item.get("role")
-            content = (item.get("content") or "").strip()
-            if role not in {"user", "assistant", "system"}:
-                continue
-            if not content:
-                continue
-            messages.append({"role": role, "content": content})
-    if not history_items or (history_items and history_items[-1].get("role") != "user"):
+        messages.extend(filtered_history)
+    if not filtered_history or filtered_history[-1].get("role") != "user":
         messages.append(
             {
                 "role": "system",
-                "content": f"以下是你需要回答的问题，请结合资料证据与会话历史，替换问题中的代词，并回答对应的问题：\n\n",
+                "content": f"以下是你需要回答的问题：\n\n",
             }
         )
         messages.append({"role": "user", "content": question})

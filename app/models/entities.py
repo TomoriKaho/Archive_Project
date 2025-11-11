@@ -91,7 +91,7 @@ class Domain(Base):  # 定义数据来源实体
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 可选描述信息
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间
-    documents: Mapped[List["Document"]] = relationship(  # 领域与文档一对多关系
+    documents: Mapped[List["Document"]] = relationship(  # 域与文档一对多关系
         "Document",  # 关联文档模型
         back_populates="domain",  # 反向引用
         cascade="all, delete-orphan",  # 删除domain时级联清理文档，保持数据一致
@@ -130,7 +130,7 @@ class Document(Base):  # 定义文档实体
     )
 
     __table_args__ = (  # 文档附加索引
-        Index("ix_documents_domain_id_created_at", "domain_id", "created_at"),  # 提升按领域和时间排序的查询效率
+        Index("ix_documents_domain_id_created_at", "domain_id", "created_at"),  # 提升按域和时间排序的查询效率
     )
 
 

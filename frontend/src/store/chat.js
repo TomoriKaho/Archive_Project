@@ -115,19 +115,28 @@ export const useChatStore = defineStore('chat', {
         }
         const { name, prompt, domain_ids: rawDomainIds } = payload;
         const domainIds = normalizeDomainIds(rawDomainIds);
+        const trimmedName = name?.trim();
+        const conversationTitle =
+          trimmedName && trimmedName.length
+            ? trimmedName
+            : i18n.global.t('chat.new.defaultTitle');
         const { data } = await createConversation({
           user_id: authStore.user.id,
-          title: name?.trim() || null
+          title: conversationTitle
         });
         await this.loadConversations();
         this.setConversationDomains(data.id, domainIds, { notify: false });
         this.activeConversationId = data.id;
         this.messages = [];
-        if (prompt?.trim()) {
-          await this.sendMessage(data.id, { content: prompt.trim() });
-        } else {
-          await this.loadMessages(data.id);
+        const trimmedPrompt = prompt?.trim();
+        if (trimmedPrompt) {
+          await sendConversationMessage(data.id, {
+            chat_id: data.id,
+            role: 'system',
+            content: trimmedPrompt
+          });
         }
+        await this.loadMessages(data.id);
         useUiStore().showToast({
           type: 'success',
           message: i18n.global.t('chat.toast.createSuccess')

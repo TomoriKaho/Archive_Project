@@ -53,20 +53,22 @@ const baseNavigation = [
     path: '/dashboard'
   },
   {
-    name: 'documents',
-    labelKey: 'navigation.documents',
-    to: { name: 'documents' },
-    path: '/documents'
+    name: 'chat',
+    labelKey: 'navigation.chat',
+    to: { name: 'chat' },
+    path: '/chat'
   },
-  { name: 'chat', labelKey: 'navigation.chat', to: { name: 'chat' }, path: '/chat' }
-];
-
-const adminNavigation = [
   {
     name: 'domains',
     labelKey: 'navigation.domains',
     to: { name: 'domains' },
     path: '/domains'
+  },
+  {
+    name: 'documents',
+    labelKey: 'navigation.documents',
+    to: { name: 'documents' },
+    path: '/documents'
   }
 ];
 
@@ -78,9 +80,6 @@ const navigation = computed(() => {
     to: { name: 'users' },
     path: '/users'
   });
-  if (authStore.isAdmin) {
-    items.push(...adminNavigation);
-  }
   return items.map((item) => ({
     ...item,
     label: t(item.labelKey),

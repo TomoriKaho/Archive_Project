@@ -72,7 +72,9 @@
               {{
                 message.role === 'user'
                   ? t('chat.messages.you')
-                  : t('chat.messages.assistant')
+                  : message.role === 'assistant'
+                    ? t('chat.messages.assistant')
+                    : t('chat.messages.system')
               }}
             </span>
             <time>{{ formatDate(message.created_at) }}</time>
@@ -554,10 +556,8 @@ function closeNewConversation() {
 }
 
 function validateNewConversation() {
-  newConversationErrors.name = newConversationForm.name
-    ? ''
-    : t('chat.new.validation.nameRequired');
-  return !newConversationErrors.name;
+  newConversationErrors.name = '';
+  return true;
 }
 
 async function startConversation() {

@@ -11,8 +11,8 @@ export const messages = {
     },
     navigation: {
       dashboard: '仪表盘',
-      documents: '文档',
-      chat: '对话',
+      documents: '文档管理',
+      chat: '开始对话',
       domains: '领域管理',
       users: '用户管理',
       profile: '个人资料',
@@ -321,7 +321,7 @@ export const messages = {
         new: '新建',
         untitled: '未命名会话',
         editAria: '编辑会话',
-        edit: '重命名'
+        edit: '编辑'
       },
       filter: {
         manage: '管理领域筛选',
@@ -345,6 +345,7 @@ export const messages = {
         empty: '暂无消息，请发送第一条消息。',
         you: '你',
         assistant: '助手',
+        system: '系统提示',
         typing: '助手正在输入…'
       },
       composer: {
@@ -358,7 +359,8 @@ export const messages = {
       },
       new: {
         title: '新建会话',
-        nameLabel: '会话标题',
+        defaultTitle: '新会话',
+        nameLabel: '会话标题（可选）',
         namePlaceholder: '可选，留空自动命名',
         promptLabel: '初始提示（可选）',
         promptPlaceholder: '可选的系统提示',
@@ -727,7 +729,7 @@ export const messages = {
         new: 'New',
         untitled: 'Untitled conversation',
         editAria: 'Edit conversation',
-        edit: 'Rename'
+        edit: 'Edit'
       },
       filter: {
         manage: 'Manage domain filter',
@@ -751,6 +753,7 @@ export const messages = {
         empty: 'No messages yet. Start the conversation by sending a message.',
         you: 'You',
         assistant: 'Assistant',
+        system: 'System prompt',
         typing: 'Assistant is typing…'
       },
       composer: {
@@ -764,7 +767,8 @@ export const messages = {
       },
       new: {
         title: 'Start New Conversation',
-        nameLabel: 'Conversation Title',
+        defaultTitle: 'New Conversation',
+        nameLabel: 'Conversation Title (optional)',
         namePlaceholder: 'Title (optional)',
         promptLabel: 'Initial Prompt (optional)',
         promptPlaceholder: 'Optional system prompt',
