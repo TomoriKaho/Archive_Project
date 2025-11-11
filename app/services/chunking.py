@@ -43,7 +43,39 @@ def chunk_text_sliding_window(text: str, size: int = 250, overlap: int = 50) -> 
     # 设计说明：滑动窗口保证相邻chunk存在overlap字符重叠，利于上层召回上下文。
 
 
-def chunk_structured_entities(entities: List[Dict[str, Any]], max_len: int = 250) -> List[str]:
+def _split_value_with_window(
+    entity_name: str,
+    key: str,
+    value: Any,
+    max_len: int,
+    overlap: int,
+) -> List[str]:
+    """Split a single key/value pair using a sliding window over the value text."""
+
+    value_str = "" if value is None else str(value)
+    # 尽量保留实体名称，若前缀过长则逐级降级，保证至少保留键名
+    prefix = f"{entity_name}:{key}:"
+    if len(prefix) >= max_len:
+        prefix = f"{key}:"
+        if len(prefix) >= max_len:
+            trimmed_key = key[: max(0, max_len - 1)]
+            prefix = f"{trimmed_key}:"
+            if len(prefix) >= max_len:
+                return [prefix] if prefix else []
+
+    size = max(1, max_len)
+    effective_overlap = 0 if size == 1 else min(overlap, size - 1)
+    segments = chunk_text_sliding_window(value_str, size=size, overlap=effective_overlap)
+    if not segments:
+        return [prefix]
+    return [f"{prefix}{segment}" for segment in segments]
+
+
+def chunk_structured_entities(
+    entities: List[Dict[str, Any]],
+    max_len: int = 250,
+    overlap: int = 50,
+) -> List[str]:
     """针对结构化实体列表生成紧凑描述字符串。"""
     chunks: List[str] = []  # 存放生成的文本段
     for entity in entities:
@@ -54,16 +86,35 @@ def chunk_structured_entities(entities: List[Dict[str, Any]], max_len: int = 250
         current = name  # 初始化当前段落以实体名开头
         first = True  # 标记是否为第一对键值
         for key, value in data.items():
-            pair = f"{key}:{value}"  # 组装键值描述
+            key_str = str(key)
+            value_str = "" if value is None else str(value)
+            pair = f"{key_str}:{value_str}"  # 组装键值描述
+            pair_with_prefix = f"{name}:{pair}"
+            if len(value_str) > max_len or len(pair_with_prefix) > max_len:
+                if current != name:
+                    chunks.append(current)
+                split_chunks = _split_value_with_window(
+                    name,
+                    key_str,
+                    value_str,
+                    max_len,
+                    overlap,
+                )
+                chunks.extend(split_chunks)
+                current = name
+                first = True
+                continue
             separator = ":" if first else ","  # 第一对使用冒号其余使用逗号
             candidate = f"{current}{separator}{pair}"  # 预组装新段落
             if len(candidate) > max_len:
-                chunks.append(current)
+                if current != name:
+                    chunks.append(current)
                 current = f"{name}:{pair}"  # 超长时新开一段从当前键值开始
             else:
                 current = candidate  # 未超长则继续累积
             first = False  # 之后的键值都走逗号
-        chunks.append(current)  # 实体数据遍历完毕写入结果
+        if current != name:
+            chunks.append(current)  # 实体数据遍历完毕写入结果
     logger.info("chunk_structured_entities count=%s", len(chunks))  # 记录生成数量
     return chunks  # 返回所有结构化段落
     # 设计说明：利用len()按字符计算长度，比字节更符合前端展示长度且兼容中文字符宽度。
