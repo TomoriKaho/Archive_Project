@@ -36,3 +36,9 @@ export function updateDocument(domainId, documentId, payload) {
 export function deleteDocument(domainId, documentId) {
   return apiClient.delete(`/domains/${domainId}/documents/${documentId}`);
 }
+
+export function cancelDocumentIndexing(domainId, documentId) {
+  return apiClient.post(
+    `/domains/${domainId}/documents/${documentId}/cancel-indexing`
+  );
+}

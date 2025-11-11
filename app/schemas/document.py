@@ -30,6 +30,18 @@ class DocumentOut(ORMModel):
     domain_id: int  # 告知文档所属的数据域
     title: str  # 返回标题供界面展示
     doc_metadata: Dict[str, Any]  # 保留元数据便于前端判断结构化类型
+    vector_index_status: str = Field(
+        description="向量入库状态：queued/processing/completed/failed/pending/cancelled"
+    )
+    vector_indexed_chunks: int = Field(
+        description="已完成向量化的chunk数量"
+    )
+    vector_total_chunks: int = Field(
+        description="待向量化的chunk总数"
+    )
+    vector_index_error: str | None = Field(
+        default=None, description="最近一次索引失败时的错误信息"
+    )
     created_at: datetime  # 展示创建时间便于排序
     updated_at: datetime  # 展示更新时间便于排查差异
     # 设计说明：输出模型同时提供内部id与外部uuid，兼顾兼容性与安全性。

@@ -11,6 +11,7 @@ from sqlalchemy import (  # 导入SQLAlchemy核心字段类型与工具函数
     DateTime,  # 日期时间类型用于审计字段
     ForeignKey,  # 外键定义确保实体之间的引用一致
     Index,  # 显式索引定义提高查询性能
+    Integer,  # 普通整型用于统计字段
     JSON,  # JSON字段存储文档元数据
     String,  # 可变长度字符串类型
     Text,  # 长文本类型存储消息与文档内容
@@ -118,6 +119,28 @@ class Document(Base):  # 定义文档实体
         Text,
         nullable=False,
         default="",
+    )
+    vector_index_status: Mapped[str] = mapped_column(  # 记录向量索引状态
+        String(32),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+    )
+    vector_indexed_chunks: Mapped[int] = mapped_column(  # 已成功写入向量库的chunk数量
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    vector_total_chunks: Mapped[int] = mapped_column(  # 需要索引的chunk总数
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    vector_index_error: Mapped[Optional[str]] = mapped_column(  # 最近一次索引失败的错误信息
+        Text,
+        nullable=True,
     )
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间

@@ -56,6 +56,9 @@ OLLAMA_CHAT_MODEL=llama3.1:8b
 RAG_TOP_K=10
 RAG_OLLAMA_TIMEOUT=60
 RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER=3
+
+# 向量入库批量配置
+DOCUMENT_INDEX_BATCH_SIZE=32
 ```
 
 > 使 `.env` 生效（仅当前 shell）：
@@ -182,6 +185,9 @@ curl -X POST http://localhost:8000/chats/7/messages \
 
 > `RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER` 决定多轮对话中保留的历史检索片段数量，
 > 其值会与 `top_k` 相乘，控制滑动窗口的大小。
+
+> `DOCUMENT_INDEX_BATCH_SIZE` 控制单次向量化/入库的 chunk 批量大小，数值越大单次请求的向量越多；
+> 若 Qdrant 或嵌入服务在大批量写入时容易超时，可适当调小该值。
 
 ---
 

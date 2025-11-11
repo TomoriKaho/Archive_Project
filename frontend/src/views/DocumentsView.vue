@@ -64,6 +64,7 @@
       :sort-by="documentsStore.filters.sort_by"
       :sort-direction="documentsStore.filters.order"
       @update:sort="onSort"
+      @cancel-indexing="onCancelIndexing"
     />
 
     <BaseModal v-model="isModalOpen" :title="t('documents.modal.createTitle')">
@@ -399,6 +400,20 @@ async function submit() {
     } finally {
       isSubmitting.value = false;
     }
+  }
+}
+
+async function onCancelIndexing(document) {
+  if (!document || !document.id || !document.domain_id) {
+    return;
+  }
+  try {
+    await documentsStore.cancelIndexing({
+      documentId: document.id,
+      domainId: document.domain_id
+    });
+  } catch (error) {
+    // 错误已通过 toast 反馈
   }
 }
 

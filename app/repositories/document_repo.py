@@ -90,6 +90,19 @@ class DocumentRepository(Repository[Document]):
         return self.db.execute(stmt).scalars().all()  # 执行SQL返回结果
         # 设计说明：统一的分页查询接口为API层提供复用能力。
 
+    def list_ids_by_index_status(self, *, statuses: Sequence[str]) -> list[int]:
+        """根据索引状态列出文档ID，用于后台索引恢复。"""
+
+        if not statuses:
+            return []
+        stmt: Select = (
+            select(Document.id)
+            .where(Document.vector_index_status.in_(list(statuses)))
+            .order_by(Document.created_at.asc(), Document.id.asc())
+        )
+        rows = self.db.execute(stmt).all()
+        return [row[0] for row in rows]
+
     def get_by_uuid(self, doc_uuid: UUID) -> Document | None:
         """按UUID查询单条文档。"""
         stmt = select(Document).where(Document.uuid == doc_uuid)  # 构造uuid过滤条件

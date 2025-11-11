@@ -7,7 +7,8 @@ import {
   createTextDocument,
   uploadCsvDocument,
   updateDocument,
-  deleteDocument
+  deleteDocument,
+  cancelDocumentIndexing
 } from '@/services/documents';
 import { i18n } from '@/i18n';
 import { useUiStore } from './ui';
@@ -145,7 +146,11 @@ export const useDocumentsStore = defineStore('documents', {
         domain_id: domainId,
         created_at: new Date().toISOString(),
         updated_at: null,
-        isUploading: true
+        isUploading: true,
+        vector_index_status: 'pending',
+        vector_indexed_chunks: 0,
+        vector_total_chunks: 0,
+        vector_index_error: null
       };
       this.pendingUploads = [placeholder, ...this.pendingUploads];
       return placeholder;
@@ -298,6 +303,34 @@ export const useDocumentsStore = defineStore('documents', {
         useUiStore().showToast({
           type: 'error',
           message: i18n.global.t('documents.toast.deleteError')
+        });
+        throw error;
+      }
+    },
+    async cancelIndexing({ documentId, domainId }) {
+      const target = this.items.find((item) => item.id === documentId);
+      if (target) {
+        target._isCancelling = true;
+      }
+      try {
+        const { data } = await cancelDocumentIndexing(domainId, documentId);
+        if (target) {
+          Object.assign(target, data, { _isCancelling: false });
+        } else {
+          await this.loadDocuments();
+        }
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('documents.toast.cancelSuccess')
+        });
+        return data;
+      } catch (error) {
+        if (target) {
+          target._isCancelling = false;
+        }
+        useUiStore().showToast({
+          type: 'error',
+          message: i18n.global.t('documents.toast.cancelError')
         });
         throw error;
       }

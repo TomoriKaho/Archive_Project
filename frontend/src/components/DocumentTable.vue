@@ -44,11 +44,28 @@
             <span v-if="document.isUploading" class="uploading">
               {{ t('documents.uploading') }}
             </span>
-            <RouterLink
-              v-else
-              :to="{ name: 'document-detail', params: { id: document.uuid } }"
-              >{{ t('common.view') }}</RouterLink
-            >
+            <template v-else>
+              <RouterLink
+                :to="{ name: 'document-detail', params: { id: document.uuid } }"
+                >{{ t('common.view') }}</RouterLink
+              >
+              <span v-if="progressText(document)" class="progress">
+                {{ progressText(document) }}
+              </span>
+              <button
+                v-if="canCancel(document)"
+                type="button"
+                class="cancel-button"
+                :disabled="document._isCancelling"
+                @click="requestCancel(document)"
+              >
+                {{
+                  document._isCancelling
+                    ? t('documents.table.cancelling')
+                    : t('documents.table.cancel')
+                }}
+              </button>
+            </template>
           </td>
         </tr>
       </tbody>
@@ -81,7 +98,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:sort']);
+const emit = defineEmits(['update:sort', 'cancel-indexing']);
 
 const { t, locale } = useI18n();
 
@@ -114,6 +131,17 @@ function resolveDomainName(domainId) {
   return domain?.name || t('documents.unknownDomain', { id: domainId });
 }
 
+function canCancel(document) {
+  if (!document || document.isUploading) return false;
+  if (!document.id) return false;
+  const status = document.vector_index_status;
+  return ['queued', 'processing', 'pending'].includes(status);
+}
+
+function requestCancel(document) {
+  emit('cancel-indexing', document);
+}
+
 function formatDate(value) {
   if (!value) return '—';
   try {
@@ -121,6 +149,47 @@ function formatDate(value) {
   } catch (error) {
     return new Date(value).toLocaleDateString();
   }
+}
+
+function progressText(document) {
+  if (!document) return '';
+
+  const status = document.vector_index_status;
+  const total = Number(document.vector_total_chunks ?? 0);
+  const indexed = Number(document.vector_indexed_chunks ?? 0);
+
+  if (!status) {
+    return '';
+  }
+
+  if (status === 'failed') {
+    return t('documents.table.progress.failed');
+  }
+
+  const safeTotal = Number.isNaN(total) ? 0 : Math.max(0, Math.floor(total));
+  const safeIndexed = Number.isNaN(indexed) ? 0 : Math.max(0, Math.floor(indexed));
+
+  if (safeTotal === 0) {
+    return status === 'completed'
+      ? t('documents.table.progress.completedNoChunks')
+      : t('documents.table.progress.empty');
+  }
+
+  const clampedIndexed = Math.min(safeIndexed, safeTotal);
+  let percent = Math.floor((clampedIndexed / safeTotal) * 100);
+  if (status === 'completed') {
+    percent = 100;
+  }
+
+  const statusKey = `documents.table.progress.status.${status}`;
+  const translatedStatus = t(statusKey);
+  const statusLabel = translatedStatus === statusKey ? status : translatedStatus;
+  return t('documents.table.progress.summary', {
+    status: statusLabel,
+    indexed: clampedIndexed,
+    total: safeTotal,
+    percent
+  });
 }
 
 </script>
@@ -159,13 +228,42 @@ th button {
 }
 
 .actions {
-  min-width: 120px;
+  min-width: 160px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .actions a {
   color: #1f2937;
   font-weight: 600;
   text-decoration: none;
+}
+
+.actions .progress {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.cancel-button {
+  padding: 6px 12px;
+  border: 1px solid #f87171;
+  background: transparent;
+  color: #dc2626;
+  border-radius: 9999px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.cancel-button:hover:enabled {
+  background: #fee2e2;
+}
+
+.cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .uploading {

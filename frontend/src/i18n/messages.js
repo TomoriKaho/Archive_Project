@@ -165,7 +165,22 @@ export const messages = {
           created: '创建时间',
           updated: '更新时间'
         },
-        empty: '未找到文档。'
+        empty: '未找到文档。',
+        progress: {
+          summary: '导入进度：{status} · {percent}%（{indexed}/{total}）',
+          empty: '导入进度：暂无可导入的片段',
+          failed: '导入进度：导入失败',
+          completedNoChunks: '导入进度：无需导入',
+          status: {
+            pending: '等待中',
+            queued: '排队中',
+            processing: '进行中',
+            completed: '已完成',
+            cancelled: '已取消'
+          }
+        },
+        cancel: '取消导入',
+        cancelling: '取消中…'
       },
       unknownDomain: '域 #{id}',
       uploading: '正在上传…',
@@ -182,7 +197,9 @@ export const messages = {
         updateSuccess: '文档更新成功。',
         updateError: '更新文档失败。',
         deleteSuccess: '文档已删除。',
-        deleteError: '删除文档失败。'
+        deleteError: '删除文档失败。',
+        cancelSuccess: '已取消向量导入。',
+        cancelError: '取消向量导入失败。'
       }
     },
     documentDetail: {
@@ -573,7 +590,19 @@ export const messages = {
           created: 'Created',
           updated: 'Updated'
         },
-        empty: 'No documents found.'
+        empty: 'No documents found.',
+        progress: {
+          summary: 'Progress: {status} · {percent}% ({indexed}/{total})',
+          empty: 'Progress: nothing to index',
+          failed: 'Progress: failed',
+          completedNoChunks: 'Progress: nothing required',
+          status: {
+            pending: 'Waiting',
+            queued: 'Queued',
+            processing: 'In progress',
+            completed: 'Completed'
+          }
+        }
       },
       unknownDomain: 'Domain #{id}',
       uploading: 'Uploading…',

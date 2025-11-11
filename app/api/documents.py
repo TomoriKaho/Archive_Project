@@ -38,7 +38,8 @@ from app.services.chunking import (
     make_chunks,
     parse_structured_entities_from_csv,
 )  # 文档切分服务
-from app.services.rag_service import index_chunks, remove_vectors  # 自动管理向量库
+from app.services.document_indexing import enqueue_document_indexing  # 文档向量化任务管理
+from app.services.rag_service import remove_vectors  # 自动管理向量库
 
 router = APIRouter(tags=["documents"])  # 声明文档相关路由
 logger = logging.getLogger(__name__)  # 初始化模块级日志
@@ -352,28 +353,22 @@ async def create_document(
     chunks = list(
         chunk_repo.bulk_create_for_document(document.id, chunk_texts)
     )  # 批量写入chunk表
-    for chunk in chunks:  # 确保向量写入时能读取domain信息
-        chunk.document = document
-    try:
-        indexed = index_chunks(chunks)
-    except RuntimeError as exc:  # pragma: no cover - 向量服务异常时记录日志并返回
-        logger.exception(
-            "auto_index_document_failed domain=%s document_id=%s uuid=%s",
-            domain_id,
-            document.id,
-            document.uuid,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        ) from exc
+    total_chunks = len(chunks)
+    document.vector_total_chunks = total_chunks
+    document.vector_indexed_chunks = 0
+    document.vector_index_error = None
+    if total_chunks == 0:
+        document.vector_index_status = "completed"
+    else:
+        document.vector_index_status = "queued"
+        enqueue_document_indexing(document.id)
     logger.info(
-        "create_document domain=%s document_id=%s uuid=%s chunk_count=%s indexed=%s",
+        "create_document domain=%s document_id=%s uuid=%s chunk_count=%s index_status=%s",
         domain_id,
         document.id,
         document.uuid,
-        len(chunk_texts),
-        indexed,
+        total_chunks,
+        document.vector_index_status,
     )  # 记录创建详情
     return _build_document_response(document)  # 返回文档信息
 
@@ -413,6 +408,38 @@ def get_document(domain_id: int, doc_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="document not found")
     logger.info("get_document domain=%s doc_id=%s", domain_id, doc_id)
     return _build_document_response(doc)
+
+
+@router.post(
+    "/domains/{domain_id}/documents/{doc_id}/cancel-indexing",
+    response_model=DocumentOut,
+)
+def cancel_document_indexing_endpoint(
+    domain_id: int,
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    """取消指定文档的向量入库任务。"""
+
+    domain_repo = DomainRepository(db)
+    if not domain_repo.get(domain_id):
+        raise HTTPException(status_code=404, detail="domain not found")
+
+    doc_repo = DocumentRepository(db)
+    document = doc_repo.get(doc_id)
+    if not document or document.domain_id != domain_id:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    if document.vector_index_status not in {"queued", "processing", "pending"}:
+        raise HTTPException(status_code=409, detail="document indexing is not active")
+
+    document.vector_index_status = "cancelled"
+    document.vector_index_error = None
+    db.add(document)
+    logger.info(
+        "cancel_document_indexing domain=%s doc_id=%s", domain_id, doc_id
+    )
+    return _build_document_response(document)
 
 
 @router.patch("/domains/{domain_id}/documents/{doc_id}", response_model=DocumentOut)

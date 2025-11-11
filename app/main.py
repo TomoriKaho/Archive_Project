@@ -5,8 +5,14 @@ from fastapi import APIRouter, FastAPI  # 导入FastAPI主体与路由分组
 from fastapi.middleware.cors import CORSMiddleware  # 引入CORS中间件处理跨域预检请求
 
 from app.api import domains, chats, documents, auth, users, rag  # 导入各功能路由模块
-from app.db.schema_compat import ensure_document_uuid_column  # 旧库兼容补丁
+from app.db.schema_compat import (
+    ensure_document_uuid_column,
+    ensure_document_vector_columns,
+)  # 旧库兼容补丁
 from app.db.session import SessionLocal, engine  # 提供数据库连接引擎
+from app.services.document_indexing import (
+    resume_pending_index_jobs,
+)  # 启动时恢复向量索引队列
 from app.services.initial_admin import ensure_initial_admin  # 启动时确保初始管理员存在
 
 logging.basicConfig(level=logging.INFO)  # 简单配置日志等级方便调试
@@ -39,6 +45,7 @@ app.include_router(api_router)
 def _ensure_schema_compatibility() -> None:
     """在服务启动时自动修补旧版本数据库缺失的列。"""
     ensure_document_uuid_column(engine)
+    ensure_document_vector_columns(engine)
 
 
 @app.on_event("startup")
@@ -53,6 +60,13 @@ def _ensure_initial_admin() -> None:
         raise
     finally:
         session.close()
+
+
+@app.on_event("startup")
+def _resume_document_indexing() -> None:
+    """服务启动时恢复未完成的文档向量化任务。"""
+
+    resume_pending_index_jobs()
 
 
 @app.get("/healthz")

@@ -95,3 +95,89 @@ def ensure_document_uuid_column(engine: Engine) -> bool:
         return True
 
 
+def ensure_document_vector_columns(engine: Engine) -> bool:
+    """Ensure recently added document vector indexing columns exist.
+
+    Deployments that predate the background indexing work are missing the
+    following fields on ``documents``:
+
+    * ``vector_index_status``
+    * ``vector_indexed_chunks``
+    * ``vector_total_chunks``
+    * ``vector_index_error``
+
+    When the ORM tries to select these columns SQLAlchemy raises
+    ``psycopg.errors.UndefinedColumn`` during application startup, crashing the
+    API before any migrations can be applied.  This helper mirrors the legacy
+    UUID patch by adding the columns with sensible defaults so the service can
+    boot and operators can later run the formal Alembic migration.
+    """
+
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+
+        if not _table_exists(inspector, "documents"):
+            logger.debug("documents table does not exist; skipping vector columns check")
+            return False
+
+        column_names = _get_column_names(inspector, "documents")
+        required_columns = {
+            "vector_index_status",
+            "vector_indexed_chunks",
+            "vector_total_chunks",
+            "vector_index_error",
+        }
+
+        missing = required_columns - column_names
+        if not missing:
+            logger.debug("documents vector columns already present; no action required")
+            return False
+
+        logger.warning(
+            "Detected legacy documents table without vector progress columns; applying in-place upgrade.",
+        )
+
+        if "vector_index_status" in missing:
+            connection.execute(
+                text(
+                    "ALTER TABLE documents "
+                    "ADD COLUMN vector_index_status VARCHAR(32) NOT NULL DEFAULT 'pending'"
+                )
+            )
+
+        if "vector_indexed_chunks" in missing:
+            connection.execute(
+                text(
+                    "ALTER TABLE documents "
+                    "ADD COLUMN vector_indexed_chunks INTEGER NOT NULL DEFAULT 0"
+                )
+            )
+
+        if "vector_total_chunks" in missing:
+            connection.execute(
+                text(
+                    "ALTER TABLE documents "
+                    "ADD COLUMN vector_total_chunks INTEGER NOT NULL DEFAULT 0"
+                )
+            )
+
+        if "vector_index_error" in missing:
+            connection.execute(
+                text("ALTER TABLE documents ADD COLUMN vector_index_error TEXT")
+            )
+
+        # Ensure existing rows get the expected defaults even on backends that
+        # ignore DEFAULT during ALTER TABLE (e.g. PostgreSQL prior to 11).
+        connection.execute(
+            text(
+                "UPDATE documents "
+                "SET vector_index_status = COALESCE(vector_index_status, 'pending'), "
+                "    vector_indexed_chunks = COALESCE(vector_indexed_chunks, 0), "
+                "    vector_total_chunks = COALESCE(vector_total_chunks, 0)"
+            )
+        )
+
+        logger.info("documents vector progress columns successfully backfilled")
+        return True
+
+
