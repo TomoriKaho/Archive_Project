@@ -5,6 +5,7 @@ import {
   updateDomain,
   deleteDomain
 } from '@/services/domains';
+import { i18n } from '@/i18n';
 import { useUiStore } from './ui';
 
 export const useDomainsStore = defineStore('domains', {
@@ -34,7 +35,7 @@ export const useDomainsStore = defineStore('domains', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to load domains.'
+          message: i18n.global.t('domains.toast.loadError')
         });
         throw error;
       } finally {
@@ -52,12 +53,15 @@ export const useDomainsStore = defineStore('domains', {
           description: payload.description || null
         };
         await createDomain(body);
-        useUiStore().showToast({ type: 'success', message: 'Domain created.' });
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('domains.toast.createSuccess')
+        });
         await this.loadDomains();
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to create domain.'
+          message: i18n.global.t('domains.toast.createError')
         });
         throw error;
       }
@@ -69,12 +73,15 @@ export const useDomainsStore = defineStore('domains', {
           description: payload.description || null
         };
         await updateDomain(domainId, body);
-        useUiStore().showToast({ type: 'success', message: 'Domain updated.' });
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('domains.toast.updateSuccess')
+        });
         await this.loadDomains();
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to update domain.'
+          message: i18n.global.t('domains.toast.updateError')
         });
         throw error;
       }
@@ -82,12 +89,15 @@ export const useDomainsStore = defineStore('domains', {
     async remove(domainId) {
       try {
         await deleteDomain(domainId);
-        useUiStore().showToast({ type: 'success', message: 'Domain deleted.' });
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('domains.toast.deleteSuccess')
+        });
         await this.loadDomains();
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to delete domain.'
+          message: i18n.global.t('domains.toast.deleteError')
         });
         throw error;
       }

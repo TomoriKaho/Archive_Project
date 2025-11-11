@@ -3,31 +3,33 @@
     <header class="document-detail__header">
       <div>
         <h2>{{ document.title }}</h2>
-        <p>Domain: {{ domainName }}</p>
+        <p>{{ t('documentDetail.domainLabel', { name: domainName }) }}</p>
       </div>
       <div class="document-detail__actions">
-        <button class="button" type="button" @click="openEdit">Edit</button>
+        <button class="button" type="button" @click="openEdit">
+          {{ t('common.edit') }}
+        </button>
         <button class="button button--danger" type="button" @click="openDelete">
-          Delete
+          {{ t('common.delete') }}
         </button>
       </div>
     </header>
 
     <div class="document-detail__meta">
       <div>
-        <span class="label">Created</span>
+        <span class="label">{{ t('documentDetail.meta.created') }}</span>
         <span>{{ formatDate(document.created_at) }}</span>
       </div>
       <div>
-        <span class="label">Updated</span>
+        <span class="label">{{ t('documentDetail.meta.updated') }}</span>
         <span>{{ formatDate(document.updated_at) }}</span>
       </div>
       <div>
-        <span class="label">UUID</span>
+        <span class="label">{{ t('documentDetail.meta.uuid') }}</span>
         <span class="mono">{{ document.uuid }}</span>
       </div>
       <div>
-        <span class="label">Domain ID</span>
+        <span class="label">{{ t('documentDetail.meta.domainId') }}</span>
         <span>{{ document.domain_id }}</span>
       </div>
     </div>
@@ -35,7 +37,7 @@
     <article class="document-detail__content document-detail__source">
       <details @toggle="onContentToggle" :open="isContentExpanded">
         <summary class="document-content__summary">
-          <span>Document content</span>
+          <span>{{ t('documentDetail.content.title') }}</span>
           <span v-if="contentRangeLabel" class="document-content__summary-range">
             {{ contentRangeLabel }}
           </span>
@@ -43,14 +45,14 @@
         <div class="document-detail__source-body">
           <p v-if="contentError" class="document-detail__error">{{ contentError }}</p>
           <p v-else-if="isContentLoading" class="document-detail__loading-text">
-            Loading content…
+            {{ t('documentDetail.content.loading') }}
           </p>
           <template v-else>
             <p
               v-if="contentPage && !contentItems.length"
               class="document-detail__empty"
             >
-              No original content is available for this document.
+              {{ t('documentDetail.content.empty') }}
             </p>
             <template v-else>
               <div
@@ -58,7 +60,7 @@
                 class="document-detail__pager"
               >
                 <label class="document-detail__pager-label" for="content-page-select"
-                  >Range</label
+                  >{{ t('documentDetail.content.rangeLabel') }}</label
                 >
                 <select
                   id="content-page-select"
@@ -132,8 +134,12 @@
             class="document-detail__pager document-detail__pager--footer"
           >
             <span class="document-content__summary-helper">
-              Total {{ contentPage.total }}
-              {{ contentPage.mode === 'csv' ? 'rows' : 'lines' }}
+              {{
+                t('documentDetail.content.total', {
+                  total: contentPage.total,
+                  unit: getContentUnit(contentPage.mode)
+                })
+              }}
             </span>
             <div
               v-if="contentPageOptions.length"
@@ -145,7 +151,7 @@
                 :disabled="contentPageIndex === 0"
                 @click="loadPreviousContentPage"
               >
-                Previous
+                {{ t('common.previous') }}
               </button>
               <button
                 class="document-detail__pager-button"
@@ -153,7 +159,7 @@
                 :disabled="contentPageIndex >= contentPageOptions.length - 1"
                 @click="loadNextContentPage"
               >
-                Next
+                {{ t('common.next') }}
               </button>
             </div>
           </div>
@@ -164,18 +170,18 @@
     <article class="document-detail__content document-detail__chunks">
       <header class="document-detail__chunks-header">
         <div>
-          <h3>Chunks</h3>
+          <h3>{{ t('documentDetail.chunks.title') }}</h3>
           <span class="document-detail__hint">
-            {{ chunks.length }}
-            {{ chunks.length === 1 ? 'chunk' : 'chunks' }}
-            stored for this document.
+            {{ chunkSummaryText }}
             <template v-if="chunkRangeLabel">
-              Currently viewing {{ chunkRangeLabel }}.
+              {{ t('documentDetail.chunks.currentRange', { range: chunkRangeLabel }) }}
             </template>
           </span>
         </div>
         <div v-if="chunkPageOptions.length > 1" class="chunk-pagination">
-          <label class="chunk-pagination__label" for="chunk-page-select">Range</label>
+          <label class="chunk-pagination__label" for="chunk-page-select"
+            >{{ t('documentDetail.chunks.rangeLabel') }}</label
+          >
           <select
             id="chunk-page-select"
             v-model.number="chunkPageIndex"
@@ -192,15 +198,15 @@
         </div>
       </header>
       <p v-if="!chunks.length" class="document-detail__empty">
-        No chunks have been generated for this document yet.
+        {{ t('documentDetail.chunks.empty') }}
       </p>
       <ul v-else class="chunk-list">
         <li v-for="chunk in visibleChunks" :key="chunk.id" class="chunk-list__item">
           <details>
             <summary>
-              <span>Chunk {{ chunk.ordinal + 1 }}</span>
+              <span>{{ t('documentDetail.chunks.itemTitle', { index: chunk.ordinal + 1 }) }}</span>
               <span class="chunk-list__meta">
-                {{ formatChunkLength(chunk) }} characters
+                {{ t('documentDetail.chunks.length', { count: formatChunkLength(chunk) }) }}
               </span>
             </summary>
             <pre>{{ chunk.content }}</pre>
@@ -208,23 +214,30 @@
         </li>
       </ul>
     </article>
-    <BaseModal v-model="isPreviewOpen" title="Cell content preview">
+    <BaseModal v-model="isPreviewOpen" :title="t('documentDetail.preview.title')">
       <p class="document-content__preview-meta">
-        Row {{ previewContent.rowNumber }} · {{ previewContent.header }}
+        {{
+          t('documentDetail.preview.meta', {
+            row: previewContent.rowNumber,
+            header: previewContent.header
+          })
+        }}
       </p>
       <pre class="document-content__preview-value">{{ previewContent.value }}</pre>
       <template #footer>
-        <button class="button" type="button" @click="closePreview">Close</button>
+        <button class="button" type="button" @click="closePreview">
+          {{ t('common.close') }}
+        </button>
       </template>
     </BaseModal>
 
-    <BaseModal v-model="isEditOpen" title="Edit Document">
+    <BaseModal v-model="isEditOpen" :title="t('documentDetail.edit.title')">
       <div class="tab-pane">
         <div
           class="form-field"
           :class="{ 'form-field--error': editErrors.title }"
         >
-          <label for="edit-title">Title</label>
+          <label for="edit-title">{{ t('documents.form.titleLabel') }}</label>
           <input id="edit-title" v-model.trim="editForm.title" type="text" />
           <p v-if="editErrors.title" class="form-field__error">
             {{ editErrors.title }}
@@ -232,20 +245,19 @@
         </div>
       </div>
       <template #footer>
-        <button class="button" type="button" @click="closeEdit">Cancel</button>
+        <button class="button" type="button" @click="closeEdit">
+          {{ t('common.cancel') }}
+        </button>
         <button class="button button--primary" type="button" @click="save">
-          {{ isSaving ? 'Saving…' : 'Save changes' }}
+          {{ isSaving ? t('common.saving') : t('documentDetail.edit.save') }}
         </button>
       </template>
     </BaseModal>
-    <BaseModal v-model="isDeleteOpen" title="Delete Document">
-      <p>
-        Deleting this document will remove it and all of its chunks permanently.
-        This action cannot be undone. Are you sure you want to continue?
-      </p>
+    <BaseModal v-model="isDeleteOpen" :title="t('documentDetail.delete.title')">
+      <p>{{ t('documentDetail.delete.message') }}</p>
       <template #footer>
         <button class="button" type="button" @click="closeDelete">
-          Cancel
+          {{ t('common.cancel') }}
         </button>
         <button
           class="button button--danger"
@@ -253,17 +265,20 @@
           :disabled="isDeleting"
           @click="remove"
         >
-          {{ isDeleting ? 'Deleting…' : 'Delete document' }}
+          {{ isDeleting ? t('common.deleting') : t('documentDetail.delete.confirm') }}
         </button>
       </template>
     </BaseModal>
   </section>
-  <section v-else class="document-detail__loading">Loading document…</section>
+  <section v-else class="document-detail__loading">
+    {{ t('documentDetail.loadingDocument') }}
+  </section>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 import BaseModal from '@/components/BaseModal.vue';
 import { useDocumentsStore } from '@/store/documents';
@@ -273,6 +288,7 @@ const route = useRoute();
 const router = useRouter();
 const documentsStore = useDocumentsStore();
 const domainsStore = useDomainsStore();
+const { t, locale } = useI18n();
 
 const isEditOpen = ref(false);
 const isDeleteOpen = ref(false);
@@ -302,6 +318,9 @@ const editErrors = reactive({
 
 const document = computed(() => documentsStore.activeDocument);
 const chunks = computed(() => documentsStore.activeChunks || []);
+const chunkSummaryText = computed(() =>
+  t('documentDetail.chunks.summary', { count: chunks.value.length })
+);
 const contentPage = computed(() => documentsStore.activeContent);
 const isContentLoading = computed(() => documentsStore.isLoadingContent);
 const domainName = computed(() => {
@@ -309,7 +328,7 @@ const domainName = computed(() => {
     (item) => item.id === document.value?.domain_id
   );
   if (!document.value) return '—';
-  return domain?.name || `Domain #${document.value.domain_id}`;
+  return domain?.name || t('documents.unknownDomain', { id: document.value.domain_id });
 });
 
 const totalChunkPages = computed(() => {
@@ -350,7 +369,9 @@ const contentHeaders = computed(() => {
   const rows = Array.isArray(page.rows) ? page.rows : [];
   const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
   if (!maxColumns) return [];
-  return Array.from({ length: maxColumns }, (_, index) => `Column ${index + 1}`);
+  return Array.from({ length: maxColumns }, (_, index) =>
+    t('documentDetail.csv.autoHeader', { index: index + 1 })
+  );
 });
 
 const normalizedRows = computed(() => {
@@ -485,7 +506,11 @@ watch(
 
 function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleString();
+  try {
+    return new Date(value).toLocaleString(locale.value);
+  } catch (error) {
+    return new Date(value).toLocaleString();
+  }
 }
 
 function openEdit() {
@@ -507,6 +532,12 @@ function closeDelete() {
 function formatChunkLength(chunk) {
   if (!chunk || typeof chunk.content !== 'string') return 0;
   return chunk.content.length;
+}
+
+function getContentUnit(mode) {
+  return mode === 'csv'
+    ? t('documentDetail.content.units.rows')
+    : t('documentDetail.content.units.lines');
 }
 
 async function loadContentPage(index) {

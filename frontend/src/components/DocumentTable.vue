@@ -21,7 +21,9 @@
       </thead>
       <tbody>
         <tr v-if="documents.length === 0">
-          <td colspan="5" class="empty">No documents found.</td>
+          <td :colspan="columns.length + 1" class="empty">
+            {{ t('documents.table.empty') }}
+          </td>
         </tr>
         <tr v-for="document in documents" :key="document.id || document.tempId">
           <td v-for="column in columns" :key="column.key">
@@ -40,12 +42,12 @@
           </td>
           <td class="actions">
             <span v-if="document.isUploading" class="uploading">
-              正在上传…
+              {{ t('documents.uploading') }}
             </span>
             <RouterLink
               v-else
               :to="{ name: 'document-detail', params: { id: document.uuid } }"
-              >View</RouterLink
+              >{{ t('common.view') }}</RouterLink
             >
           </td>
         </tr>
@@ -56,6 +58,9 @@
 
 <script setup>
 import { RouterLink } from 'vue-router';
+
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const props = defineProps({
   documents: {
@@ -78,12 +83,22 @@ const props = defineProps({
 
 const emit = defineEmits(['update:sort']);
 
-const columns = [
-  { key: 'title', label: 'Name', sortable: true },
-  { key: 'domain', label: 'Domain', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
-  { key: 'updated_at', label: 'Updated', sortable: true }
-];
+const { t, locale } = useI18n();
+
+const columns = computed(() => [
+  { key: 'title', label: t('documents.table.columns.name'), sortable: true },
+  { key: 'domain', label: t('documents.table.columns.domain'), sortable: true },
+  {
+    key: 'created_at',
+    label: t('documents.table.columns.created'),
+    sortable: true
+  },
+  {
+    key: 'updated_at',
+    label: t('documents.table.columns.updated'),
+    sortable: true
+  }
+]);
 
 function changeSort(key) {
   let direction = 'asc';
@@ -96,12 +111,16 @@ function changeSort(key) {
 function resolveDomainName(domainId) {
   if (!domainId) return '—';
   const domain = props.domains.find((item) => item.id === domainId);
-  return domain?.name || `Domain #${domainId}`;
+  return domain?.name || t('documents.unknownDomain', { id: domainId });
 }
 
 function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString();
+  try {
+    return new Date(value).toLocaleDateString(locale.value);
+  } catch (error) {
+    return new Date(value).toLocaleDateString();
+  }
 }
 
 </script>

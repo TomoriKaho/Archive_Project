@@ -1,39 +1,39 @@
 <template>
   <form class="auth-form" @submit.prevent="onSubmit">
-    <h2 class="auth-form__title">Create your account</h2>
+    <h2 class="auth-form__title">{{ t('auth.register.title') }}</h2>
     <p class="auth-form__subtitle">
-      Join Archive AI to manage knowledge effortlessly.
+      {{ t('auth.register.subtitle') }}
     </p>
 
     <div class="form-field" :class="{ 'form-field--error': errors.name }">
-      <label for="name">Full name</label>
+      <label for="name">{{ t('auth.register.nameLabel') }}</label>
       <input
         id="name"
         v-model.trim="form.name"
         type="text"
-        placeholder="Ada Lovelace"
+        :placeholder="t('auth.register.namePlaceholder')"
       />
       <p v-if="errors.name" class="form-field__error">{{ errors.name }}</p>
     </div>
 
     <div class="form-field" :class="{ 'form-field--error': errors.email }">
-      <label for="email">Email</label>
+      <label for="email">{{ t('auth.register.emailLabel') }}</label>
       <input
         id="email"
         v-model.trim="form.email"
         type="email"
-        placeholder="you@example.com"
+        :placeholder="t('auth.register.emailPlaceholder')"
       />
       <p v-if="errors.email" class="form-field__error">{{ errors.email }}</p>
     </div>
 
     <div class="form-field" :class="{ 'form-field--error': errors.password }">
-      <label for="password">Password</label>
+      <label for="password">{{ t('auth.register.passwordLabel') }}</label>
       <input
         id="password"
         v-model="form.password"
         type="password"
-        placeholder="Strong password"
+        :placeholder="t('auth.register.passwordPlaceholder')"
       />
       <p v-if="errors.password" class="form-field__error">
         {{ errors.password }}
@@ -44,12 +44,12 @@
       class="form-field"
       :class="{ 'form-field--error': errors.confirmPassword }"
     >
-      <label for="confirmPassword">Confirm password</label>
+      <label for="confirmPassword">{{ t('auth.register.confirmLabel') }}</label>
       <input
         id="confirmPassword"
         v-model="form.confirmPassword"
         type="password"
-        placeholder="Re-enter password"
+        :placeholder="t('auth.register.confirmPlaceholder')"
       />
       <p v-if="errors.confirmPassword" class="form-field__error">
         {{ errors.confirmPassword }}
@@ -61,12 +61,16 @@
       type="submit"
       :disabled="isSubmitting"
     >
-      {{ isSubmitting ? 'Creating account…' : 'Create Account' }}
+      {{
+        isSubmitting
+          ? t('auth.register.submitting')
+          : t('auth.register.submit')
+      }}
     </button>
 
     <p class="auth-form__footer">
-      Already have an account?
-      <RouterLink :to="{ name: 'login' }">Sign in</RouterLink>
+      {{ t('auth.register.haveAccount') }}
+      <RouterLink :to="{ name: 'login' }">{{ t('auth.register.loginLink') }}</RouterLink>
     </p>
   </form>
 </template>
@@ -74,10 +78,12 @@
 <script setup>
 import { reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 import { useAuthStore } from '@/store/auth';
 
 const authStore = useAuthStore();
+const { t } = useI18n();
 
 const form = reactive({
   name: '',
@@ -96,32 +102,31 @@ const errors = reactive({
 const isSubmitting = ref(false);
 
 function validate() {
-  errors.name = form.name ? '' : 'Name is required.';
+  errors.name = form.name ? '' : t('auth.register.validation.nameRequired');
 
   const emailRegex = /[^\s@]+@[^\s@]+\.[^\s@]+/;
   if (!form.email) {
-    errors.email = 'Email is required.';
+    errors.email = t('auth.register.validation.emailRequired');
   } else if (!emailRegex.test(form.email)) {
-    errors.email = 'Enter a valid email address.';
+    errors.email = t('auth.register.validation.emailInvalid');
   } else {
     errors.email = '';
   }
 
   if (!form.password) {
-    errors.password = 'Password is required.';
+    errors.password = t('auth.register.validation.passwordRequired');
   } else if (
     form.password.length < 8 ||
     !/[A-Z]/.test(form.password) ||
     !/\d/.test(form.password)
   ) {
-    errors.password =
-      'Use at least 8 characters with a number and uppercase letter.';
+    errors.password = t('auth.register.validation.passwordWeak');
   } else {
     errors.password = '';
   }
 
   if (form.confirmPassword !== form.password) {
-    errors.confirmPassword = 'Passwords must match.';
+    errors.confirmPassword = t('auth.register.validation.passwordMismatch');
   } else {
     errors.confirmPassword = '';
   }

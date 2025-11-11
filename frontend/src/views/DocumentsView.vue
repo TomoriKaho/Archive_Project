@@ -2,30 +2,27 @@
   <section class="documents">
     <header class="documents__header">
       <div>
-        <h2>Documents</h2>
-        <p>
-          Manage your knowledge assets and ensure they sync with the vector
-          store.
-        </p>
+        <h2>{{ t('documents.title') }}</h2>
+        <p>{{ t('documents.subtitle') }}</p>
       </div>
       <button
         class="button button--primary"
         type="button"
         @click="openNewDocument"
       >
-        New Document
+        {{ t('documents.actions.new') }}
       </button>
     </header>
 
     <div class="documents__controls">
       <div class="form-field documents__search-field">
-        <label for="search">Search</label>
+        <label for="search">{{ t('documents.search.label') }}</label>
         <div class="documents__search-bar">
           <input
             id="search"
             v-model="search"
             type="search"
-            placeholder="Search documents"
+            :placeholder="t('documents.search.placeholder')"
             @keyup.enter="applySearch"
           />
           <button
@@ -33,13 +30,13 @@
             type="button"
             @click="applySearch"
           >
-            Search
+            {{ t('common.search') }}
           </button>
           <button
             v-if="isSearchApplied"
             class="button button--ghost documents__clear-search"
             type="button"
-            aria-label="Clear search filter"
+            :aria-label="t('documents.search.clearAria')"
             @click="clearSearch"
           >
             ×
@@ -47,9 +44,9 @@
         </div>
       </div>
       <div class="form-field">
-        <label for="domain-filter">Domain</label>
+        <label for="domain-filter">{{ t('documents.filters.domain.label') }}</label>
         <select id="domain-filter" v-model="selectedDomainFilter">
-          <option value="">All domains</option>
+          <option value="">{{ t('documents.filters.domain.all') }}</option>
           <option
             v-for="domain in domainsStore.items"
             :key="domain.id"
@@ -69,7 +66,7 @@
       @update:sort="onSort"
     />
 
-    <BaseModal v-model="isModalOpen" title="Create Document">
+    <BaseModal v-model="isModalOpen" :title="t('documents.modal.createTitle')">
       <BaseTabs v-model="activeTab" :tabs="tabs">
         <template #default="{ active }">
           <div v-if="active === 'text'" class="tab-pane">
@@ -77,9 +74,9 @@
               class="form-field"
               :class="{ 'form-field--error': textErrors.domainId }"
             >
-              <label for="text-domain">Domain</label>
+              <label for="text-domain">{{ t('documents.form.domainLabel') }}</label>
               <select id="text-domain" v-model="textForm.domainId">
-                <option value="">Select a domain</option>
+                <option value="">{{ t('documents.form.domainPlaceholder') }}</option>
                 <option
                   v-for="domain in domainsStore.items"
                   :key="domain.id"
@@ -96,12 +93,12 @@
               class="form-field"
               :class="{ 'form-field--error': textErrors.title }"
             >
-              <label for="title">Title</label>
+              <label for="title">{{ t('documents.form.titleLabel') }}</label>
               <input
                 id="title"
                 v-model.trim="textForm.title"
                 type="text"
-                placeholder="Document title"
+                :placeholder="t('documents.form.titlePlaceholder')"
               />
               <p v-if="textErrors.title" class="form-field__error">
                 {{ textErrors.title }}
@@ -112,12 +109,12 @@
               class="form-field"
               :class="{ 'form-field--error': textErrors.content }"
             >
-              <label for="content">Content</label>
+              <label for="content">{{ t('documents.form.contentLabel') }}</label>
               <textarea
                 id="content"
                 v-model="textForm.content"
                 rows="8"
-                placeholder="Paste your content here"
+                :placeholder="t('documents.form.contentPlaceholder')"
               ></textarea>
               <p v-if="textErrors.content" class="form-field__error">
                 {{ textErrors.content }}
@@ -129,9 +126,9 @@
               class="form-field"
               :class="{ 'form-field--error': csvErrors.domainId }"
             >
-              <label for="csv-domain">Domain</label>
+              <label for="csv-domain">{{ t('documents.form.domainLabel') }}</label>
               <select id="csv-domain" v-model="csvForm.domainId">
-                <option value="">Select a domain</option>
+                <option value="">{{ t('documents.form.domainPlaceholder') }}</option>
                 <option
                   v-for="domain in domainsStore.items"
                   :key="domain.id"
@@ -148,19 +145,19 @@
               class="form-field"
               :class="{ 'form-field--error': csvErrors.title }"
             >
-              <label for="csv-title">Title</label>
+              <label for="csv-title">{{ t('documents.form.titleLabel') }}</label>
               <input
                 id="csv-title"
                 v-model.trim="csvForm.title"
                 type="text"
-                placeholder="Document title"
+                :placeholder="t('documents.form.titlePlaceholder')"
               />
               <p v-if="csvErrors.title" class="form-field__error">
                 {{ csvErrors.title }}
               </p>
             </div>
             <div class="upload-zone" @dragover.prevent @drop.prevent="onDrop">
-              <p>Drag & drop your CSV here or click to browse.</p>
+              <p>{{ t('documents.csv.dropHint') }}</p>
               <input
                 ref="fileInput"
                 type="file"
@@ -168,10 +165,10 @@
                 @change="onFileChange"
               />
               <button class="button" type="button" @click="fileInput?.click()">
-                Select File
+                {{ t('documents.csv.selectFile') }}
               </button>
               <p v-if="csvFile" class="upload-zone__file">
-                Selected: {{ csvFile.name }}
+                {{ t('documents.csv.selectedFile', { name: csvFile.name }) }}
               </p>
               <p v-if="csvErrors.file" class="form-field__error">
                 {{ csvErrors.file }}
@@ -182,9 +179,11 @@
       </BaseTabs>
 
       <template #footer>
-        <button class="button" type="button" @click="closeModal">Cancel</button>
+        <button class="button" type="button" @click="closeModal">
+          {{ t('common.cancel') }}
+        </button>
         <button class="button button--primary" type="button" @click="submit">
-          {{ isSubmitting ? 'Saving…' : 'Create' }}
+          {{ isSubmitting ? t('common.saving') : t('documents.actions.create') }}
         </button>
       </template>
     </BaseModal>
@@ -193,6 +192,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import BaseModal from '@/components/BaseModal.vue';
 import BaseTabs from '@/components/BaseTabs.vue';
@@ -202,6 +202,7 @@ import { useDomainsStore } from '@/store/domains';
 
 const documentsStore = useDocumentsStore();
 const domainsStore = useDomainsStore();
+const { t } = useI18n();
 
 const search = ref(documentsStore.filters.search ?? '');
 const selectedDomainFilter = ref(
@@ -213,10 +214,10 @@ const isSubmitting = ref(false);
 
 const isSearchApplied = computed(() => Boolean(documentsStore.filters.search));
 
-const tabs = [
-  { value: 'text', label: 'Plain Text' },
-  { value: 'csv', label: 'CSV Upload' }
-];
+const tabs = computed(() => [
+  { value: 'text', label: t('documents.tabs.text') },
+  { value: 'csv', label: t('documents.tabs.csv') }
+]);
 
 const textForm = reactive({
   domainId: '',
@@ -310,26 +311,32 @@ function resetForms() {
 }
 
 function validateText() {
-  textErrors.domainId = textForm.domainId ? '' : 'Select a domain.';
-  textErrors.title = textForm.title ? '' : 'Title is required.';
-  textErrors.content = textForm.content ? '' : 'Content cannot be empty.';
+  textErrors.domainId = textForm.domainId
+    ? ''
+    : t('documents.validation.domainRequired');
+  textErrors.title = textForm.title
+    ? ''
+    : t('documents.validation.titleRequired');
+  textErrors.content = textForm.content
+    ? ''
+    : t('documents.validation.contentRequired');
   return !textErrors.domainId && !textErrors.title && !textErrors.content;
 }
 
 function validateCsvFile(file) {
   csvErrors.file = '';
   if (!file) {
-    csvErrors.file = 'Select a CSV file to upload.';
+    csvErrors.file = t('documents.validation.csvRequired');
     return false;
   }
   const isCsv = file.type === 'text/csv' || file.name.endsWith('.csv');
   if (!isCsv) {
-    csvErrors.file = 'Only CSV files are allowed.';
+    csvErrors.file = t('documents.validation.csvType');
     return false;
   }
   const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) {
-    csvErrors.file = 'File exceeds 10MB limit.';
+    csvErrors.file = t('documents.validation.csvSize');
     return false;
   }
   return true;
@@ -354,8 +361,12 @@ function onDrop(event) {
 }
 
 function validateCsvForm() {
-  csvErrors.domainId = csvForm.domainId ? '' : 'Select a domain.';
-  csvErrors.title = csvForm.title ? '' : 'Title is required.';
+  csvErrors.domainId = csvForm.domainId
+    ? ''
+    : t('documents.validation.domainRequired');
+  csvErrors.title = csvForm.title
+    ? ''
+    : t('documents.validation.titleRequired');
   const fileValid = validateCsvFile(csvFile.value);
   return !csvErrors.domainId && !csvErrors.title && fileValid;
 }

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/store/auth';
+import { updateDocumentTitle } from '@/i18n';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -8,13 +9,13 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { layout: 'auth', public: true, title: 'Login' }
+      meta: { layout: 'auth', public: true, titleKey: 'routes.login' }
     },
     {
       path: '/register',
       name: 'register',
       component: () => import('@/views/RegisterView.vue'),
-      meta: { layout: 'auth', public: true, title: 'Register' }
+      meta: { layout: 'auth', public: true, titleKey: 'routes.register' }
     },
     {
       path: '/',
@@ -24,43 +25,43 @@ const router = createRouter({
       path: '/dashboard',
       name: 'dashboard',
       component: () => import('@/views/DashboardView.vue'),
-      meta: { requiresAuth: true, title: 'Dashboard' }
+      meta: { requiresAuth: true, titleKey: 'routes.dashboard' }
     },
     {
       path: '/documents',
       name: 'documents',
       component: () => import('@/views/DocumentsView.vue'),
-      meta: { requiresAuth: true, title: 'Documents' }
+      meta: { requiresAuth: true, titleKey: 'routes.documents' }
     },
     {
       path: '/documents/:id',
       name: 'document-detail',
       component: () => import('@/views/DocumentDetailView.vue'),
-      meta: { requiresAuth: true, title: 'Document Detail' }
+      meta: { requiresAuth: true, titleKey: 'routes.documentDetail' }
     },
     {
       path: '/chat',
       name: 'chat',
       component: () => import('@/views/ChatView.vue'),
-      meta: { requiresAuth: true, title: 'Chat' }
+      meta: { requiresAuth: true, titleKey: 'routes.chat' }
     },
     {
       path: '/domains',
       name: 'domains',
       component: () => import('@/views/DomainsView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true, title: 'Domains' }
+      meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'routes.domains' }
     },
     {
       path: '/users',
       name: 'users',
       component: () => import('@/views/UsersView.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true, title: 'Users' }
+      meta: { requiresAuth: true, requiresAdmin: true, titleKey: 'routes.users' }
     },
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),
-      meta: { requiresAuth: true, title: 'Not Found' }
+      meta: { requiresAuth: true, titleKey: 'routes.notFound' }
     }
   ]
 });
@@ -85,9 +86,7 @@ router.beforeEach(async (to, from, next) => {
 });
 
 router.afterEach((to) => {
-  if (to.meta?.title) {
-    document.title = `${to.meta.title} · Archive AI`;
-  }
+  updateDocumentTitle(to);
 });
 
 export default router;

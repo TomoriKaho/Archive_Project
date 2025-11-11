@@ -2,9 +2,9 @@
   <section class="chat">
     <aside class="chat__sidebar">
       <header class="chat__header">
-        <h2>Conversations</h2>
+        <h2>{{ t('chat.sidebar.title') }}</h2>
         <button class="button" type="button" @click="openNewConversation">
-          New
+          {{ t('chat.sidebar.new') }}
         </button>
       </header>
       <ul class="chat__conversation-list">
@@ -22,7 +22,7 @@
             @click="selectConversation(conversation.id)"
           >
             <span class="chat__conversation-name">{{
-              conversation.title || 'Untitled conversation'
+              conversation.title || t('chat.sidebar.untitled')
             }}</span>
             <span class="chat__conversation-date">{{
               formatDate(conversation.updated_at)
@@ -34,12 +34,12 @@
             class="chat__conversation-delete"
             :disabled="conversation.id === deletingConversationId"
             @click.stop="promptRemoveConversation(conversation.id)"
-            aria-label="Delete conversation"
+            :aria-label="t('chat.sidebar.deleteAria')"
           >
             {{
               conversation.id === deletingConversationId
-                ? 'Deleting…'
-                : 'Delete'
+                ? t('chat.sidebar.deleting')
+                : t('chat.sidebar.delete')
             }}
           </button>
         </li>
@@ -55,7 +55,7 @@
           type="button"
           @click="openDomainFilter"
         >
-          Manage domain filter
+          {{ t('chat.filter.manage') }}
           <span v-if="domainSelectionChanged" class="chat__filter-indicator">
             •
           </span>
@@ -64,7 +64,7 @@
 
       <div class="chat__messages" ref="messagesContainer">
         <p v-if="chatStore.messages.length === 0" class="chat__empty">
-          No messages yet. Start the conversation by sending a message.
+          {{ t('chat.messages.empty') }}
         </p>
         <div
           v-for="message in chatStore.messages"
@@ -73,13 +73,19 @@
           :class="`chat__message--${message.role}`"
         >
           <div class="chat__message-meta">
-            <span>{{ message.role === 'user' ? 'You' : 'Assistant' }}</span>
+            <span>
+              {{
+                message.role === 'user'
+                  ? t('chat.messages.you')
+                  : t('chat.messages.assistant')
+              }}
+            </span>
             <time>{{ formatDate(message.created_at) }}</time>
           </div>
           <div class="chat__message-content">{{ message.content }}</div>
         </div>
         <div v-if="chatStore.isSending" class="chat__stream">
-          Assistant is typing…
+          {{ t('chat.messages.typing') }}
         </div>
       </div>
 
@@ -87,7 +93,7 @@
         <textarea
           v-model="message"
           rows="3"
-          placeholder="Type your message and press send"
+          :placeholder="t('chat.composer.placeholder')"
           @keydown.enter.exact.prevent="sendMessage"
         ></textarea>
         <button
@@ -95,50 +101,54 @@
           type="submit"
           :disabled="!canSend"
         >
-          Send
+          {{ t('chat.composer.send') }}
         </button>
       </form>
     </div>
 
     <div v-else class="chat__placeholder">
-      <h3 class="chat__placeholder-title">No conversation selected</h3>
+      <h3 class="chat__placeholder-title">{{ t('chat.placeholder.title') }}</h3>
       <p class="chat__placeholder-text">
         {{
           hasConversations
-            ? 'Choose a conversation from the list or start a new one to begin.'
-            : 'Create a new conversation to start chatting.'
+            ? t('chat.placeholder.instructions')
+            : t('chat.placeholder.empty')
         }}
       </p>
     </div>
 
-    <BaseModal v-model="isNewConversationOpen" title="Start New Conversation">
+    <BaseModal
+      v-model="isNewConversationOpen"
+      :title="t('chat.new.title')"
+    >
       <div
         class="form-field"
         :class="{ 'form-field--error': newConversationErrors.name }"
       >
-        <label for="conversation-name">Conversation Title</label>
+        <label for="conversation-name">{{ t('chat.new.nameLabel') }}</label>
         <input
           id="conversation-name"
           v-model.trim="newConversationForm.name"
           type="text"
+          :placeholder="t('chat.new.namePlaceholder')"
         />
         <p v-if="newConversationErrors.name" class="form-field__error">
           {{ newConversationErrors.name }}
         </p>
       </div>
       <div class="form-field">
-        <label for="conversation-prompt">Initial Prompt (optional)</label>
+        <label for="conversation-prompt">{{ t('chat.new.promptLabel') }}</label>
         <textarea
           id="conversation-prompt"
           v-model="newConversationForm.prompt"
           rows="4"
+          :placeholder="t('chat.new.promptPlaceholder')"
         ></textarea>
       </div>
       <div v-if="domainOptions.length" class="form-field">
-        <label>Domain filter (optional)</label>
+        <label>{{ t('chat.new.domainLabel') }}</label>
         <p class="form-field__hint">
-          Pick domains to constrain retrieval. Leave empty to include all
-          domains.
+          {{ t('chat.new.domainHint') }}
         </p>
         <div class="chat__domain-options">
           <label
@@ -161,19 +171,23 @@
           @click="clearNewConversationDomains"
           :disabled="newConversationForm.domain_ids.length === 0"
         >
-          Clear selection
+          {{ t('chat.filter.clearSelection') }}
         </button>
       </div>
       <template #footer>
         <button class="button" type="button" @click="closeNewConversation">
-          Cancel
+          {{ t('common.cancel') }}
         </button>
         <button
           class="button button--primary"
           type="button"
           @click="startConversation"
         >
-          {{ chatStore.isSending ? 'Starting…' : 'Start Conversation' }}
+          {{
+            chatStore.isSending
+              ? t('chat.new.starting')
+              : t('chat.new.start')
+          }}
         </button>
       </template>
     </BaseModal>
@@ -181,10 +195,10 @@
     <BaseModal
       v-if="domainOptions.length"
       v-model="isDomainFilterOpen"
-      title="Domain filter"
+      :title="t('chat.filter.title')"
     >
       <p class="chat__domain-filter-hint">
-        Leave unselected to search across every domain.
+        {{ t('chat.filter.hint') }}
       </p>
       <div class="chat__domain-options">
         <label
@@ -209,7 +223,7 @@
               v-if="domainSelectionChanged"
               class="chat__domain-filter-dirty"
             >
-              Unsaved changes — apply to update this conversation
+              {{ t('chat.filter.unsaved') }}
             </span>
           </span>
           <div class="chat__domain-filter-actions">
@@ -219,7 +233,7 @@
               @click="clearActiveDomainSelection"
               :disabled="!hasActiveDomainSelection"
             >
-              Clear selection
+              {{ t('chat.filter.clearSelection') }}
             </button>
             <button
               class="button"
@@ -227,21 +241,21 @@
               @click="applyActiveDomains"
               :disabled="!canApplyDomainSelection"
             >
-              Apply
+              {{ t('chat.filter.apply') }}
             </button>
           </div>
         </div>
       </template>
     </BaseModal>
 
-    <BaseModal v-model="isDeleteConversationOpen" title="Delete Conversation">
-      <p>
-        Are you sure you want to delete this conversation? This action cannot be
-        undone and will remove all messages inside it.
-      </p>
+    <BaseModal
+      v-model="isDeleteConversationOpen"
+      :title="t('chat.delete.title')"
+    >
+      <p>{{ t('chat.delete.message') }}</p>
       <template #footer>
         <button class="button" type="button" @click="closeDeleteConversation">
-          Cancel
+          {{ t('common.cancel') }}
         </button>
         <button
           class="button button--danger"
@@ -249,7 +263,11 @@
           :disabled="deletingConversationId !== null"
           @click="removeConversation"
         >
-          {{ deletingConversationId ? 'Deleting…' : 'Delete conversation' }}
+          {{
+            deletingConversationId
+              ? t('common.deleting')
+              : t('chat.delete.confirm')
+          }}
         </button>
       </template>
     </BaseModal>
@@ -258,6 +276,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import BaseModal from '@/components/BaseModal.vue';
 import { useAuthStore } from '@/store/auth';
@@ -267,6 +286,7 @@ import { useDomainsStore } from '@/store/domains';
 const authStore = useAuthStore();
 const chatStore = useChatStore();
 const domainsStore = useDomainsStore();
+const { t, locale } = useI18n();
 const message = ref('');
 const messagesContainer = ref(null);
 const isDomainFilterOpen = ref(false);
@@ -289,7 +309,9 @@ const newConversationErrors = reactive({
 const activeDomainSelection = ref([]);
 
 const domainOptions = computed(() =>
-  domainsStore.items.slice().sort((a, b) => a.name.localeCompare(b.name))
+  domainsStore.items
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, locale.value || undefined))
 );
 
 function normalizeDomainIds(value) {
@@ -337,17 +359,21 @@ const appliedDomainNames = computed(() => {
     .filter((name) => !!name);
 });
 
+const domainSeparator = computed(() => t('chat.filter.separator'));
+
 const activeConversationFilterText = computed(() => {
   if (!hasActiveConversation.value) {
-    return 'Select a conversation to configure domain filters.';
+    return t('chat.filter.noConversation');
   }
   if (!domainsStore.items.length) {
-    return 'Domain filters unavailable.';
+    return t('chat.filter.unavailable');
   }
   if (appliedDomainNames.value.length === 0) {
-    return 'Filter: All domains';
+    return t('chat.filter.allDomains');
   }
-  return `Filter: ${appliedDomainNames.value.join(', ')}`;
+  return t('chat.filter.applied', {
+    domains: appliedDomainNames.value.join(domainSeparator.value)
+  });
 });
 
 const domainSelectionChanged = computed(
@@ -365,13 +391,16 @@ const canApplyDomainSelection = computed(
 
 const activeDomainStatusText = computed(() => {
   if (!hasActiveConversation.value) {
-    return 'Select a conversation to manage domains';
+    return t('chat.filter.status.noConversation');
   }
   if (hasActiveDomainSelection.value) {
     const count = activeDomainSelection.value.length;
-    return `${count} domain${count > 1 ? 's' : ''} selected`;
+    return t('chat.filter.status.count', {
+      count,
+      plural: count > 1 ? 's' : ''
+    });
   }
-  return 'All domains selected';
+  return t('chat.filter.status.all');
 });
 
 const canSend = computed(
@@ -427,7 +456,11 @@ watch(
 
 function formatDate(value) {
   if (!value) return '';
-  return new Date(value).toLocaleString();
+  try {
+    return new Date(value).toLocaleString(locale.value);
+  } catch (error) {
+    return new Date(value).toLocaleString();
+  }
 }
 
 function openNewConversation() {
@@ -445,7 +478,7 @@ function closeNewConversation() {
 function validateNewConversation() {
   newConversationErrors.name = newConversationForm.name
     ? ''
-    : 'Name is required.';
+    : t('chat.new.validation.nameRequired');
   return !newConversationErrors.name;
 }
 

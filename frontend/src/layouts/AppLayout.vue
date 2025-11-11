@@ -18,6 +18,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 import AppSidebar from '@/components/AppSidebar.vue';
 import AppTopbar from '@/components/AppTopbar.vue';
@@ -25,8 +26,11 @@ import { useUiStore } from '@/store/ui';
 
 const route = useRoute();
 const uiStore = useUiStore();
+const { t } = useI18n();
 
-const title = computed(() => route.meta.title || 'Archive AI');
+const title = computed(() =>
+  route.meta.titleKey ? t(route.meta.titleKey) : t('app.name')
+);
 </script>
 
 <style scoped>

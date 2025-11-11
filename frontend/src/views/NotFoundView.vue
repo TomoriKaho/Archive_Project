@@ -1,15 +1,18 @@
 <template>
   <section class="not-found">
-    <h2>Page not found</h2>
-    <p>The page you're looking for doesn't exist.</p>
+    <h2>{{ t('notFound.title') }}</h2>
+    <p>{{ t('notFound.description') }}</p>
     <RouterLink class="button button--primary" :to="{ name: 'dashboard' }">
-      Go back to dashboard
+      {{ t('notFound.backToDashboard') }}
     </RouterLink>
   </section>
 </template>
 
 <script setup>
 import { RouterLink } from 'vue-router';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 </script>
 
 <style scoped>

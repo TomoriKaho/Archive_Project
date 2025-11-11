@@ -2,8 +2,8 @@
   <section class="users">
     <header class="users__header">
       <div>
-        <h2>Users</h2>
-        <p>Manage roles, passwords, and access.</p>
+        <h2>{{ t('users.title') }}</h2>
+        <p>{{ t('users.subtitle') }}</p>
       </div>
     </header>
 
@@ -28,7 +28,7 @@
       </thead>
       <tbody>
         <tr v-if="usersStore.items.length === 0">
-          <td colspan="6" class="empty">No users found.</td>
+          <td colspan="6" class="empty">{{ t('users.empty') }}</td>
         </tr>
         <tr v-for="user in usersStore.items" :key="user.id">
           <td v-for="column in columns" :key="column.key">
@@ -42,7 +42,7 @@
               <span
                 :class="['badge', user.is_admin ? 'badge--admin' : 'badge--user']"
               >
-                {{ user.is_admin ? 'Admin' : 'User' }}
+                {{ user.is_admin ? t('roles.admin') : t('users.roles.standard') }}
               </span>
             </template>
             <template v-else-if="column.key === 'updated_at'">
@@ -54,7 +54,7 @@
           </td>
           <td>
             <button class="button" type="button" @click="openEditUser(user.id)">
-              Edit
+              {{ t('common.edit') }}
             </button>
           </td>
         </tr>
@@ -64,15 +64,15 @@
     <BaseModal
       v-if="editingUser"
       v-model="isModalOpen"
-      :title="`Edit ${editingUser.full_name || editingUser.email}`"
+      :title="modalTitle"
     >
       <div class="form-field">
-        <label for="user-name">Name</label>
+        <label for="user-name">{{ t('users.form.nameLabel') }}</label>
         <input
           id="user-name"
           v-model.trim="editingForm.full_name"
           type="text"
-          placeholder="Name (optional)"
+          :placeholder="t('users.form.namePlaceholder')"
         />
       </div>
 
@@ -80,34 +80,37 @@
         <label class="toggle">
           <input type="checkbox" v-model="editingForm.is_admin" />
           <span>
-            {{ editingForm.is_admin ? 'Administrator' : 'Standard user' }}
+            {{
+              editingForm.is_admin
+                ? t('users.roles.admin')
+                : t('users.roles.standard')
+            }}
           </span>
         </label>
       </div>
 
       <div class="form-field">
-        <label for="user-password">New password</label>
+        <label for="user-password">{{ t('users.form.passwordLabel') }}</label>
         <input
           id="user-password"
           v-model.trim="editingForm.password"
           type="password"
-          placeholder="Leave blank to keep current password"
+          :placeholder="t('users.form.passwordPlaceholder')"
         />
         <p class="form-field__hint">
-          Leave blank to keep the existing password.
+          {{ t('users.form.passwordHint') }}
         </p>
       </div>
 
       <div v-if="showDeleteConfirm" class="delete-confirmation" role="alert">
         <p>
-          Deleting this user will remove their access immediately. This action
-          cannot be undone. Do you still want to proceed?
+          {{ t('users.delete.message') }}
         </p>
       </div>
 
       <template #footer>
         <button class="button" type="button" @click="onBackOrCancel">
-          {{ showDeleteConfirm ? 'Back' : 'Cancel' }}
+          {{ showDeleteConfirm ? t('common.back') : t('common.cancel') }}
         </button>
 
         <template v-if="showDeleteConfirm">
@@ -117,7 +120,7 @@
             :disabled="deleting"
             @click="confirmDelete"
           >
-            {{ deleting ? 'Deleting…' : 'Delete user' }}
+            {{ deleting ? t('common.deleting') : t('users.delete.confirm') }}
           </button>
         </template>
         <template v-else>
@@ -127,7 +130,7 @@
             :disabled="saving"
             @click="saveUser"
           >
-            {{ saving ? 'Saving…' : 'Save changes' }}
+            {{ saving ? t('common.saving') : t('common.saveChanges') }}
           </button>
           <button
             v-if="!isEditingSelf"
@@ -136,7 +139,7 @@
             :disabled="deleting"
             @click="requestDelete"
           >
-            Delete user
+            {{ t('users.delete.button') }}
           </button>
         </template>
       </template>
@@ -146,6 +149,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import BaseModal from '@/components/BaseModal.vue';
 import { useAuthStore } from '@/store/auth';
@@ -153,14 +157,15 @@ import { useUsersStore } from '@/store/users';
 
 const usersStore = useUsersStore();
 const authStore = useAuthStore();
+const { t, locale } = useI18n();
 
-const columns = [
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'email', label: 'Email', sortable: true },
-  { key: 'admin', label: 'Admin', sortable: true },
-  { key: 'updated_at', label: 'Updated', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true }
-];
+const columns = computed(() => [
+  { key: 'name', label: t('users.table.name'), sortable: true },
+  { key: 'email', label: t('users.table.email'), sortable: true },
+  { key: 'admin', label: t('users.table.admin'), sortable: true },
+  { key: 'updated_at', label: t('users.table.updated'), sortable: true },
+  { key: 'created_at', label: t('users.table.created'), sortable: true }
+]);
 
 const sortBy = computed(() => usersStore.filters.sort_by);
 const sortDirection = computed(() => usersStore.filters.order);
@@ -219,6 +224,13 @@ const editingUser = computed(() => {
   return (
     usersStore.items.find((user) => user.id === editingUserId.value) || null
   );
+});
+
+const modalTitle = computed(() => {
+  if (!editingUser.value) return '';
+  return t('users.modal.title', {
+    name: editingUser.value.full_name || editingUser.value.email
+  });
 });
 
 const isEditingSelf = computed(
@@ -287,7 +299,11 @@ async function confirmDelete() {
 
 function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleString();
+  try {
+    return new Date(value).toLocaleString(locale.value);
+  } catch (error) {
+    return new Date(value).toLocaleString();
+  }
 }
 </script>
 

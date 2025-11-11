@@ -9,6 +9,7 @@ import {
 } from '@/services/chat';
 import { useUiStore } from './ui';
 import { useAuthStore } from './auth';
+import { i18n } from '@/i18n';
 
 function normalizeDomainIds(rawValue) {
   if (!Array.isArray(rawValue)) {
@@ -78,7 +79,7 @@ export const useChatStore = defineStore('chat', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Unable to load conversations.'
+          message: i18n.global.t('chat.toast.loadError')
         });
         throw error;
       } finally {
@@ -98,7 +99,7 @@ export const useChatStore = defineStore('chat', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to load messages.'
+          message: i18n.global.t('chat.toast.messagesError')
         });
         throw error;
       } finally {
@@ -110,7 +111,7 @@ export const useChatStore = defineStore('chat', {
       try {
         const authStore = useAuthStore();
         if (!authStore.user) {
-          throw new Error('You must be logged in to start a conversation.');
+          throw new Error(i18n.global.t('chat.errors.notAuthenticated'));
         }
         const { name, prompt, domain_ids: rawDomainIds } = payload;
         const domainIds = normalizeDomainIds(rawDomainIds);
@@ -129,12 +130,12 @@ export const useChatStore = defineStore('chat', {
         }
         useUiStore().showToast({
           type: 'success',
-          message: 'Conversation created.'
+          message: i18n.global.t('chat.toast.createSuccess')
         });
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Unable to start conversation.'
+          message: i18n.global.t('chat.toast.createError')
         });
         throw error;
       } finally {
@@ -196,7 +197,7 @@ export const useChatStore = defineStore('chat', {
         }
         useUiStore().showToast({
           type: 'error',
-          message: 'Unable to send message.'
+          message: i18n.global.t('chat.toast.sendError')
         });
         throw error;
       } finally {
@@ -214,8 +215,8 @@ export const useChatStore = defineStore('chat', {
         useUiStore().showToast({
           type: 'success',
           message: normalized.length
-            ? 'Domain filter updated.'
-            : 'Domain filter cleared.'
+            ? i18n.global.t('chat.toast.domainApplied')
+            : i18n.global.t('chat.toast.domainCleared')
         });
       }
     },
@@ -236,13 +237,13 @@ export const useChatStore = defineStore('chat', {
         }
         useUiStore().showToast({
           type: 'success',
-          message: 'Conversation updated.'
+          message: i18n.global.t('chat.toast.updateSuccess')
         });
         return data;
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Unable to update conversation.'
+          message: i18n.global.t('chat.toast.updateError')
         });
         throw error;
       }
@@ -259,7 +260,7 @@ export const useChatStore = defineStore('chat', {
         } else {
           uiStore.showToast({
             type: 'error',
-            message: 'Unable to delete conversation.'
+            message: i18n.global.t('chat.toast.deleteError')
           });
           throw error;
         }
@@ -274,7 +275,9 @@ export const useChatStore = defineStore('chat', {
       if (!this.conversations.length) {
         uiStore.showToast({
           type: 'success',
-          message: notFound ? 'Conversation removed.' : 'Conversation deleted.'
+          message: notFound
+            ? i18n.global.t('chat.toast.deleteMissing')
+            : i18n.global.t('chat.toast.deleteSuccess')
         });
         return;
       }
@@ -285,7 +288,9 @@ export const useChatStore = defineStore('chat', {
 
       uiStore.showToast({
         type: 'success',
-        message: notFound ? 'Conversation removed.' : 'Conversation deleted.'
+        message: notFound
+          ? i18n.global.t('chat.toast.deleteMissing')
+          : i18n.global.t('chat.toast.deleteSuccess')
       });
     }
   }

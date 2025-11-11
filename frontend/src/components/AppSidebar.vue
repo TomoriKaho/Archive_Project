@@ -1,7 +1,7 @@
 <template>
   <aside :class="['sidebar', { 'sidebar--collapsed': props.collapsed }]">
     <div class="sidebar__brand" :class="{ 'sidebar__brand--collapsed': props.collapsed }">
-      <span class="sidebar__brand-text">Archive AI</span>
+      <span class="sidebar__brand-text">{{ t('app.name') }}</span>
       <span class="sidebar__brand-indicator" aria-hidden="true"></span>
     </div>
     <ul v-if="!props.collapsed" class="sidebar__menu">
@@ -21,7 +21,7 @@
     </ul>
     <div v-if="!props.collapsed" class="sidebar__footer">
       <button class="sidebar__menu-button" type="button" @click="logout">
-        Logout
+        {{ t('navigation.logout') }}
       </button>
     </div>
   </aside>
@@ -30,6 +30,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 import { useAuthStore } from '@/store/auth';
 
@@ -42,31 +43,32 @@ const props = defineProps({
 
 const route = useRoute();
 const authStore = useAuthStore();
+const { t } = useI18n();
 
 const baseNavigation = [
   {
     name: 'dashboard',
-    label: 'Dashboard',
+    labelKey: 'navigation.dashboard',
     to: { name: 'dashboard' },
     path: '/dashboard'
   },
   {
     name: 'documents',
-    label: 'Documents',
+    labelKey: 'navigation.documents',
     to: { name: 'documents' },
     path: '/documents'
   },
-  { name: 'chat', label: 'Chat', to: { name: 'chat' }, path: '/chat' }
+  { name: 'chat', labelKey: 'navigation.chat', to: { name: 'chat' }, path: '/chat' }
 ];
 
 const adminNavigation = [
   {
     name: 'domains',
-    label: 'Domains',
+    labelKey: 'navigation.domains',
     to: { name: 'domains' },
     path: '/domains'
   },
-  { name: 'users', label: 'Users', to: { name: 'users' }, path: '/users' }
+  { name: 'users', labelKey: 'navigation.users', to: { name: 'users' }, path: '/users' }
 ];
 
 const navigation = computed(() => {
@@ -76,6 +78,7 @@ const navigation = computed(() => {
   }
   return items.map((item) => ({
     ...item,
+    label: t(item.labelKey),
     isActive: route.name === item.name || route.path.startsWith(item.path)
   }));
 });

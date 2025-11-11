@@ -1,60 +1,73 @@
 <template>
   <section class="dashboard">
     <div class="dashboard__header">
-      <h2>Hello, {{ displayName || 'Explorer' }}</h2>
-      <p>Here's what's happening with your knowledge base today.</p>
+      <h2>
+        {{
+          displayName
+            ? t('dashboard.greetingNamed', { name: displayName })
+            : t('dashboard.greetingUnnamed')
+        }}
+      </h2>
+      <p>{{ t('dashboard.subtitle') }}</p>
     </div>
 
     <div class="dashboard__grid">
       <div class="card">
-        <h3>Profile</h3>
+        <h3>{{ t('dashboard.profile.title') }}</h3>
         <ul class="profile-list">
           <li>
-            <span>Name</span><span>{{ displayName || '—' }}</span>
+            <span>{{ t('dashboard.profile.name') }}</span
+            ><span>{{ displayName || '—' }}</span>
           </li>
           <li>
-            <span>Email</span><span>{{ user?.email }}</span>
+            <span>{{ t('dashboard.profile.email') }}</span
+            ><span>{{ user?.email }}</span>
           </li>
           <li>
-            <span>Role</span>
-            <span class="tag">{{ user?.is_admin ? 'Admin' : 'Member' }}</span>
+            <span>{{ t('dashboard.profile.role') }}</span>
+            <span class="tag">
+              {{ user?.is_admin ? t('roles.admin') : t('roles.member') }}
+            </span>
           </li>
         </ul>
       </div>
 
       <div class="card">
-        <h3>Recent Activity</h3>
+        <h3>{{ t('dashboard.recentActivity.title') }}</h3>
         <ul class="activity-list">
           <li v-if="recentDocuments.length === 0" class="activity-list__empty">
-            No recent documents.
+            {{ t('dashboard.recentActivity.empty') }}
           </li>
           <li v-for="document in recentDocuments" :key="document.id">
             <span class="activity-list__title">{{ document.title }}</span>
             <span class="activity-list__meta"
-              >Updated
-              {{ formatDate(document.updated_at || document.created_at) }}</span
+              >{{
+                t('dashboard.recentActivity.updated', {
+                  date: formatDate(document.updated_at || document.created_at)
+                })
+              }}</span
             >
           </li>
         </ul>
       </div>
 
       <div class="card">
-        <h3>Quick Links</h3>
+        <h3>{{ t('dashboard.quickLinks.title') }}</h3>
         <div class="quick-links">
           <RouterLink class="quick-link" :to="{ name: 'documents' }"
-            >Manage Documents</RouterLink
+            >{{ t('dashboard.quickLinks.documents') }}</RouterLink
           >
           <RouterLink class="quick-link" :to="{ name: 'chat' }"
-            >Open Chat</RouterLink
+            >{{ t('dashboard.quickLinks.chat') }}</RouterLink
           >
           <RouterLink
             v-if="isAdmin"
             class="quick-link"
             :to="{ name: 'domains' }"
-            >Domains</RouterLink
+            >{{ t('dashboard.quickLinks.domains') }}</RouterLink
           >
           <RouterLink v-if="isAdmin" class="quick-link" :to="{ name: 'users' }"
-            >Users</RouterLink
+            >{{ t('dashboard.quickLinks.users') }}</RouterLink
           >
         </div>
       </div>
@@ -65,12 +78,14 @@
 <script setup>
 import { computed, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 import { useAuthStore } from '@/store/auth';
 import { useDocumentsStore } from '@/store/documents';
 
 const authStore = useAuthStore();
 const documentsStore = useDocumentsStore();
+const { t, locale } = useI18n();
 
 const user = computed(() => authStore.user);
 const displayName = computed(() => user.value?.full_name || user.value?.email);
@@ -83,7 +98,11 @@ onMounted(() => {
 
 function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleString();
+  try {
+    return new Date(value).toLocaleString(locale.value);
+  } catch (error) {
+    return new Date(value).toLocaleString();
+  }
 }
 </script>
 

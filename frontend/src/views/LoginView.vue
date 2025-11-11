@@ -1,28 +1,28 @@
 <template>
   <form class="auth-form" @submit.prevent="onSubmit">
-    <h2 class="auth-form__title">Welcome back</h2>
+    <h2 class="auth-form__title">{{ t('auth.login.title') }}</h2>
     <p class="auth-form__subtitle">
-      Sign in to continue managing your archives.
+      {{ t('auth.login.subtitle') }}
     </p>
 
     <div class="form-field" :class="{ 'form-field--error': errors.email }">
-      <label for="email">Email</label>
+      <label for="email">{{ t('auth.login.emailLabel') }}</label>
       <input
         id="email"
         v-model.trim="form.email"
         type="email"
-        placeholder="you@example.com"
+        :placeholder="t('auth.login.emailPlaceholder')"
       />
       <p v-if="errors.email" class="form-field__error">{{ errors.email }}</p>
     </div>
 
     <div class="form-field" :class="{ 'form-field--error': errors.password }">
-      <label for="password">Password</label>
+      <label for="password">{{ t('auth.login.passwordLabel') }}</label>
       <input
         id="password"
         v-model="form.password"
         type="password"
-        placeholder="••••••••"
+        :placeholder="t('auth.login.passwordPlaceholder')"
       />
       <p v-if="errors.password" class="form-field__error">
         {{ errors.password }}
@@ -34,12 +34,12 @@
       type="submit"
       :disabled="isSubmitting"
     >
-      {{ isSubmitting ? 'Signing in…' : 'Sign In' }}
+      {{ isSubmitting ? t('auth.login.submitting') : t('auth.login.submit') }}
     </button>
 
     <p class="auth-form__footer">
-      Need an account?
-      <RouterLink :to="{ name: 'register' }">Register</RouterLink>
+      {{ t('auth.login.needAccount') }}
+      <RouterLink :to="{ name: 'register' }">{{ t('auth.login.registerLink') }}</RouterLink>
     </p>
   </form>
 </template>
@@ -47,11 +47,13 @@
 <script setup>
 import { reactive, ref } from 'vue';
 import { useRouter, RouterLink } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 
 import { useAuthStore } from '@/store/auth';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { t } = useI18n();
 
 const form = reactive({
   email: '',
@@ -71,20 +73,19 @@ function validate() {
 
   const emailRegex = /[^\s@]+@[^\s@]+\.[^\s@]+/;
   if (!form.email) {
-    errors.email = 'Email is required.';
+    errors.email = t('auth.login.validation.emailRequired');
   } else if (!emailRegex.test(form.email)) {
-    errors.email = 'Enter a valid email address.';
+    errors.email = t('auth.login.validation.emailInvalid');
   }
 
   if (!form.password) {
-    errors.password = 'Password is required.';
+    errors.password = t('auth.login.validation.passwordRequired');
   } else if (
     form.password.length < 8 ||
     !/[A-Z]/.test(form.password) ||
     !/\d/.test(form.password)
   ) {
-    errors.password =
-      'Use at least 8 characters with a number and uppercase letter.';
+    errors.password = t('auth.login.validation.passwordWeak');
   }
 
   return !errors.email && !errors.password;

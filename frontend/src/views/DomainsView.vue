@@ -2,11 +2,11 @@
   <section class="domains">
     <header class="domains__header">
       <div>
-        <h2>Domains</h2>
-        <p>Manage domains available for document ingestion.</p>
+        <h2>{{ t('domains.title') }}</h2>
+        <p>{{ t('domains.subtitle') }}</p>
       </div>
       <button class="button button--primary" type="button" @click="openCreate">
-        New Domain
+        {{ t('domains.actions.new') }}
       </button>
     </header>
 
@@ -31,7 +31,7 @@
       </thead>
       <tbody>
         <tr v-if="domainsStore.items.length === 0">
-          <td colspan="5" class="empty">No domains found.</td>
+          <td colspan="5" class="empty">{{ t('domains.empty') }}</td>
         </tr>
         <tr v-for="domain in domainsStore.items" :key="domain.id">
           <td>{{ domain.name }}</td>
@@ -39,13 +39,15 @@
           <td>{{ formatDate(domain.created_at) }}</td>
           <td>{{ formatDate(domain.updated_at) }}</td>
           <td class="actions">
-            <button type="button" @click="openEdit(domain)">Edit</button>
+            <button type="button" @click="openEdit(domain)">
+              {{ t('common.edit') }}
+            </button>
             <button
               type="button"
               class="button--link-danger"
               @click="promptRemove(domain)"
             >
-              Delete
+              {{ t('common.delete') }}
             </button>
           </td>
         </tr>
@@ -54,34 +56,34 @@
 
     <BaseModal v-model="isModalOpen" :title="modalTitle">
       <div class="form-field" :class="{ 'form-field--error': errors.name }">
-        <label for="domain-name">Name</label>
+        <label for="domain-name">{{ t('domains.form.nameLabel') }}</label>
         <input id="domain-name" v-model.trim="form.name" type="text" />
         <p v-if="errors.name" class="form-field__error">{{ errors.name }}</p>
       </div>
       <div class="form-field">
-        <label for="domain-description">Description</label>
+        <label for="domain-description">{{ t('domains.form.descriptionLabel') }}</label>
         <textarea
           id="domain-description"
           v-model="form.description"
           rows="3"
+          :placeholder="t('domains.form.descriptionPlaceholder')"
         ></textarea>
       </div>
-      <p class="form-hint">Domains are always active once created.</p>
+      <p class="form-hint">{{ t('domains.form.hint') }}</p>
       <template #footer>
-        <button class="button" type="button" @click="closeModal">Cancel</button>
+        <button class="button" type="button" @click="closeModal">
+          {{ t('common.cancel') }}
+        </button>
         <button class="button button--primary" type="button" @click="submit">
-          {{ isSaving ? 'Saving…' : 'Save' }}
+          {{ isSaving ? t('common.saving') : t('common.save') }}
         </button>
       </template>
     </BaseModal>
-    <BaseModal v-model="isDeleteModalOpen" title="Delete Domain">
-      <p>
-        Deleting a domain will remove it and any associated documents from the
-        system. This action cannot be undone. Do you still want to proceed?
-      </p>
+    <BaseModal v-model="isDeleteModalOpen" :title="t('domains.delete.title')">
+      <p>{{ t('domains.delete.message') }}</p>
       <template #footer>
         <button class="button" type="button" @click="closeDeleteModal">
-          Cancel
+          {{ t('common.cancel') }}
         </button>
         <button
           class="button button--danger"
@@ -89,7 +91,7 @@
           :disabled="isDeleting"
           @click="confirmRemove"
         >
-          {{ isDeleting ? 'Deleting…' : 'Delete domain' }}
+          {{ isDeleting ? t('common.deleting') : t('domains.delete.confirm') }}
         </button>
       </template>
     </BaseModal>
@@ -98,18 +100,20 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 import BaseModal from '@/components/BaseModal.vue';
 import { useDomainsStore } from '@/store/domains';
 
 const domainsStore = useDomainsStore();
+const { t, locale } = useI18n();
 
-const columns = [
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'description', label: 'Description', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
-  { key: 'updated_at', label: 'Updated', sortable: true }
-];
+const columns = computed(() => [
+  { key: 'name', label: t('domains.table.name'), sortable: true },
+  { key: 'description', label: t('domains.table.description'), sortable: true },
+  { key: 'created_at', label: t('domains.table.created'), sortable: true },
+  { key: 'updated_at', label: t('domains.table.updated'), sortable: true }
+]);
 
 const sortBy = computed(() => domainsStore.filters.sort_by);
 const sortDirection = computed(() => domainsStore.filters.order);
@@ -131,7 +135,7 @@ const errors = reactive({
 });
 
 const modalTitle = computed(() =>
-  editingDomainId.value ? 'Edit Domain' : 'New Domain'
+  editingDomainId.value ? t('domains.modal.editTitle') : t('domains.modal.newTitle')
 );
 
 onMounted(() => {
@@ -168,7 +172,7 @@ function closeModal() {
 }
 
 function validate() {
-  errors.name = form.name ? '' : 'Name is required.';
+  errors.name = form.name ? '' : t('domains.form.validation.nameRequired');
   return !errors.name;
 }
 
@@ -214,7 +218,11 @@ async function confirmRemove() {
 
 function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleString();
+  try {
+    return new Date(value).toLocaleString(locale.value);
+  } catch (error) {
+    return new Date(value).toLocaleString();
+  }
 }
 </script>
 

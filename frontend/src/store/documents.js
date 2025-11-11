@@ -9,6 +9,7 @@ import {
   updateDocument,
   deleteDocument
 } from '@/services/documents';
+import { i18n } from '@/i18n';
 import { useUiStore } from './ui';
 
 export const useDocumentsStore = defineStore('documents', {
@@ -71,7 +72,7 @@ export const useDocumentsStore = defineStore('documents', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to load documents.'
+          message: i18n.global.t('documents.toast.loadError')
         });
         throw error;
       } finally {
@@ -103,7 +104,7 @@ export const useDocumentsStore = defineStore('documents', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Unable to fetch document.'
+          message: i18n.global.t('documents.toast.fetchError')
         });
         throw error;
       } finally {
@@ -120,14 +121,14 @@ export const useDocumentsStore = defineStore('documents', {
         const { data } = await createTextDocument(domainId, body);
         useUiStore().showToast({
           type: 'success',
-          message: 'Document created successfully.'
+          message: i18n.global.t('documents.toast.createSuccess')
         });
         await this.loadDocuments();
         return data;
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to create document.'
+          message: i18n.global.t('documents.toast.createError')
         });
         throw error;
       }
@@ -177,7 +178,7 @@ export const useDocumentsStore = defineStore('documents', {
           this.removePendingUpload(tempId);
           useUiStore().showToast({
             type: 'success',
-            message: `${title} 文档上传成功。`
+            message: i18n.global.t('documents.toast.uploadSuccess', { title })
           });
           await this.loadDocuments();
           return;
@@ -190,7 +191,7 @@ export const useDocumentsStore = defineStore('documents', {
         this.removePendingUpload(tempId);
         useUiStore().showToast({
           type: 'warning',
-          message: '无法确认文档上传状态，请稍后刷新页面。'
+          message: i18n.global.t('documents.toast.uploadUnknown')
         });
         await this.loadDocuments();
         return;
@@ -215,7 +216,7 @@ export const useDocumentsStore = defineStore('documents', {
         await uploadCsvDocument(domainId, formData);
         useUiStore().showToast({
           type: 'success',
-          message: `${title} 文档上传成功。`
+          message: i18n.global.t('documents.toast.uploadSuccess', { title })
         });
         this.removePendingUpload(pendingUpload.tempId);
         await this.loadDocuments();
@@ -228,7 +229,7 @@ export const useDocumentsStore = defineStore('documents', {
         if (isTimeout || isNetworkIssue) {
           useUiStore().showToast({
             type: 'info',
-            message: '文档较大，正在后台继续处理。完成后将出现在文档列表中。'
+            message: i18n.global.t('documents.toast.uploadInProgress')
           });
           this.waitForUploadCompletion({
             tempId: pendingUpload.tempId,
@@ -240,7 +241,7 @@ export const useDocumentsStore = defineStore('documents', {
         this.removePendingUpload(pendingUpload.tempId);
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to upload CSV.'
+          message: i18n.global.t('documents.toast.uploadError')
         });
         throw error;
       }
@@ -254,7 +255,7 @@ export const useDocumentsStore = defineStore('documents', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to load document content.'
+          message: i18n.global.t('documents.toast.contentError')
         });
         throw error;
       } finally {
@@ -273,14 +274,14 @@ export const useDocumentsStore = defineStore('documents', {
         const { data } = await updateDocument(domainId, documentId, body);
         useUiStore().showToast({
           type: 'success',
-          message: 'Document updated successfully.'
+          message: i18n.global.t('documents.toast.updateSuccess')
         });
         await this.loadDocuments();
         return data;
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to update document.'
+          message: i18n.global.t('documents.toast.updateError')
         });
         throw error;
       }
@@ -290,13 +291,13 @@ export const useDocumentsStore = defineStore('documents', {
         await deleteDocument(domainId, documentId);
         useUiStore().showToast({
           type: 'success',
-          message: 'Document deleted.'
+          message: i18n.global.t('documents.toast.deleteSuccess')
         });
         await this.loadDocuments();
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to delete document.'
+          message: i18n.global.t('documents.toast.deleteError')
         });
         throw error;
       }

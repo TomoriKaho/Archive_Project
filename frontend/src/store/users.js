@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { deleteUser, fetchUsers, updateUser } from '@/services/users';
+import { i18n } from '@/i18n';
 import { useUiStore } from './ui';
 
 export const useUsersStore = defineStore('users', {
@@ -39,7 +40,7 @@ export const useUsersStore = defineStore('users', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Failed to load users.'
+          message: i18n.global.t('users.toast.loadError')
         });
         throw error;
       } finally {
@@ -67,7 +68,10 @@ export const useUsersStore = defineStore('users', {
           }
         }
         await updateUser(userId, body);
-        useUiStore().showToast({ type: 'success', message: 'User updated.' });
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('users.toast.updateSuccess')
+        });
         await this.loadUsers({
           sort_by: this.filters.sort_by,
           order: this.filters.order,
@@ -77,7 +81,7 @@ export const useUsersStore = defineStore('users', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Unable to update user.'
+          message: i18n.global.t('users.toast.updateError')
         });
         throw error;
       }
@@ -87,7 +91,7 @@ export const useUsersStore = defineStore('users', {
         await deleteUser(userId);
         useUiStore().showToast({
           type: 'success',
-          message: 'User deleted.'
+          message: i18n.global.t('users.toast.deleteSuccess')
         });
         await this.loadUsers({
           sort_by: this.filters.sort_by,
@@ -98,7 +102,7 @@ export const useUsersStore = defineStore('users', {
       } catch (error) {
         useUiStore().showToast({
           type: 'error',
-          message: 'Unable to delete user.'
+          message: i18n.global.t('users.toast.deleteError')
         });
         throw error;
       }

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import router from '@/router';
+import { i18n } from '@/i18n';
 import { configureApi, getStoredToken, persistToken } from '@/services/api';
 import {
   loginRequest,
@@ -67,7 +68,7 @@ export const useAuthStore = defineStore('auth', {
         const token = data.access_token || data.token;
 
         if (!token) {
-          throw new Error('No access token received from the server.');
+          throw new Error(i18n.global.t('auth.errors.missingToken'));
         }
 
         this.token = token;
@@ -76,7 +77,7 @@ export const useAuthStore = defineStore('auth', {
         await this.refreshUser();
         useUiStore().showToast({
           type: 'success',
-          message: 'Logged in successfully.'
+          message: i18n.global.t('auth.toast.loginSuccess')
         });
         router.push({ name: 'dashboard' });
       } catch (error) {
@@ -84,7 +85,7 @@ export const useAuthStore = defineStore('auth', {
           type: 'error',
           message:
             error.response?.data?.message ||
-            'Unable to login. Check your credentials.'
+            i18n.global.t('auth.toast.loginError')
         });
         throw error;
       } finally {
@@ -97,7 +98,7 @@ export const useAuthStore = defineStore('auth', {
         await registerRequest(payload);
         useUiStore().showToast({
           type: 'success',
-          message: 'Account created. Please login.'
+          message: i18n.global.t('auth.toast.registerSuccess')
         });
         router.push({ name: 'login' });
       } catch (error) {
@@ -105,7 +106,7 @@ export const useAuthStore = defineStore('auth', {
           type: 'error',
           message:
             error.response?.data?.message ||
-            'Unable to register. Please try again.'
+            i18n.global.t('auth.toast.registerError')
         });
         throw error;
       } finally {
@@ -130,7 +131,7 @@ export const useAuthStore = defineStore('auth', {
       persistToken(null);
       useUiStore().showToast({
         type: 'info',
-        message: 'You have been logged out.'
+        message: i18n.global.t('auth.toast.logout')
       });
       router.push({ name: 'login' });
     },
