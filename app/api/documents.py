@@ -1,9 +1,11 @@
 """文档与chunk相关的REST接口。"""
 from __future__ import annotations  # 允许前置类型注解
 
+import csv  # 解析CSV文档内容
+import io  # 提供内存文本缓冲
 import json  # 处理Form中的元数据
 import logging  # 统一日志输出
-from typing import List, Literal, Optional  # 类型注解
+from typing import List, Literal, Optional, Sequence  # 类型注解
 from uuid import UUID  # 使用UUID匹配数据库字段
 
 from fastapi import (
@@ -26,6 +28,7 @@ from app.repositories.domain_repo import DomainRepository  # domain仓储用于�
 from app.repositories.chunk_repo import ChunkRepository  # chunk仓储
 from app.schemas.document import (  # 文档相关schema
     DocumentCreate,
+    DocumentContentOut,
     DocumentListResponse,
     DocumentOut,
     DocumentUpdate,
@@ -55,6 +58,28 @@ def _build_document_response(document) -> DocumentOut:
     schema = DocumentOut.model_validate(document)
     schema.doc_metadata.pop("tags", None)
     return schema
+
+
+def _reconstruct_text_from_chunks(chunks: Sequence) -> str:
+    """尝试根据已有chunk内容复原原始文本。"""
+
+    reconstructed = ""
+    for chunk in chunks:
+        content = getattr(chunk, "content", None)
+        if not content:
+            continue
+        text = str(content)
+        if not reconstructed:
+            reconstructed = text
+            continue
+        max_overlap = min(len(reconstructed), len(text), 256)
+        overlap = 0
+        for size in range(max_overlap, 0, -1):
+            if reconstructed[-size:] == text[:size]:
+                overlap = size
+                break
+        reconstructed += text[overlap:]
+    return reconstructed
 
 
 @router.get("/documents", response_model=DocumentListResponse)
@@ -118,6 +143,90 @@ def get_document_by_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="document not found")  # 未命中返回404
     logger.info("get_document_by_uuid uuid=%s", doc_uuid)  # 打印访问日志
     return _build_document_response(doc)  # 返回文档
+
+
+@router.get("/documents/by-uuid/{doc_uuid}/content", response_model=DocumentContentOut)
+def get_document_content(
+    doc_uuid: UUID,
+    offset: int = Query(0, ge=0, description="内容偏移，单位为行号"),
+    limit: int | None = Query(
+        default=None,
+        ge=1,
+        le=1000,
+        description="单页数量，可选，文本默认100行，CSV默认20行",
+    ),
+    db: Session = Depends(get_db),
+):
+    """分页返回文档原始内容。"""
+
+    doc = DocumentRepository(db).get_by_uuid(doc_uuid)
+    if not doc:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    metadata = doc.doc_metadata or {}
+    source = str(metadata.get("source") or "").lower()
+    mode = "csv" if source == "csv" else "text"
+
+    default_limit = 20 if mode == "csv" else 100
+    page_limit = limit or default_limit
+    page_limit = max(1, min(page_limit, 1000))
+
+    raw_content = doc.raw_content or ""
+    if mode == "text" and not raw_content.strip():
+        chunk_repo = ChunkRepository(db)
+        fallback_chunks = chunk_repo.list_by_document(doc.id)
+        if fallback_chunks:
+            raw_content = _reconstruct_text_from_chunks(fallback_chunks)
+            logger.info(
+                "reconstruct_document_content uuid=%s chunk_count=%s", doc_uuid, len(fallback_chunks)
+            )
+
+    if mode == "csv":
+        headers: List[str] = []
+        rows: List[List[str]] = []
+        total_rows = 0
+        if raw_content:
+            stream = io.StringIO(raw_content.lstrip("\ufeff"))
+            try:
+                reader = csv.reader(stream)
+            except csv.Error as exc:  # pragma: no cover - 极端格式错误
+                logger.warning("parse_csv_failed uuid=%s error=%s", doc_uuid, exc)
+                reader = None
+            if reader is not None:
+                try:
+                    headers = next(reader, [])
+                except csv.Error as exc:  # pragma: no cover - 表头损坏
+                    logger.warning(
+                        "read_csv_header_failed uuid=%s error=%s", doc_uuid, exc
+                    )
+                    headers = []
+                    reader = None
+                if reader is not None:
+                    for index, row in enumerate(reader):
+                        total_rows += 1
+                        if index >= offset and len(rows) < page_limit:
+                            rows.append(row)
+        effective_offset = min(offset, total_rows)
+        return DocumentContentOut(
+            mode="csv",
+            total=total_rows,
+            offset=effective_offset,
+            limit=page_limit,
+            headers=headers,
+            rows=rows,
+        )
+
+    lines = raw_content.splitlines() if raw_content else []
+    total_lines = len(lines)
+    effective_offset = min(offset, total_lines)
+    sliced = lines[effective_offset : effective_offset + page_limit]
+    return DocumentContentOut(
+        mode="text",
+        total=total_lines,
+        offset=effective_offset,
+        limit=page_limit,
+        lines=sliced,
+    )
 
 
 @router.delete("/documents/by-uuid/{doc_uuid}", status_code=status.HTTP_204_NO_CONTENT)
@@ -212,6 +321,8 @@ async def create_document(
             raw_content = content_form or ""
             if not raw_content.strip():
                 raise HTTPException(status_code=400, detail="text content is required")
+            if "source" not in doc_metadata:
+                doc_metadata["source"] = "text"
         title = title_value
     else:
         try:
@@ -222,8 +333,15 @@ async def create_document(
         title = payload.title
         raw_content = payload.content
         doc_metadata = payload.doc_metadata or {}
+        if "source" not in doc_metadata:
+            doc_metadata["source"] = "text"
     doc_metadata = _strip_tags(doc_metadata)
-    data = {"title": title, "doc_metadata": doc_metadata, "domain_id": domain_id}
+    data = {
+        "title": title,
+        "doc_metadata": doc_metadata,
+        "domain_id": domain_id,
+        "raw_content": raw_content,
+    }
     document = doc_repo.create(**data)  # 创建文档记录
     chunk_texts = make_chunks(
         document,

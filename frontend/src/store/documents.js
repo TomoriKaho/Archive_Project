@@ -3,6 +3,7 @@ import {
   fetchDocuments,
   fetchDocument,
   fetchDocumentChunks,
+  fetchDocumentContent,
   createTextDocument,
   uploadCsvDocument,
   updateDocument,
@@ -23,7 +24,9 @@ export const useDocumentsStore = defineStore('documents', {
     },
     isLoading: false,
     activeDocument: null,
-    activeChunks: []
+    activeChunks: [],
+    activeContent: null,
+    isLoadingContent: false
   }),
   getters: {
     displayItems(state) {
@@ -90,6 +93,7 @@ export const useDocumentsStore = defineStore('documents', {
       try {
         this.activeDocument = null;
         this.activeChunks = [];
+        this.activeContent = null;
         const [documentResponse, chunksResponse] = await Promise.all([
           fetchDocument(documentUuid),
           fetchDocumentChunks(documentUuid)
@@ -240,6 +244,25 @@ export const useDocumentsStore = defineStore('documents', {
         });
         throw error;
       }
+    },
+    async loadDocumentContent(documentUuid, params = {}) {
+      this.isLoadingContent = true;
+      try {
+        const { data } = await fetchDocumentContent(documentUuid, params);
+        this.activeContent = data;
+        return data;
+      } catch (error) {
+        useUiStore().showToast({
+          type: 'error',
+          message: 'Failed to load document content.'
+        });
+        throw error;
+      } finally {
+        this.isLoadingContent = false;
+      }
+    },
+    resetActiveContent() {
+      this.activeContent = null;
     },
     async saveDocument({ documentId, domainId, title, metadata }) {
       try {

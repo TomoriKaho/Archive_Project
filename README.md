@@ -29,8 +29,6 @@
 - **Node.js / npm**（建议使用 nvm 安装 LTS 版）
 - **Docker**（用于 PostgreSQL / Qdrant）
 
-> *提示*：前端使用 Vue CLI；老的静态 HTML/CSS 前端已移除。
-
 ---
 
 ## 二、环境变量（统一清单）
@@ -195,6 +193,3 @@ curl -X POST http://localhost:8000/chats/7/messages \
 - **管理员缺失**：运行 `python -m app.scripts.bootstrap_admin` 重新注入。
 
 ---
-
-> 至此，后端与 Vue 前端均可按统一清单配置与启动；旧版静态前端已完全移除。仅保留必要命令与环境项，后续如需补充，请在上述结构下增量添加。
-

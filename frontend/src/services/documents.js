@@ -12,6 +12,10 @@ export function fetchDocumentChunks(documentUuid) {
   return apiClient.get(`/documents/by-uuid/${documentUuid}/chunks`);
 }
 
+export function fetchDocumentContent(documentUuid, params = {}) {
+  return apiClient.get(`/documents/by-uuid/${documentUuid}/content`, { params });
+}
+
 export function createTextDocument(domainId, payload) {
   return apiClient.post(`/domains/${domainId}/documents`, payload);
 }

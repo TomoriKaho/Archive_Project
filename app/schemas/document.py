@@ -1,6 +1,6 @@
 """文档相关Pydantic模型，负责请求与响应的结构校验。"""
 from datetime import datetime  # 导入datetime用于序列化时间戳字段
-from typing import Any, Dict, List  # 引入List以描述列表字段
+from typing import Any, Dict, List, Literal  # 引入List以描述列表字段
 from uuid import UUID  # 导入UUID类型与数据库字段保持一致
 
 from pydantic import Field  # 使用Field提供更丰富的校验与描述
@@ -44,3 +44,15 @@ class DocumentListResponse(ORMModel):
     sort_by: str  # 当前排序字段
     order: str  # 当前排序方向
     # 设计说明：统一返回结构让前端在不同筛选下共享分页逻辑。
+
+
+class DocumentContentOut(ORMModel):
+    """文档原始内容分页返回模型。"""
+
+    mode: Literal["text", "csv"]  # 内容类型：纯文本或CSV表格
+    total: int  # 总行数或总记录数
+    offset: int  # 当前页偏移
+    limit: int  # 每页数量
+    lines: List[str] = Field(default_factory=list)  # 文本模式下的内容行
+    headers: List[str] = Field(default_factory=list)  # CSV表头
+    rows: List[List[str]] = Field(default_factory=list)  # CSV数据行

@@ -114,6 +114,11 @@ class Document(Base):  # 定义文档实体
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)  # 文档标题
     doc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)  # 元数据存储结构化信息
+    raw_content: Mapped[str] = mapped_column(  # 存储文档原始内容，支持后续详情展示
+        Text,
+        nullable=False,
+        default="",
+    )
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间
     domain: Mapped["Domain"] = relationship("Domain", back_populates="documents", passive_deletes=True)  # 反向关系
