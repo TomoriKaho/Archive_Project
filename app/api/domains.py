@@ -49,7 +49,18 @@ def update_domain(domain_id: int, payload: DomainUpdate, db: Session = Depends(g
     dom = repo.get(domain_id)
     if not dom:
         raise HTTPException(404, "domain not found")
-    return repo.update(dom, **payload.model_dump(exclude_none=True))
+    update_data = payload.model_dump(exclude_none=True)
+    new_name = update_data.get("name")
+    if new_name is not None:
+        stripped_name = new_name.strip()
+        if not stripped_name:
+            raise HTTPException(422, "name is required")
+        update_data["name"] = stripped_name
+        if stripped_name != dom.name:
+            existing = repo.get_by_name(stripped_name)
+            if existing and existing.id != domain_id:
+                raise HTTPException(400, "domain name already exists")
+    return repo.update(dom, **update_data)
 
 # Delete domain, also delete all related documents and chunks
 @router.delete("/{domain_id}", status_code=status.HTTP_204_NO_CONTENT)

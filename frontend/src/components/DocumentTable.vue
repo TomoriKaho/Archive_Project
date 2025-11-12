@@ -168,26 +168,32 @@ function progressText(document) {
 
   const safeTotal = Number.isNaN(total) ? 0 : Math.max(0, Math.floor(total));
   const safeIndexed = Number.isNaN(indexed) ? 0 : Math.max(0, Math.floor(indexed));
-
-  if (safeTotal === 0) {
-    return status === 'completed'
-      ? t('documents.table.progress.completedNoChunks')
-      : t('documents.table.progress.empty');
-  }
-
-  const clampedIndexed = Math.min(safeIndexed, safeTotal);
-  let percent = Math.floor((clampedIndexed / safeTotal) * 100);
-  if (status === 'completed') {
+  let percent = 0;
+  if (safeTotal > 0) {
+    const clampedIndexed = Math.min(safeIndexed, safeTotal);
+    const rawPercent = (clampedIndexed / safeTotal) * 100;
+    if (status === 'completed') {
+      percent = 100;
+    } else if (rawPercent > 0 && rawPercent < 1) {
+      percent = 1;
+    } else {
+      percent = Math.floor(rawPercent);
+    }
+  } else if (status === 'completed') {
     percent = 100;
   }
+  percent = Math.max(0, Math.min(100, percent));
 
   const statusKey = `documents.table.progress.status.${status}`;
   const translatedStatus = t(statusKey);
-  const statusLabel = translatedStatus === statusKey ? status : translatedStatus;
+  const hasStatusLabel = translatedStatus !== statusKey;
+
+  if (!hasStatusLabel) {
+    return t('documents.table.progress.summaryNoStatus', { percent });
+  }
+
   return t('documents.table.progress.summary', {
-    status: statusLabel,
-    indexed: clampedIndexed,
-    total: safeTotal,
+    status: translatedStatus,
     percent
   });
 }

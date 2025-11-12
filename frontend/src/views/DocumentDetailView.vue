@@ -270,6 +270,9 @@
       </template>
     </BaseModal>
   </section>
+  <section v-else-if="loadError" class="document-detail__error-state">
+    {{ loadError }}
+  </section>
   <section v-else class="document-detail__loading">
     {{ t('documentDetail.loadingDocument') }}
   </section>
@@ -301,6 +304,7 @@ const chunkPageIndex = ref(0);
 const contentPageIndex = ref(0);
 const isContentExpanded = ref(false);
 const contentError = ref('');
+const loadError = ref('');
 const isPreviewOpen = ref(false);
 const previewContent = reactive({
   header: '',
@@ -483,6 +487,7 @@ watch(
       previewContent.header = '';
       previewContent.value = '';
       previewContent.rowNumber = 0;
+      loadError.value = '';
     }
   },
   { immediate: false }
@@ -492,7 +497,12 @@ onMounted(async () => {
   if (!domainsStore.items.length) {
     await domainsStore.loadDomains();
   }
-  await documentsStore.loadDocument(route.params.id);
+  try {
+    await documentsStore.loadDocument(route.params.id);
+    loadError.value = '';
+  } catch (error) {
+    loadError.value = t('documentDetail.loadError');
+  }
 });
 
 watch(
@@ -637,7 +647,12 @@ async function save() {
       title: editForm.title,
       metadata: document.value.doc_metadata
     });
-    await documentsStore.loadDocument(route.params.id);
+    try {
+      await documentsStore.loadDocument(route.params.id);
+      loadError.value = '';
+    } catch (error) {
+      loadError.value = t('documentDetail.loadError');
+    }
     closeEdit();
   } finally {
     isSaving.value = false;
@@ -1018,6 +1033,19 @@ async function remove() {
   border-radius: 16px;
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
   color: #6b7280;
+}
+
+.document-detail__error-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 320px;
+  background: #fef2f2;
+  border-radius: 16px;
+  box-shadow: 0 16px 32px rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  text-align: center;
+  padding: 0 24px;
 }
 
 .button {

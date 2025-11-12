@@ -61,6 +61,47 @@ def _build_document_response(document) -> DocumentOut:
     return schema
 
 
+def _cancel_indexing_and_remove_vectors(db: Session, document) -> int:
+    """取消活跃的向量入库并清理向量库中的相关条目。"""
+
+    active_statuses = {"queued", "processing", "pending"}
+    if document.vector_index_status in active_statuses:
+        document.vector_index_status = "cancelled"
+        document.vector_index_error = None
+        db.flush()
+        logger.info("cancel_indexing_before_delete doc_id=%s", document.id)
+
+    chunk_repo = ChunkRepository(db)
+    removed = 0
+    batch_limit = 2048
+    batch: List[int] = []
+    try:
+        for chunk_id in chunk_repo.iter_ids_by_document(
+            document.id, batch_size=batch_limit
+        ):
+            batch.append(chunk_id)
+            if len(batch) >= batch_limit:
+                removed += remove_vectors(batch)
+                batch.clear()
+        if batch:
+            removed += remove_vectors(batch)
+            batch.clear()
+    except RuntimeError as exc:  # pragma: no cover - 向量服务异常时记录日志
+        logger.exception(
+            "remove_vectors_failed document_id=%s batch_size=%s pending_batch=%s processed=%s",
+            document.id,
+            batch_limit,
+            len(batch),
+            removed,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+    return removed
+
+
 def _reconstruct_text_from_chunks(chunks: Sequence) -> str:
     """尝试根据已有chunk内容复原原始文本。"""
 
@@ -238,24 +279,7 @@ def delete_document_by_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
     if not document:
         logger.info("delete_document_by_uuid idempotent miss uuid=%s", doc_uuid)  # 记录幂等删除
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-    chunk_repo = ChunkRepository(db)
-    chunks = list(chunk_repo.list_by_document(document.id))
-    chunk_ids = [chunk.id for chunk in chunks]
-    removed = 0
-    if chunk_ids:
-        try:
-            removed = remove_vectors(chunk_ids)
-        except RuntimeError as exc:  # pragma: no cover - 向量服务异常时记录日志并返回
-            logger.exception(
-                "auto_remove_vectors_failed document_id=%s uuid=%s chunk_count=%s",
-                document.id,
-                doc_uuid,
-                len(chunk_ids),
-            )
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=str(exc),
-            ) from exc
+    removed = _cancel_indexing_and_remove_vectors(db, document)
     db.delete(document)
     db.flush()
     logger.info(
@@ -331,12 +355,16 @@ async def create_document(
         except ValueError as exc:  # pragma: no cover - FastAPI会统一处理但做容错
             raise HTTPException(status_code=400, detail="invalid request body") from exc
         payload = DocumentCreate.model_validate(payload_data)
-        title = payload.title
+        title = payload.title.strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="title is required")
         raw_content = payload.content
         doc_metadata = payload.doc_metadata or {}
         if "source" not in doc_metadata:
             doc_metadata["source"] = "text"
     doc_metadata = _strip_tags(doc_metadata)
+    if doc_repo.get_by_title(domain_id, title):
+        raise HTTPException(status_code=409, detail="document title already exists")
     data = {
         "title": title,
         "doc_metadata": doc_metadata,
@@ -453,6 +481,16 @@ def update_document(domain_id: int, doc_id: int, payload: DocumentUpdate, db: Se
     if not doc or doc.domain_id != domain_id:
         raise HTTPException(status_code=404, detail="document not found")
     update_data = payload.model_dump(exclude_none=True)
+    new_title = update_data.get("title")
+    if new_title is not None:
+        stripped_title = new_title.strip()
+        if not stripped_title:
+            raise HTTPException(status_code=422, detail="title is required")
+        update_data["title"] = stripped_title
+        if stripped_title != doc.title:
+            existing = repo.get_by_title(domain_id, stripped_title)
+            if existing and existing.id != doc.id:
+                raise HTTPException(status_code=409, detail="document title already exists")
     if "doc_metadata" in update_data:
         update_data["doc_metadata"] = _strip_tags(update_data["doc_metadata"])
     updated = repo.update(doc, **update_data)
@@ -470,8 +508,15 @@ def delete_document(domain_id: int, doc_id: int, db: Session = Depends(get_db)):
     doc = repo.get(doc_id)
     if not doc or doc.domain_id != domain_id:
         raise HTTPException(status_code=404, detail="document not found")
-    repo.delete(doc_id)
-    logger.info("delete_document domain=%s doc_id=%s", domain_id, doc_id)
+    removed = _cancel_indexing_and_remove_vectors(db, doc)
+    db.delete(doc)
+    db.flush()
+    logger.info(
+        "delete_document domain=%s doc_id=%s removed_vectors=%s",
+        domain_id,
+        doc_id,
+        removed,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

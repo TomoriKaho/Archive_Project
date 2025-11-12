@@ -179,6 +179,7 @@ def process_document_indexing(
         document = doc_repo.get(document_id)
         if not document:
             logger.warning("index_document_missing document_id=%s", document_id)
+            # 文档可能仍在创建事务中，返回 False 让工作线程稍后重试。
             return False
 
         if document.vector_index_status == "cancelled":

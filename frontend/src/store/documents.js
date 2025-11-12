@@ -92,16 +92,24 @@ export const useDocumentsStore = defineStore('documents', {
     },
     async loadDocument(documentUuid) {
       this.isLoading = true;
+      this.activeDocument = null;
+      this.activeChunks = [];
+      this.activeContent = null;
       try {
-        this.activeDocument = null;
-        this.activeChunks = [];
-        this.activeContent = null;
-        const [documentResponse, chunksResponse] = await Promise.all([
-          fetchDocument(documentUuid),
-          fetchDocumentChunks(documentUuid)
-        ]);
-        this.activeDocument = documentResponse.data;
-        this.activeChunks = chunksResponse.data ?? [];
+        const { data } = await fetchDocument(documentUuid);
+        this.activeDocument = data;
+        try {
+          const { data: chunkData } = await fetchDocumentChunks(documentUuid);
+          this.activeChunks = chunkData ?? [];
+        } catch (chunkError) {
+          console.error('Failed to load document chunks', chunkError);
+          this.activeChunks = [];
+          useUiStore().showToast({
+            type: 'warning',
+            message: i18n.global.t('documents.toast.chunksError')
+          });
+        }
+        return data;
       } catch (error) {
         useUiStore().showToast({
           type: 'error',

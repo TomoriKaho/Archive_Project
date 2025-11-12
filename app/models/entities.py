@@ -152,8 +152,17 @@ class Document(Base):  # 定义文档实体
         passive_deletes=True,  # 交由数据库执行级联
     )
 
-    __table_args__ = (  # 文档附加索引
-        Index("ix_documents_domain_id_created_at", "domain_id", "created_at"),  # 提升按域和时间排序的查询效率
+    __table_args__ = (  # 文档附加索引与约束
+        UniqueConstraint(
+            "domain_id",
+            "title",
+            name="uq_documents_domain_title",
+        ),  # 同一域内文档标题唯一
+        Index(
+            "ix_documents_domain_id_created_at",
+            "domain_id",
+            "created_at",
+        ),  # 提升按域和时间排序的查询效率
     )
 
 

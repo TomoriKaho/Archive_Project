@@ -1,6 +1,6 @@
 """文档块仓储，集中管理chunks表的访问逻辑。"""
 import logging  # 引入日志便于观察批量操作
-from typing import Iterable, Sequence  # 提供类型注解
+from typing import Iterable, Iterator, Sequence  # 提供类型注解
 
 from sqlalchemy import Select, delete, select  # 使用select/delete构造SQL
 from sqlalchemy.orm import Session, joinedload  # 操作文档块依赖Session
@@ -29,6 +29,25 @@ class ChunkRepository(Repository[Chunk]):
         logger.info("list_chunks document_id=%s", document_id)  # 记录访问日志
         return self.db.execute(stmt).scalars().all()  # 执行查询并返回结果
         # 设计说明：始终按ordinal排序确保切片输出有序。
+
+    def iter_ids_by_document(self, document_id: int, *, batch_size: int = 1000) -> Iterator[int]:
+        """逐批返回指定文档的chunk主键，避免一次性载入大文本。"""
+
+        stmt: Select = (
+            select(Chunk.id)
+            .where(Chunk.document_id == document_id)
+            .order_by(Chunk.id.asc())
+            .execution_options(yield_per=batch_size)
+        )
+        logger.info(
+            "iter_chunk_ids document_id=%s batch_size=%s", document_id, batch_size
+        )
+        result = self.db.execute(stmt)
+        try:
+            for chunk_id in result.scalars():
+                yield int(chunk_id)
+        finally:
+            result.close()
 
     def bulk_create_for_document(self, document_id: int, contents: Iterable[str]) -> Sequence[Chunk]:
         """将多段文本批量写入chunks表。"""

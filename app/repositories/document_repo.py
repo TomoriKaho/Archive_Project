@@ -110,6 +110,15 @@ class DocumentRepository(Repository[Document]):
         return self.db.execute(stmt).scalar_one_or_none()  # 返回匹配的文档或None
         # 设计说明：uuid查询用于外部接口，实现幂等删除等需求。
 
+    def get_by_title(self, domain_id: int, title: str) -> Document | None:
+        """按domain与标题查询文档，帮助校验唯一性。"""
+
+        stmt = select(Document).where(
+            Document.domain_id == domain_id,
+            Document.title == title,
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
     def delete_by_uuid(self, doc_uuid: UUID) -> bool:
         """按UUID删除文档，返回是否真的删除。"""
         doc = self.get_by_uuid(doc_uuid)  # 先查再删避免盲删

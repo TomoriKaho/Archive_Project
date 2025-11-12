@@ -167,10 +167,9 @@ export const messages = {
         },
         empty: '未找到文档。',
         progress: {
-          summary: '导入进度：{status} · {percent}%（{indexed}/{total}）',
-          empty: '导入进度：暂无可导入的片段',
+          summary: '导入进度：{status} · {percent}%',
+          summaryNoStatus: '导入进度：{percent}%',
           failed: '导入进度：导入失败',
-          completedNoChunks: '导入进度：无需导入',
           status: {
             pending: '等待中',
             queued: '排队中',
@@ -194,6 +193,7 @@ export const messages = {
         uploadInProgress: '文档较大，已在后台继续处理，完成后将显示在列表中。',
         uploadError: '上传 CSV 失败。',
         contentError: '加载文档内容失败。',
+        chunksError: '加载文档片段失败，将仅展示原文。',
         updateSuccess: '文档更新成功。',
         updateError: '更新文档失败。',
         deleteSuccess: '文档已删除。',
@@ -246,7 +246,8 @@ export const messages = {
         message: '删除该文档将永久移除文档及其所有片段，此操作无法撤销。是否继续？',
         confirm: '删除文档'
       },
-      loadingDocument: '正在加载文档…'
+      loadingDocument: '正在加载文档…',
+      loadError: '无法加载文档，请返回列表后重试。'
     },
     domains: {
       title: '域',
@@ -592,15 +593,15 @@ export const messages = {
         },
         empty: 'No documents found.',
         progress: {
-          summary: 'Progress: {status} · {percent}% ({indexed}/{total})',
-          empty: 'Progress: nothing to index',
+          summary: 'Progress: {status} · {percent}%',
+          summaryNoStatus: 'Progress: {percent}%',
           failed: 'Progress: failed',
-          completedNoChunks: 'Progress: nothing required',
           status: {
             pending: 'Waiting',
             queued: 'Queued',
             processing: 'In progress',
-            completed: 'Completed'
+            completed: 'Completed',
+            cancelled: 'Cancelled'
           }
         }
       },
@@ -616,6 +617,7 @@ export const messages = {
         uploadInProgress: 'The document is large; processing continues in the background. It will appear once finished.',
         uploadError: 'Failed to upload CSV.',
         contentError: 'Failed to load document content.',
+        chunksError: 'Unable to load document chunks; showing the original file only.',
         updateSuccess: 'Document updated successfully.',
         updateError: 'Failed to update document.',
         deleteSuccess: 'Document deleted.',
@@ -666,7 +668,8 @@ export const messages = {
         message: 'Deleting this document will remove it and all of its chunks permanently. This action cannot be undone. Do you want to continue?',
         confirm: 'Delete document'
       },
-      loadingDocument: 'Loading document…'
+      loadingDocument: 'Loading document…',
+      loadError: 'Unable to load this document. Please return to the list and try again.'
     },
     domains: {
       title: 'Domains',
