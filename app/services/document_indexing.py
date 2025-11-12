@@ -7,7 +7,6 @@ import threading
 import time
 from functools import lru_cache
 from queue import Empty, Queue
-from typing import Iterable
 
 from app.db.session import SessionLocal
 from app.repositories.chunk_repo import ChunkRepository
@@ -24,20 +23,6 @@ _WORKER_LOCK = threading.Lock()
 _WORKER_THREAD: threading.Thread | None = None
 _MAX_RETRIES = 5
 _RETRY_DELAY_SECONDS = 1.0
-
-
-def _iter_batches(items: Iterable, batch_size: int):
-    """按指定大小将序列切分为批次。"""
-    batch: list = []
-    for item in items:
-        batch.append(item)
-        if len(batch) >= batch_size:
-            yield batch
-            batch = []
-    if batch:
-        yield batch
-
-
 @lru_cache(maxsize=1)
 def get_configured_batch_size() -> int:
     """返回环境变量配置的批大小，若配置非法则回退默认值。"""
@@ -194,8 +179,7 @@ def process_document_indexing(
             )
             return True
 
-        chunks = list(chunk_repo.list_by_document(document_id))
-        total = len(chunks)
+        total = chunk_repo.count_by_document(document_id)
         document.vector_total_chunks = total
         document.vector_index_error = None
         if total == 0:
@@ -211,6 +195,7 @@ def process_document_indexing(
         db.commit()
 
         processed = 0
+        offset = 0
         logger.info(
             "index_document_started document_id=%s total=%s batch_size=%s",
             document_id,
@@ -218,7 +203,13 @@ def process_document_indexing(
             effective_batch,
         )
 
-        for batch in _iter_batches(chunks, effective_batch):
+        while True:
+            batch = chunk_repo.list_by_document(
+                document_id, limit=effective_batch, offset=offset
+            )
+            if not batch:
+                break
+            offset += len(batch)
             db.refresh(document, attribute_names=["vector_index_status"])
             if document.vector_index_status == "cancelled":
                 logger.info(
