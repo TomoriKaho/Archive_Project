@@ -195,6 +195,15 @@ async def update_user(
         user.hashed_password = hash_password(payload.password)  # 哈希后更新
         changed = True
     if current_user.is_admin and payload.is_admin is not None:  # 仅管理员可改权限
+        if (
+            user.id == current_user.id
+            and user.is_admin
+            and payload.is_admin is False
+        ):  # 禁止管理员自降权限
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="管理员不能取消自己的管理员身份",
+            )
         if user.is_admin != payload.is_admin:
             user.is_admin = payload.is_admin  # 设置权限
             changed = True
