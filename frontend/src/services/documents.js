@@ -42,3 +42,15 @@ export function cancelDocumentIndexing(domainId, documentId) {
     `/domains/${domainId}/documents/${documentId}/cancel-indexing`
   );
 }
+
+export function pauseDocumentIndexing(domainId, documentId) {
+  return apiClient.post(
+    `/domains/${domainId}/documents/${documentId}/pause-indexing`
+  );
+}
+
+export function resumeDocumentIndexing(domainId, documentId) {
+  return apiClient.post(
+    `/domains/${domainId}/documents/${documentId}/resume-indexing`
+  );
+}

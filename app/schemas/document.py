@@ -32,7 +32,7 @@ class DocumentOut(ORMModel):
     title: str  # 返回标题供界面展示
     doc_metadata: Dict[str, Any]  # 保留元数据便于前端判断结构化类型
     vector_index_status: str = Field(
-        description="向量入库状态：queued/processing/completed/failed/pending/cancelled"
+        description="向量入库状态：queued/processing/completed/failed/pending/cancelled/paused"
     )
     vector_indexed_chunks: int = Field(
         description="已完成向量化的chunk数量"

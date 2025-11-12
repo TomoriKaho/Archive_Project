@@ -171,6 +171,10 @@ def process_document_indexing(
             logger.info("index_document_skip_cancelled document_id=%s", document_id)
             return True
 
+        if document.vector_index_status == "paused":
+            logger.info("index_document_skip_paused document_id=%s", document_id)
+            return True
+
         if document.vector_index_status not in {"queued", "pending", "processing"}:
             logger.info(
                 "index_document_skip_status document_id=%s status=%s",
@@ -182,6 +186,7 @@ def process_document_indexing(
         total = chunk_repo.count_by_document(document_id)
         document.vector_total_chunks = total
         document.vector_index_error = None
+        processed = max(0, min(int(document.vector_indexed_chunks or 0), total))
         if total == 0:
             document.vector_indexed_chunks = 0
             document.vector_index_status = "completed"
@@ -189,13 +194,23 @@ def process_document_indexing(
             logger.info("index_document_skipped_empty document_id=%s", document_id)
             return True
 
-        # 为重新入队的任务重置进度，保证显示一致性。
-        document.vector_indexed_chunks = 0
+        if processed >= total:
+            document.vector_index_status = "completed"
+            document.vector_indexed_chunks = total
+            db.commit()
+            logger.info(
+                "index_document_already_completed document_id=%s total=%s",
+                document_id,
+                total,
+            )
+            return True
+
+        # 为重新入队的任务进入 processing 状态，保持最新进度。
         document.vector_index_status = "processing"
+        document.vector_indexed_chunks = processed
         db.commit()
 
-        processed = 0
-        offset = 0
+        offset = processed
         logger.info(
             "index_document_started document_id=%s total=%s batch_size=%s",
             document_id,
@@ -214,6 +229,14 @@ def process_document_indexing(
             if document.vector_index_status == "cancelled":
                 logger.info(
                     "index_document_cancelled_midflight document_id=%s processed=%s total=%s",
+                    document_id,
+                    processed,
+                    total,
+                )
+                return True
+            if document.vector_index_status == "paused":
+                logger.info(
+                    "index_document_paused_midflight document_id=%s processed=%s total=%s",
                     document_id,
                     processed,
                     total,

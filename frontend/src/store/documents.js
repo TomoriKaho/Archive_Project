@@ -8,7 +8,9 @@ import {
   uploadCsvDocument,
   updateDocument,
   deleteDocument,
-  cancelDocumentIndexing
+  cancelDocumentIndexing,
+  pauseDocumentIndexing,
+  resumeDocumentIndexing
 } from '@/services/documents';
 import { i18n } from '@/i18n';
 import { useUiStore } from './ui';
@@ -296,6 +298,88 @@ export const useDocumentsStore = defineStore('documents', {
         useUiStore().showToast({
           type: 'error',
           message: i18n.global.t('documents.toast.deleteError')
+        });
+        throw error;
+      }
+    },
+    async pauseIndexing({ documentId, domainId }) {
+      const target = this.items.find((item) => item.id === documentId);
+      if (target) {
+        target._isPausing = true;
+      }
+      try {
+        const { data } = await pauseDocumentIndexing(domainId, documentId);
+        if (target) {
+          Object.assign(target, data, { _isPausing: false });
+        } else {
+          await this.loadDocuments();
+        }
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('documents.toast.pauseSuccess')
+        });
+        return data;
+      } catch (error) {
+        if (target) {
+          target._isPausing = false;
+        }
+        useUiStore().showToast({
+          type: 'error',
+          message: i18n.global.t('documents.toast.pauseError')
+        });
+        throw error;
+      }
+    },
+    async resumeIndexing({ documentId, domainId }) {
+      const target = this.items.find((item) => item.id === documentId);
+      if (target) {
+        target._isResuming = true;
+      }
+      try {
+        const { data } = await resumeDocumentIndexing(domainId, documentId);
+        if (target) {
+          Object.assign(target, data, { _isResuming: false });
+        } else {
+          await this.loadDocuments();
+        }
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('documents.toast.resumeSuccess')
+        });
+        return data;
+      } catch (error) {
+        if (target) {
+          target._isResuming = false;
+        }
+        useUiStore().showToast({
+          type: 'error',
+          message: i18n.global.t('documents.toast.resumeError')
+        });
+        throw error;
+      }
+    },
+    async cancelUpload({ documentId, domainId }) {
+      const target = this.items.find((item) => item.id === documentId);
+      if (target) {
+        target._isCancelling = true;
+      }
+      try {
+        await deleteDocument(domainId, documentId);
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('documents.toast.cancelUploadSuccess')
+        });
+        await this.loadDocuments();
+        if (target) {
+          target._isCancelling = false;
+        }
+      } catch (error) {
+        if (target) {
+          target._isCancelling = false;
+        }
+        useUiStore().showToast({
+          type: 'error',
+          message: i18n.global.t('documents.toast.cancelUploadError')
         });
         throw error;
       }

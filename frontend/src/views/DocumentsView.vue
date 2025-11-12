@@ -64,7 +64,9 @@
       :sort-by="documentsStore.filters.sort_by"
       :sort-direction="documentsStore.filters.order"
       @update:sort="onSort"
-      @cancel-indexing="onCancelIndexing"
+      @pause-indexing="onPauseIndexing"
+      @resume-indexing="onResumeIndexing"
+      @cancel-upload="onCancelUpload"
     />
 
     <BaseModal v-model="isModalOpen" :title="t('documents.modal.createTitle')">
@@ -398,12 +400,46 @@ async function submit() {
   }
 }
 
-async function onCancelIndexing(document) {
+async function onPauseIndexing(document) {
   if (!document || !document.id || !document.domain_id) {
     return;
   }
   try {
-    await documentsStore.cancelIndexing({
+    await documentsStore.pauseIndexing({
+      documentId: document.id,
+      domainId: document.domain_id
+    });
+  } catch (error) {
+    // 错误已通过 toast 反馈
+  }
+}
+
+async function onResumeIndexing(document) {
+  if (!document || !document.id || !document.domain_id) {
+    return;
+  }
+  try {
+    await documentsStore.resumeIndexing({
+      documentId: document.id,
+      domainId: document.domain_id
+    });
+  } catch (error) {
+    // 错误已通过 toast 反馈
+  }
+}
+
+async function onCancelUpload(document) {
+  if (!document || !document.id || !document.domain_id) {
+    return;
+  }
+  const confirmed = window.confirm(
+    t('documents.table.actions.cancelConfirm', { title: document.title })
+  );
+  if (!confirmed) {
+    return;
+  }
+  try {
+    await documentsStore.cancelUpload({
       documentId: document.id,
       domainId: document.domain_id
     });

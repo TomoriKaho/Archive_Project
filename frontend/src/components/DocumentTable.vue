@@ -53,16 +53,42 @@
                 {{ progressText(document) }}
               </span>
               <button
-                v-if="canCancel(document)"
+                v-if="canPause(document)"
                 type="button"
-                class="cancel-button"
+                class="action-button action-button--primary"
+                :disabled="document._isPausing"
+                @click="requestPause(document)"
+              >
+                {{
+                  document._isPausing
+                    ? t('documents.table.actions.pausing')
+                    : t('documents.table.actions.pause')
+                }}
+              </button>
+              <button
+                v-else-if="canResume(document)"
+                type="button"
+                class="action-button action-button--primary"
+                :disabled="document._isResuming"
+                @click="requestResume(document)"
+              >
+                {{
+                  document._isResuming
+                    ? t('documents.table.actions.resuming')
+                    : t('documents.table.actions.resume')
+                }}
+              </button>
+              <button
+                v-if="canCancelUpload(document)"
+                type="button"
+                class="action-button action-button--danger"
                 :disabled="document._isCancelling"
-                @click="requestCancel(document)"
+                @click="requestCancelUpload(document)"
               >
                 {{
                   document._isCancelling
-                    ? t('documents.table.cancelling')
-                    : t('documents.table.cancel')
+                    ? t('documents.table.actions.cancelling')
+                    : t('documents.table.actions.cancelUpload')
                 }}
               </button>
             </template>
@@ -98,7 +124,12 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:sort', 'cancel-indexing']);
+const emit = defineEmits([
+  'update:sort',
+  'pause-indexing',
+  'resume-indexing',
+  'cancel-upload'
+]);
 
 const { t, locale } = useI18n();
 
@@ -131,15 +162,36 @@ function resolveDomainName(domainId) {
   return domain?.name || t('documents.unknownDomain', { id: domainId });
 }
 
-function canCancel(document) {
+function canPause(document) {
   if (!document || document.isUploading) return false;
   if (!document.id) return false;
   const status = document.vector_index_status;
   return ['queued', 'processing', 'pending'].includes(status);
 }
 
-function requestCancel(document) {
-  emit('cancel-indexing', document);
+function canResume(document) {
+  if (!document || document.isUploading) return false;
+  if (!document.id) return false;
+  return document.vector_index_status === 'paused';
+}
+
+function canCancelUpload(document) {
+  if (!document || document.isUploading) return false;
+  if (!document.id) return false;
+  const status = document.vector_index_status;
+  return ['queued', 'processing', 'pending', 'paused'].includes(status);
+}
+
+function requestPause(document) {
+  emit('pause-indexing', document);
+}
+
+function requestResume(document) {
+  emit('resume-indexing', document);
+}
+
+function requestCancelUpload(document) {
+  emit('cancel-upload', document);
 }
 
 function formatDate(value) {
@@ -154,20 +206,22 @@ function formatDate(value) {
 function progressText(document) {
   if (!document) return '';
 
-  const status = document.vector_index_status;
+  const rawStatus = document.vector_index_status;
   const total = Number(document.vector_total_chunks ?? 0);
   const indexed = Number(document.vector_indexed_chunks ?? 0);
 
-  if (!status) {
+  if (!rawStatus) {
     return '';
   }
 
-  if (status === 'failed') {
+  if (rawStatus === 'failed') {
     return t('documents.table.progress.failed');
   }
 
   const safeTotal = Number.isNaN(total) ? 0 : Math.max(0, Math.floor(total));
   const safeIndexed = Number.isNaN(indexed) ? 0 : Math.max(0, Math.floor(indexed));
+  let status = rawStatus;
+
   let percent = 0;
   if (safeTotal > 0) {
     const clampedIndexed = Math.min(safeIndexed, safeTotal);
@@ -181,6 +235,13 @@ function progressText(document) {
     }
   } else if (status === 'completed') {
     percent = 100;
+  }
+  if (
+    ['queued', 'pending'].includes(status) &&
+    safeIndexed > 0 &&
+    (safeTotal === 0 || safeIndexed <= safeTotal)
+  ) {
+    status = 'processing';
   }
   percent = Math.max(0, Math.min(100, percent));
 
@@ -252,24 +313,45 @@ th button {
   font-size: 0.875rem;
 }
 
-.cancel-button {
-  padding: 6px 12px;
-  border: 1px solid #f87171;
-  background: transparent;
-  color: #dc2626;
+.action-button {
+  padding: 6px 14px;
   border-radius: 9999px;
   font-size: 13px;
+  font-weight: 600;
+  border: none;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.cancel-button:hover:enabled {
-  background: #fee2e2;
+.action-button--primary {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
 }
 
-.cancel-button:disabled {
+.action-button--primary:hover:enabled {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.25);
+}
+
+.action-button--danger {
+  background: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(220, 38, 38, 0.2);
+}
+
+.action-button--danger:hover:enabled {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(220, 38, 38, 0.25);
+}
+
+.action-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .uploading {

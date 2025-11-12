@@ -65,7 +65,7 @@ def _build_document_response(document) -> DocumentOut:
 def _cancel_indexing_and_remove_vectors(db: Session, document) -> int:
     """取消活跃的向量入库并清理向量库中的相关条目。"""
 
-    active_statuses = {"queued", "processing", "pending"}
+    active_statuses = {"queued", "processing", "pending", "paused"}
     if document.vector_index_status in active_statuses:
         document.vector_index_status = "cancelled"
         document.vector_index_error = None
@@ -464,6 +464,68 @@ def get_document(domain_id: int, doc_id: int, db: Session = Depends(get_db)):
 
 
 @router.post(
+    "/domains/{domain_id}/documents/{doc_id}/pause-indexing",
+    response_model=DocumentOut,
+)
+def pause_document_indexing_endpoint(
+    domain_id: int,
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    """暂停正在进行的向量入库任务并保留当前进度。"""
+
+    domain_repo = DomainRepository(db)
+    if not domain_repo.get(domain_id):
+        raise HTTPException(status_code=404, detail="domain not found")
+
+    doc_repo = DocumentRepository(db)
+    document = doc_repo.get(doc_id)
+    if not document or document.domain_id != domain_id:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    if document.vector_index_status not in {"queued", "processing", "pending"}:
+        raise HTTPException(status_code=409, detail="document indexing is not active")
+
+    document.vector_index_status = "paused"
+    db.add(document)
+    logger.info("pause_document_indexing domain=%s doc_id=%s", domain_id, doc_id)
+    return _build_document_response(document)
+
+
+@router.post(
+    "/domains/{domain_id}/documents/{doc_id}/resume-indexing",
+    response_model=DocumentOut,
+)
+def resume_document_indexing_endpoint(
+    domain_id: int,
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    """恢复已暂停的向量入库任务。"""
+
+    domain_repo = DomainRepository(db)
+    if not domain_repo.get(domain_id):
+        raise HTTPException(status_code=404, detail="domain not found")
+
+    doc_repo = DocumentRepository(db)
+    document = doc_repo.get(doc_id)
+    if not document or document.domain_id != domain_id:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    if document.vector_index_status != "paused":
+        raise HTTPException(status_code=409, detail="document indexing is not paused")
+
+    document.vector_index_status = "queued"
+    document.vector_index_error = None
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    enqueue_document_indexing(document.id)
+    logger.info("resume_document_indexing domain=%s doc_id=%s", domain_id, doc_id)
+    return _build_document_response(document)
+
+
+@router.post(
     "/domains/{domain_id}/documents/{doc_id}/cancel-indexing",
     response_model=DocumentOut,
 )
@@ -483,7 +545,7 @@ def cancel_document_indexing_endpoint(
     if not document or document.domain_id != domain_id:
         raise HTTPException(status_code=404, detail="document not found")
 
-    if document.vector_index_status not in {"queued", "processing", "pending"}:
+    if document.vector_index_status not in {"queued", "processing", "pending", "paused"}:
         raise HTTPException(status_code=409, detail="document indexing is not active")
 
     document.vector_index_status = "cancelled"

@@ -202,11 +202,19 @@ export const messages = {
             queued: '排队中',
             processing: '进行中',
             completed: '已完成',
-            cancelled: '已取消'
+            cancelled: '已取消',
+            paused: '已暂停'
           }
         },
-        cancel: '取消导入',
-        cancelling: '取消中…'
+        actions: {
+          pause: '暂停导入',
+          resume: '继续导入',
+          cancelUpload: '取消上传',
+          pausing: '暂停中…',
+          resuming: '继续中…',
+          cancelling: '取消中…',
+          cancelConfirm: '确定要取消“{title}”的上传吗？该操作会删除已上传的内容。'
+        }
       },
       unknownDomain: '域 #{id}',
       uploading: '正在上传…',
@@ -224,7 +232,13 @@ export const messages = {
         deleteSuccess: '文档已删除。',
         deleteError: '删除文档失败。',
         cancelSuccess: '已取消向量导入。',
-        cancelError: '取消向量导入失败。'
+        cancelError: '取消向量导入失败。',
+        pauseSuccess: '导入已暂停，可随时继续。',
+        pauseError: '暂停导入失败。',
+        resumeSuccess: '已重新开始导入。',
+        resumeError: '恢复导入失败。',
+        cancelUploadSuccess: '已取消上传并删除文档。',
+        cancelUploadError: '取消上传失败。'
       }
     },
     documentDetail: {
@@ -656,8 +670,18 @@ export const messages = {
             queued: 'Queued',
             processing: 'In progress',
             completed: 'Completed',
-            cancelled: 'Cancelled'
+            cancelled: 'Cancelled',
+            paused: 'Paused'
           }
+        },
+        actions: {
+          pause: 'Pause Import',
+          resume: 'Resume Import',
+          cancelUpload: 'Cancel Upload',
+          pausing: 'Pausing…',
+          resuming: 'Resuming…',
+          cancelling: 'Cancelling…',
+          cancelConfirm: 'Cancel upload for “{title}”? Progress will be lost.'
         }
       },
       unknownDomain: 'Domain #{id}',
@@ -674,7 +698,15 @@ export const messages = {
         updateSuccess: 'Document updated successfully.',
         updateError: 'Failed to update document.',
         deleteSuccess: 'Document deleted.',
-        deleteError: 'Failed to delete document.'
+        deleteError: 'Failed to delete document.',
+        cancelSuccess: 'Vector import cancelled.',
+        cancelError: 'Failed to cancel vector import.',
+        pauseSuccess: 'Import paused. You can resume later.',
+        pauseError: 'Failed to pause import.',
+        resumeSuccess: 'Import resumed.',
+        resumeError: 'Failed to resume import.',
+        cancelUploadSuccess: 'Upload cancelled and document removed.',
+        cancelUploadError: 'Failed to cancel the upload.'
       }
     },
     documentDetail: {
