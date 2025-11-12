@@ -26,9 +26,15 @@ export const useDocumentsStore = defineStore('documents', {
     },
     isLoading: false,
     activeDocument: null,
-    activeChunks: [],
+    activeChunkPage: {
+      items: [],
+      total: 0,
+      limit: 0,
+      offset: 0
+    },
     activeContent: null,
-    isLoadingContent: false
+    isLoadingContent: false,
+    isLoadingChunks: false
   }),
   getters: {
     displayItems(state) {
@@ -93,22 +99,18 @@ export const useDocumentsStore = defineStore('documents', {
     async loadDocument(documentUuid) {
       this.isLoading = true;
       this.activeDocument = null;
-      this.activeChunks = [];
+      this.activeChunkPage = {
+        items: [],
+        total: 0,
+        limit: 0,
+        offset: 0
+      };
       this.activeContent = null;
+      this.isLoadingChunks = false;
       try {
         const { data } = await fetchDocument(documentUuid);
         this.activeDocument = data;
-        try {
-          const { data: chunkData } = await fetchDocumentChunks(documentUuid);
-          this.activeChunks = chunkData ?? [];
-        } catch (chunkError) {
-          console.error('Failed to load document chunks', chunkError);
-          this.activeChunks = [];
-          useUiStore().showToast({
-            type: 'warning',
-            message: i18n.global.t('documents.toast.chunksError')
-          });
-        }
+        this.activeChunkPage.total = data?.vector_total_chunks ?? 0;
         return data;
       } catch (error) {
         useUiStore().showToast({
@@ -118,6 +120,57 @@ export const useDocumentsStore = defineStore('documents', {
         throw error;
       } finally {
         this.isLoading = false;
+      }
+    },
+    async loadDocumentChunks({ documentUuid, limit = 100, offset = 0 } = {}) {
+      if (!documentUuid) {
+        return;
+      }
+      this.isLoadingChunks = true;
+      try {
+        const params = {};
+        if (limit !== undefined && limit !== null) {
+          params.limit = limit;
+        }
+        if (offset) {
+          params.offset = offset;
+        }
+        const { data } = await fetchDocumentChunks(documentUuid, params);
+        if (!this.activeDocument || this.activeDocument.uuid !== documentUuid) {
+          return;
+        }
+        const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+        const total =
+          typeof data?.total === 'number'
+            ? data.total
+            : this.activeDocument?.vector_total_chunks ?? items.length;
+        const limitValue = typeof data?.limit === 'number' ? data.limit : limit ?? items.length;
+        const offsetValue = typeof data?.offset === 'number' ? data.offset : offset;
+        this.activeChunkPage = {
+          items,
+          total,
+          limit: limitValue,
+          offset: offsetValue
+        };
+        return this.activeChunkPage;
+      } catch (chunkError) {
+        if (!this.activeDocument || this.activeDocument.uuid !== documentUuid) {
+          return;
+        }
+        console.error('Failed to load document chunks', chunkError);
+        this.activeChunkPage = {
+          items: [],
+          total: this.activeDocument?.vector_total_chunks ?? 0,
+          limit,
+          offset
+        };
+        useUiStore().showToast({
+          type: 'warning',
+          message: i18n.global.t('documents.toast.chunksError')
+        });
+        throw chunkError;
+      } finally {
+        this.isLoadingChunks = false;
       }
     },
     async createDocument(payload) {

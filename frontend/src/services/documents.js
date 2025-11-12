@@ -8,8 +8,8 @@ export function fetchDocument(documentUuid) {
   return apiClient.get(`/documents/by-uuid/${documentUuid}`);
 }
 
-export function fetchDocumentChunks(documentUuid) {
-  return apiClient.get(`/documents/by-uuid/${documentUuid}/chunks`);
+export function fetchDocumentChunks(documentUuid, params = {}) {
+  return apiClient.get(`/documents/by-uuid/${documentUuid}/chunks`, { params });
 }
 
 export function fetchDocumentContent(documentUuid, params = {}) {

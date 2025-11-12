@@ -257,6 +257,7 @@ export const messages = {
         summary: '共存储 {count} 个片段。',
         currentRange: '当前查看 {range}。',
         rangeLabel: '范围',
+        loading: '正在加载片段…',
         empty: '该文档尚未生成任何片段。',
         itemTitle: '片段 {index}',
         length: '长度 {count} 字符'
@@ -709,6 +710,7 @@ export const messages = {
         summary: 'Stored {count} chunk(s) for this document.',
         currentRange: 'Currently viewing {range}.',
         rangeLabel: 'Range',
+        loading: 'Loading chunks…',
         empty: 'No chunks have been generated for this document yet.',
         itemTitle: 'Chunk {index}',
         length: '{count} characters'

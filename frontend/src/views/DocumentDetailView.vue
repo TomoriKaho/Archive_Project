@@ -197,8 +197,14 @@
           </select>
         </div>
       </header>
-      <p v-if="!chunks.length" class="document-detail__empty">
+      <p v-if="isLoadingChunks" class="document-detail__empty">
+        {{ t('documentDetail.chunks.loading') }}
+      </p>
+      <p v-else-if="!hasChunks" class="document-detail__empty">
         {{ t('documentDetail.chunks.empty') }}
+      </p>
+      <p v-else-if="!visibleChunks.length" class="document-detail__empty">
+        {{ t('documentDetail.chunks.loading') }}
       </p>
       <ul v-else class="chunk-list">
         <li v-for="chunk in visibleChunks" :key="chunk.id" class="chunk-list__item">
@@ -321,9 +327,21 @@ const editErrors = reactive({
 });
 
 const document = computed(() => documentsStore.activeDocument);
-const chunks = computed(() => documentsStore.activeChunks || []);
+const chunkPage = computed(() => documentsStore.activeChunkPage);
+const isLoadingChunks = computed(() => documentsStore.isLoadingChunks);
+const chunkTotal = computed(() => {
+  const pageTotal = chunkPage.value?.total;
+  if (typeof pageTotal === 'number' && pageTotal >= 0) {
+    return pageTotal;
+  }
+  const docTotal = document.value?.vector_total_chunks;
+  if (typeof docTotal === 'number' && docTotal >= 0) {
+    return docTotal;
+  }
+  return 0;
+});
 const chunkSummaryText = computed(() =>
-  t('documentDetail.chunks.summary', { count: chunks.value.length })
+  t('documentDetail.chunks.summary', { count: chunkTotal.value })
 );
 const contentPage = computed(() => documentsStore.activeContent);
 const isContentLoading = computed(() => documentsStore.isLoadingContent);
@@ -335,32 +353,34 @@ const domainName = computed(() => {
   return domain?.name || t('documents.unknownDomain', { id: document.value.domain_id });
 });
 
-const totalChunkPages = computed(() => {
-  if (!chunks.value.length) return 0;
-  return Math.ceil(chunks.value.length / chunkPageSize);
-});
-
 const chunkPageOptions = computed(() => {
-  if (!chunks.value.length) return [];
-  const totalPages = Math.ceil(chunks.value.length / chunkPageSize);
+  const total = chunkTotal.value;
+  if (!total) return [];
+  const totalPages = Math.ceil(total / chunkPageSize);
   return Array.from({ length: totalPages }, (_, index) => {
     const start = index * chunkPageSize + 1;
-    const end = Math.min((index + 1) * chunkPageSize, chunks.value.length);
+    const end = Math.min((index + 1) * chunkPageSize, total);
     return { index, label: `${start}-${end}` };
   });
 });
 
 const visibleChunks = computed(() => {
-  if (!chunks.value.length) return [];
-  const start = chunkPageIndex.value * chunkPageSize;
-  return chunks.value.slice(start, start + chunkPageSize);
+  const items = chunkPage.value?.items;
+  if (!Array.isArray(items)) return [];
+  return items;
 });
 
+const hasChunks = computed(() => chunkTotal.value > 0);
+
 const chunkRangeLabel = computed(() => {
-  if (!chunks.value.length) return '';
-  const start = chunkPageIndex.value * chunkPageSize;
-  const end = Math.min(start + chunkPageSize, chunks.value.length);
-  return `${start + 1}-${end}`;
+  if (!visibleChunks.value.length || !chunkTotal.value) return '';
+  const limit = chunkPage.value?.limit && chunkPage.value.limit > 0
+    ? chunkPage.value.limit
+    : chunkPageSize;
+  const offset = chunkPage.value?.offset ?? chunkPageIndex.value * limit;
+  const start = Math.min(offset + 1, Math.max(chunkTotal.value, 1));
+  const end = Math.min(offset + visibleChunks.value.length, chunkTotal.value);
+  return `${start}-${end} / ${chunkTotal.value}`;
 });
 
 const contentHeaders = computed(() => {
@@ -439,17 +459,60 @@ const contentPageOptions = computed(() => {
   });
 });
 
-watch(chunks, () => {
-  chunkPageIndex.value = 0;
-});
+let isSyncingChunkPageIndex = false;
 
-watch(totalChunkPages, (total) => {
+async function loadChunkPage(index) {
+  if (!document.value) return;
+  const safeIndex = Math.max(0, Number.isFinite(index) ? index : 0);
+  const offset = safeIndex * chunkPageSize;
+  try {
+    await documentsStore.loadDocumentChunks({
+      documentUuid: document.value.uuid,
+      limit: chunkPageSize,
+      offset
+    });
+  } catch (error) {
+    // 请求失败时保持当前展示，错误已在 store 内部通过 toast 提示
+  }
+}
+
+watch(
+  chunkPage,
+  (page) => {
+    isSyncingChunkPageIndex = true;
+    if (!page) {
+      chunkPageIndex.value = 0;
+    } else {
+      const limit = page.limit && page.limit > 0 ? page.limit : chunkPageSize;
+      const offset = page.offset && page.offset > 0 ? page.offset : 0;
+      const derived = limit > 0 ? Math.floor(offset / limit) : 0;
+      chunkPageIndex.value = derived;
+    }
+    isSyncingChunkPageIndex = false;
+  },
+  { immediate: true }
+);
+
+watch(
+  () => chunkPageIndex.value,
+  (index, previous) => {
+    if (isSyncingChunkPageIndex) return;
+    if (index === previous) return;
+    if (!document.value) return;
+    loadChunkPage(index);
+  }
+);
+
+watch(chunkTotal, (total) => {
   if (!total) {
+    isSyncingChunkPageIndex = true;
     chunkPageIndex.value = 0;
+    isSyncingChunkPageIndex = false;
     return;
   }
-  if (chunkPageIndex.value > total - 1) {
-    chunkPageIndex.value = total - 1;
+  const maxIndex = Math.max(Math.ceil(total / chunkPageSize) - 1, 0);
+  if (chunkPageIndex.value > maxIndex) {
+    loadChunkPage(maxIndex);
   }
 });
 
@@ -466,7 +529,7 @@ watch(contentPage, (page) => {
 
 watch(
   document,
-  (value, oldValue) => {
+  async (value, oldValue) => {
     if (!value) {
       documentsStore.resetActiveContent();
       contentPageIndex.value = 0;
@@ -476,6 +539,9 @@ watch(
       previewContent.header = '';
       previewContent.value = '';
       previewContent.rowNumber = 0;
+      isSyncingChunkPageIndex = true;
+      chunkPageIndex.value = 0;
+      isSyncingChunkPageIndex = false;
       return;
     }
     if (!oldValue || value.uuid !== oldValue.uuid) {
@@ -488,6 +554,14 @@ watch(
       previewContent.value = '';
       previewContent.rowNumber = 0;
       loadError.value = '';
+      isSyncingChunkPageIndex = true;
+      chunkPageIndex.value = 0;
+      isSyncingChunkPageIndex = false;
+      try {
+        await loadChunkPage(0);
+      } catch (error) {
+        // 错误已在 loadChunkPage 内部处理
+      }
     }
   },
   { immediate: false }

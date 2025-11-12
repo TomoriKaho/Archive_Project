@@ -2,7 +2,7 @@
 import logging  # 引入日志便于观察批量操作
 from typing import Iterable, Iterator, Sequence  # 提供类型注解
 
-from sqlalchemy import Select, delete, select  # 使用select/delete构造SQL
+from sqlalchemy import Select, delete, func, select  # 使用select/delete构造SQL
 from sqlalchemy.orm import Session, joinedload  # 操作文档块依赖Session
 
 from .base import Repository  # 复用通用仓储能力
@@ -18,17 +18,45 @@ class ChunkRepository(Repository[Chunk]):
         super().__init__(db, Chunk)  # 调用父类初始化
         # 设计说明：仓储层保持薄，仅封装常用查询与批处理。
 
-    def list_by_document(self, document_id: int) -> Sequence[Chunk]:
-        """按文档ID获取所有chunk，按顺序返回。"""
+    def list_by_document(
+        self,
+        document_id: int,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> Sequence[Chunk]:
+        """按文档ID获取chunk，支持分页按顺序返回。"""
+
         stmt: Select = (
             select(Chunk)
             .options(joinedload(Chunk.document))
             .where(Chunk.document_id == document_id)  # 条件限定同一文档
             .order_by(Chunk.ordinal.asc())  # 维持顺序供前端显示
         )
-        logger.info("list_chunks document_id=%s", document_id)  # 记录访问日志
+        if offset:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        logger.info(
+            "list_chunks document_id=%s limit=%s offset=%s",
+            document_id,
+            limit,
+            offset,
+        )  # 记录访问日志
         return self.db.execute(stmt).scalars().all()  # 执行查询并返回结果
         # 设计说明：始终按ordinal排序确保切片输出有序。
+
+    def count_by_document(self, document_id: int) -> int:
+        """统计指定文档的chunk数量。"""
+
+        stmt: Select = (
+            select(func.count())
+            .select_from(Chunk)
+            .where(Chunk.document_id == document_id)
+        )
+        total = self.db.execute(stmt).scalar_one()
+        logger.info("count_chunks document_id=%s total=%s", document_id, total)
+        return int(total)
 
     def iter_ids_by_document(self, document_id: int, *, batch_size: int = 1000) -> Iterator[int]:
         """逐批返回指定文档的chunk主键，避免一次性载入大文本。"""

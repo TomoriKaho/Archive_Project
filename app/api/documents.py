@@ -31,6 +31,7 @@ from app.schemas.document import (  # 文档相关schema
     DocumentContentOut,
     DocumentListResponse,
     DocumentOut,
+    ChunkListResponse,
     DocumentUpdate,
 )
 from app.schemas.chunk import ChunkOut  # chunk输出schema
@@ -416,11 +417,37 @@ def list_documents_by_domain(domain_id: int, db: Session = Depends(get_db)):
     return [_build_document_response(doc) for doc in documents]
 
 
-def _collect_chunks(db: Session, document_id: int) -> List[ChunkOut]:
-    """统一获取指定文档的chunk列表。"""
-    chunks = ChunkRepository(db).list_by_document(document_id)
-    logger.info("collect_chunks doc_id=%s chunk_count=%s", document_id, len(chunks))
-    return [ChunkOut.model_validate(chunk) for chunk in chunks]
+def _collect_chunks(
+    db: Session,
+    document_id: int,
+    *,
+    limit: int | None = None,
+    offset: int = 0,
+) -> ChunkListResponse:
+    """统一获取指定文档的chunk分页结果。"""
+
+    chunk_repo = ChunkRepository(db)
+    total = chunk_repo.count_by_document(document_id)
+    effective_offset = max(0, offset)
+    chunks = chunk_repo.list_by_document(
+        document_id,
+        limit=limit,
+        offset=effective_offset,
+    )
+    logger.info(
+        "collect_chunks doc_id=%s chunk_count=%s limit=%s offset=%s total=%s",
+        document_id,
+        len(chunks),
+        limit,
+        effective_offset,
+        total,
+    )
+    return ChunkListResponse(
+        items=[ChunkOut.model_validate(chunk) for chunk in chunks],
+        total=total,
+        limit=limit if limit is not None else total,
+        offset=effective_offset,
+    )
 
 
 @router.get("/domains/{domain_id}/documents/{doc_id}", response_model=DocumentOut)
@@ -518,10 +545,16 @@ def delete_document(domain_id: int, doc_id: int, db: Session = Depends(get_db)):
 
 @router.get(
     "/domains/{domain_id}/documents/{doc_id}/chunks",
-    response_model=List[ChunkOut],
+    response_model=ChunkListResponse,
     deprecated=True,
 )
-def list_chunks(domain_id: int, doc_id: int, db: Session = Depends(get_db)):
+def list_chunks(
+    domain_id: int,
+    doc_id: int,
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
     """获取指定文档的chunk列表（推荐使用新路径）。"""
     domain_repo = DomainRepository(db)
     if not domain_repo.get(domain_id):
@@ -529,26 +562,39 @@ def list_chunks(domain_id: int, doc_id: int, db: Session = Depends(get_db)):
     doc = DocumentRepository(db).get(doc_id)
     if not doc or doc.domain_id != domain_id:
         raise HTTPException(status_code=404, detail="document not found")
-    return _collect_chunks(db, doc_id)
+    return _collect_chunks(db, doc_id, limit=limit, offset=offset)
 
 
 
-@router.get("/documents/{doc_id}/chunks", response_model=List[ChunkOut])
-def list_chunks_by_document_id(doc_id: int, db: Session = Depends(get_db)):
+@router.get("/documents/{doc_id}/chunks", response_model=ChunkListResponse)
+def list_chunks_by_document_id(
+    doc_id: int,
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
     """通过文档ID获取chunk列表。"""
     doc = DocumentRepository(db).get(doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="document not found")
-    return _collect_chunks(db, doc_id)
+    return _collect_chunks(db, doc_id, limit=limit, offset=offset)
 
 
-@router.get("/documents/by-uuid/{doc_uuid}/chunks", response_model=List[ChunkOut])
-def list_chunks_by_document_uuid(doc_uuid: UUID, db: Session = Depends(get_db)):
+@router.get(
+    "/documents/by-uuid/{doc_uuid}/chunks",
+    response_model=ChunkListResponse,
+)
+def list_chunks_by_document_uuid(
+    doc_uuid: UUID,
+    limit: int | None = Query(default=None, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
     """通过文档UUID获取chunk列表。"""
     doc = DocumentRepository(db).get_by_uuid(doc_uuid)
     if not doc:
         raise HTTPException(status_code=404, detail="document not found")
-    return _collect_chunks(db, doc.id)
+    return _collect_chunks(db, doc.id, limit=limit, offset=offset)
 
 
 

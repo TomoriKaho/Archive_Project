@@ -6,6 +6,7 @@ from uuid import UUID  # 导入UUID类型与数据库字段保持一致
 from pydantic import Field  # 使用Field提供更丰富的校验与描述
 
 from .base import ORMModel  # 引入项目自定义的ORMModel基类
+from .chunk import ChunkOut
 
 
 class DocumentCreate(ORMModel):
@@ -56,6 +57,15 @@ class DocumentListResponse(ORMModel):
     sort_by: str  # 当前排序字段
     order: str  # 当前排序方向
     # 设计说明：统一返回结构让前端在不同筛选下共享分页逻辑。
+
+
+class ChunkListResponse(ORMModel):
+    """文档片段分页列表响应模型。"""
+
+    items: List[ChunkOut]  # 本页片段数据
+    total: int  # 片段总数
+    limit: int  # 本次请求的limit
+    offset: int  # 本次请求的offset
 
 
 class DocumentContentOut(ORMModel):
