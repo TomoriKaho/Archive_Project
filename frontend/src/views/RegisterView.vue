@@ -149,7 +149,7 @@ async function onSubmit() {
   try {
     const trimmedName = form.name.trim();
     await authStore.register({
-      name: trimmedName,
+      full_name: trimmedName,
       email: form.email,
       password: form.password
     });

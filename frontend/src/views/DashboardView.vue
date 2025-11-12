@@ -52,11 +52,7 @@
             </span>
             <span>{{ t('dashboard.quickLinks.chat') }}</span>
           </RouterLink>
-          <RouterLink
-            v-if="isAdmin"
-            class="quick-link"
-            :to="{ name: 'domains' }"
-          >
+          <RouterLink class="quick-link" :to="{ name: 'domains' }">
             <span class="quick-link__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path
@@ -87,6 +83,23 @@
               </svg>
             </span>
             <span>{{ t('dashboard.quickLinks.domains') }}</span>
+          </RouterLink>
+          <RouterLink class="quick-link" :to="{ name: 'profile' }">
+            <span class="quick-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M4.5 20.25a7.5 7.5 0 0115 0"
+                />
+              </svg>
+            </span>
+            <span>{{ t('dashboard.quickLinks.profile') }}</span>
           </RouterLink>
           <RouterLink class="quick-link" :to="{ name: 'documents' }">
             <span class="quick-link__icon" aria-hidden="true">

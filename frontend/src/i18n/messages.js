@@ -109,7 +109,35 @@ export const messages = {
         documents: '管理文档',
         chat: '开始对话',
         domains: '域管理',
+        profile: '个人资料',
         users: '用户管理'
+      }
+    },
+    profile: {
+      title: '个人资料',
+      subtitle: '更新你的账户信息。',
+      form: {
+        nameLabel: '姓名',
+        namePlaceholder: '如：张伟',
+        emailLabel: '邮箱',
+        emailPlaceholder: 'name@example.com',
+        passwordLabel: '新密码',
+        passwordPlaceholder: '填写以更新密码',
+        confirmLabel: '确认密码',
+        confirmPlaceholder: '再次输入新密码',
+        passwordHint: '留空则保持当前密码。',
+        save: '保存更改',
+        saving: '正在保存…'
+      },
+      validation: {
+        emailRequired: '请输入邮箱地址。',
+        emailInvalid: '请输入有效的邮箱地址。',
+        passwordLength: '密码至少需要 8 个字符。',
+        passwordMismatch: '两次输入的密码不一致。'
+      },
+      toast: {
+        updateSuccess: '个人资料已更新。',
+        updateError: '更新个人资料失败。'
       }
     },
     documents: {
@@ -381,7 +409,7 @@ export const messages = {
         nameLabel: '会话标题（可选）',
         namePlaceholder: '可选，留空自动命名',
         promptLabel: '初始提示（可选）',
-        promptPlaceholder: '可选的系统提示',
+        promptPlaceholder: '可选的系统提示，例如指定助手角色',
         domainLabel: '域筛选（可选）',
         domainHint: '选择限定检索的域，留空表示包含全部域。',
         start: '开始会话',
@@ -423,7 +451,8 @@ export const messages = {
       title: '页面未找到',
       description: '你访问的页面不存在。',
       backToDashboard: '返回仪表盘'
-    }
+    },
+    Profile: '个人资料'
   },
   en: {
     app: {
@@ -535,7 +564,35 @@ export const messages = {
         documents: 'Manage Documents',
         chat: 'Start Conversation',
         domains: 'Manage Domains',
+        profile: 'Your Profile',
         users: 'Manage Users'
+      }
+    },
+    profile: {
+      title: 'Profile',
+      subtitle: 'Keep your account details up to date.',
+      form: {
+        nameLabel: 'Name',
+        namePlaceholder: 'e.g. Ada Lovelace',
+        emailLabel: 'Email',
+        emailPlaceholder: 'name@example.com',
+        passwordLabel: 'New Password',
+        passwordPlaceholder: 'Enter a new password to update it',
+        confirmLabel: 'Confirm Password',
+        confirmPlaceholder: 'Re-enter the new password',
+        passwordHint: 'Leave blank to keep your existing password.',
+        save: 'Save Changes',
+        saving: 'Saving…'
+      },
+      validation: {
+        emailRequired: 'Please enter your email address.',
+        emailInvalid: 'Enter a valid email address.',
+        passwordLength: 'Password must be at least 8 characters long.',
+        passwordMismatch: 'Passwords do not match.'
+      },
+      toast: {
+        updateSuccess: 'Profile updated successfully.',
+        updateError: 'Unable to update your profile.'
       }
     },
     documents: {
@@ -803,7 +860,7 @@ export const messages = {
         nameLabel: 'Conversation Title (optional)',
         namePlaceholder: 'Title (optional)',
         promptLabel: 'Initial Prompt (optional)',
-        promptPlaceholder: 'Optional system prompt',
+        promptPlaceholder: 'Optional system prompt, e.g., to specify assistant role',
         domainLabel: 'Domain filter (optional)',
         domainHint: 'Pick domains to constrain retrieval. Leave empty to include all domains.',
         start: 'Start Conversation',
@@ -845,6 +902,7 @@ export const messages = {
       title: 'Page not found',
       description: "The page you're looking for doesn't exist.",
       backToDashboard: 'Go back to dashboard'
-    }
+    },
+    Profile: 'Profile'
   }
 };

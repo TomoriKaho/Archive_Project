@@ -74,11 +74,12 @@ const baseNavigation = [
 
 const navigation = computed(() => {
   const items = [...baseNavigation];
+  const profileRoute = authStore.isAdmin ? 'users' : 'profile';
   items.push({
-    name: 'users',
+    name: profileRoute,
     labelKey: authStore.isAdmin ? 'navigation.users' : 'navigation.profile',
-    to: { name: 'users' },
-    path: '/users'
+    to: { name: profileRoute },
+    path: authStore.isAdmin ? '/users' : '/profile'
   });
   return items.map((item) => ({
     ...item,
