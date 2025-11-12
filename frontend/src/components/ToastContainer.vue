@@ -59,6 +59,10 @@ function remove(id) {
   background-color: #ef4444;
 }
 
+.toast--warning {
+  background-color: #f59e0b;
+}
+
 .toast--info {
   background-color: #3b82f6;
 }

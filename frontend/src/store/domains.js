@@ -47,42 +47,68 @@ export const useDomainsStore = defineStore('domains', {
       this.filters.order = sortDirection;
     },
     async create(payload) {
+      const uiStore = useUiStore();
       try {
         const body = {
           name: payload.name,
           description: payload.description || null
         };
         await createDomain(body);
-        useUiStore().showToast({
+        uiStore.showToast({
           type: 'success',
           message: i18n.global.t('domains.toast.createSuccess')
         });
         await this.loadDomains();
+        return true;
       } catch (error) {
-        useUiStore().showToast({
-          type: 'error',
-          message: i18n.global.t('domains.toast.createError')
-        });
+        if (
+          error?.response?.status === 400 &&
+          error.response?.data?.detail === 'domain name already exists'
+        ) {
+          uiStore.showToast({
+            type: 'warning',
+            message: i18n.global.t('domains.toast.duplicateName')
+          });
+          return false;
+        } else {
+          uiStore.showToast({
+            type: 'error',
+            message: i18n.global.t('domains.toast.createError')
+          });
+        }
         throw error;
       }
     },
     async update(domainId, payload) {
+      const uiStore = useUiStore();
       try {
         const body = {
           name: payload.name,
           description: payload.description || null
         };
         await updateDomain(domainId, body);
-        useUiStore().showToast({
+        uiStore.showToast({
           type: 'success',
           message: i18n.global.t('domains.toast.updateSuccess')
         });
         await this.loadDomains();
+        return true;
       } catch (error) {
-        useUiStore().showToast({
-          type: 'error',
-          message: i18n.global.t('domains.toast.updateError')
-        });
+        if (
+          error?.response?.status === 400 &&
+          error.response?.data?.detail === 'domain name already exists'
+        ) {
+          uiStore.showToast({
+            type: 'warning',
+            message: i18n.global.t('domains.toast.duplicateName')
+          });
+          return false;
+        } else {
+          uiStore.showToast({
+            type: 'error',
+            message: i18n.global.t('domains.toast.updateError')
+          });
+        }
         throw error;
       }
     },

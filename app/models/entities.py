@@ -153,11 +153,6 @@ class Document(Base):  # 定义文档实体
     )
 
     __table_args__ = (  # 文档附加索引与约束
-        UniqueConstraint(
-            "domain_id",
-            "title",
-            name="uq_documents_domain_title",
-        ),  # 同一域内文档标题唯一
         Index(
             "ix_documents_domain_id_created_at",
             "domain_id",

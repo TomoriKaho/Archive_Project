@@ -363,8 +363,6 @@ async def create_document(
         if "source" not in doc_metadata:
             doc_metadata["source"] = "text"
     doc_metadata = _strip_tags(doc_metadata)
-    if doc_repo.get_by_title(domain_id, title):
-        raise HTTPException(status_code=409, detail="document title already exists")
     data = {
         "title": title,
         "doc_metadata": doc_metadata,
@@ -487,10 +485,8 @@ def update_document(domain_id: int, doc_id: int, payload: DocumentUpdate, db: Se
         if not stripped_title:
             raise HTTPException(status_code=422, detail="title is required")
         update_data["title"] = stripped_title
-        if stripped_title != doc.title:
-            existing = repo.get_by_title(domain_id, stripped_title)
-            if existing and existing.id != doc.id:
-                raise HTTPException(status_code=409, detail="document title already exists")
+        # Duplicate titles are allowed within the same domain, so we only normalize
+        # whitespace without enforcing uniqueness checks at the API layer.
     if "doc_metadata" in update_data:
         update_data["doc_metadata"] = _strip_tags(update_data["doc_metadata"])
     updated = repo.update(doc, **update_data)

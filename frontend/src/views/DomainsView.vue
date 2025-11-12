@@ -184,12 +184,15 @@ async function submit() {
     description: form.description
   };
   try {
-    if (editingDomainId.value) {
-      await domainsStore.update(editingDomainId.value, payload);
-    } else {
-      await domainsStore.create(payload);
+    const success = editingDomainId.value
+      ? await domainsStore.update(editingDomainId.value, payload)
+      : await domainsStore.create(payload);
+    if (success) {
+      closeModal();
     }
-    closeModal();
+  } catch (error) {
+    // The domain store already displays error toasts. Keep the modal open so the
+    // user can adjust the form.
   } finally {
     isSaving.value = false;
   }

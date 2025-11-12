@@ -84,12 +84,16 @@ export const useUsersStore = defineStore('users', {
           limit: this.filters.limit,
           offset: this.filters.offset
         });
+        return true;
       } catch (error) {
+        const message =
+          error?.response?.data?.detail ||
+          i18n.global.t('users.toast.updateError');
         useUiStore().showToast({
           type: 'error',
-          message: i18n.global.t('users.toast.updateError')
+          message
         });
-        throw error;
+        return false;
       }
     },
     async removeUser(userId) {

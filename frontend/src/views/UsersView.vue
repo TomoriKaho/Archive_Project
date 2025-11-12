@@ -339,7 +339,10 @@ async function saveUser() {
     if (canManageRoles.value) {
       payload.is_admin = editingForm.is_admin;
     }
-    await usersStore.saveUser(editingUser.value.id, payload);
+    const wasSaved = await usersStore.saveUser(editingUser.value.id, payload);
+    if (!wasSaved) {
+      return;
+    }
     if (isEditingSelf.value) {
       await authStore.refreshUser();
     }
