@@ -221,57 +221,6 @@ export const useDocumentsStore = defineStore('documents', {
         (item) => item.tempId !== tempId
       );
     },
-    async waitForUploadCompletion({ tempId, domainId, title, attempt = 0 }) {
-      const pendingItem = this.pendingUploads.find((item) => item.tempId === tempId);
-      if (!pendingItem) {
-        return;
-      }
-
-      const MAX_ATTEMPTS = 24;
-      const POLL_INTERVAL = 5000;
-
-      try {
-        const { data } = await fetchDocuments({
-          domain_id: domainId,
-          search: title,
-          sort_by: 'created_at',
-          order: 'desc',
-          limit: 10
-        });
-        const items = data.items || data;
-        const match = items.find((item) => item.title === title);
-        if (match) {
-          this.removePendingUpload(tempId);
-          useUiStore().showToast({
-            type: 'success',
-            message: i18n.global.t('documents.toast.uploadSuccess', { title })
-          });
-          await this.loadDocuments();
-          return;
-        }
-      } catch (pollError) {
-        console.error('Failed to poll document status', pollError);
-      }
-
-      if (attempt + 1 >= MAX_ATTEMPTS) {
-        this.removePendingUpload(tempId);
-        useUiStore().showToast({
-          type: 'warning',
-          message: i18n.global.t('documents.toast.uploadUnknown')
-        });
-        await this.loadDocuments();
-        return;
-      }
-
-      setTimeout(() => {
-        this.waitForUploadCompletion({
-          tempId,
-          domainId,
-          title,
-          attempt: attempt + 1
-        });
-      }, POLL_INTERVAL);
-    },
     async uploadCsv({ domainId, title, file }) {
       const pendingUpload = this.addPendingUpload({ domainId, title });
       try {
@@ -287,23 +236,6 @@ export const useDocumentsStore = defineStore('documents', {
         this.removePendingUpload(pendingUpload.tempId);
         await this.loadDocuments();
       } catch (error) {
-        const isTimeout = error?.code === 'ECONNABORTED';
-        const isNetworkIssue =
-          !error?.response &&
-          (error?.code === 'ERR_NETWORK' || error?.message === 'Network Error');
-
-        if (isTimeout || isNetworkIssue) {
-          useUiStore().showToast({
-            type: 'info',
-            message: i18n.global.t('documents.toast.uploadInProgress')
-          });
-          this.waitForUploadCompletion({
-            tempId: pendingUpload.tempId,
-            domainId,
-            title
-          });
-          return;
-        }
         this.removePendingUpload(pendingUpload.tempId);
         useUiStore().showToast({
           type: 'error',

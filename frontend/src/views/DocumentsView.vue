@@ -335,11 +335,6 @@ function validateCsvFile(file) {
     csvErrors.file = t('documents.validation.csvType');
     return false;
   }
-  const maxSize = 10 * 1024 * 1024;
-  if (file.size > maxSize) {
-    csvErrors.file = t('documents.validation.csvSize');
-    return false;
-  }
   return true;
 }
 

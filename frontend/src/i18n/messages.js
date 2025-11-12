@@ -183,8 +183,7 @@ export const messages = {
         titleRequired: '标题为必填项。',
         contentRequired: '内容不能为空。',
         csvRequired: '请选择要上传的 CSV 文件。',
-        csvType: '仅支持 CSV 文件。',
-        csvSize: '文件超过 10MB 限制。'
+        csvType: '仅支持 CSV 文件。'
       },
       table: {
         columns: {
@@ -217,8 +216,6 @@ export const messages = {
         createSuccess: '文档创建成功。',
         createError: '创建文档失败。',
         uploadSuccess: '“{title}” 文档上传成功。',
-        uploadUnknown: '无法确认文档上传状态，请稍后刷新页面。',
-        uploadInProgress: '文档较大，已在后台继续处理，完成后将显示在列表中。',
         uploadError: '上传 CSV 失败。',
         contentError: '加载文档内容失败。',
         chunksError: '加载文档片段失败，将仅展示原文。',
@@ -640,8 +637,7 @@ export const messages = {
         titleRequired: 'Title is required.',
         contentRequired: 'Content cannot be empty.',
         csvRequired: 'Select a CSV file to upload.',
-        csvType: 'Only CSV files are allowed.',
-        csvSize: 'File exceeds 10MB limit.'
+        csvType: 'Only CSV files are allowed.'
       },
       table: {
         columns: {
@@ -672,8 +668,6 @@ export const messages = {
         createSuccess: 'Document created successfully.',
         createError: 'Failed to create document.',
         uploadSuccess: '“{title}” uploaded successfully.',
-        uploadUnknown: 'Unable to confirm the upload status. Please refresh later.',
-        uploadInProgress: 'The document is large; processing continues in the background. It will appear once finished.',
         uploadError: 'Failed to upload CSV.',
         contentError: 'Failed to load document content.',
         chunksError: 'Unable to load document chunks; showing the original file only.',

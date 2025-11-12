@@ -5,6 +5,8 @@ import csv  # 解析结构化CSV内容
 import io  # 提供内存文本缓冲
 import json  # 解析结构化JSON内容
 import logging  # 记录切分过程方便调试
+import os  # 读取可配置的CSV字段长度限制
+import sys  # 调整CSV字段长度限制
 from typing import Any, Dict, List  # 类型注解辅助
 
 from app.models.entities import Document  # 引入Document模型以读取元数据
@@ -120,12 +122,49 @@ def chunk_structured_entities(
     # 设计说明：利用len()按字符计算长度，比字节更符合前端展示长度且兼容中文字符宽度。
 
 
+DEFAULT_MAX_CSV_FIELD_SIZE = 10 * 1024 * 1024  # 允许单字段最大10MB
+MAX_CSV_FIELD_SIZE_ENV = "CSV_FIELD_SIZE_LIMIT"
+
+
+def _resolve_max_csv_field_size() -> int:
+    """从环境变量读取CSV字段长度限制，默认为10MB。"""
+
+    raw_value = os.getenv(MAX_CSV_FIELD_SIZE_ENV)
+    if not raw_value:
+        return DEFAULT_MAX_CSV_FIELD_SIZE
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        logger.warning(
+            "Invalid %s value %s, falling back to default %s",
+            MAX_CSV_FIELD_SIZE_ENV,
+            raw_value,
+            DEFAULT_MAX_CSV_FIELD_SIZE,
+        )
+        return DEFAULT_MAX_CSV_FIELD_SIZE
+    if parsed <= 0:
+        logger.warning(
+            "%s must be positive, falling back to default %s",
+            MAX_CSV_FIELD_SIZE_ENV,
+            DEFAULT_MAX_CSV_FIELD_SIZE,
+        )
+        return DEFAULT_MAX_CSV_FIELD_SIZE
+    return parsed
+
+
+MAX_CSV_FIELD_SIZE = _resolve_max_csv_field_size()
+
+
 def parse_structured_entities_from_csv(csv_text: str) -> List[Dict[str, Any]]:
     """将CSV文本解析为实体列表，每个实体包含键值对数据。"""
     if not csv_text:
         return []  # 空文本直接返回
     stream = io.StringIO(csv_text)
     try:
+        try:
+            csv.field_size_limit(MAX_CSV_FIELD_SIZE)
+        except OverflowError:
+            csv.field_size_limit(sys.maxsize)
         reader = csv.DictReader(stream)
     except csv.Error:
         return []  # CSV格式错误直接返回空列表让上层决定
