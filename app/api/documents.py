@@ -46,6 +46,32 @@ router = APIRouter(tags=["documents"])  # 声明文档相关路由
 logger = logging.getLogger(__name__)  # 初始化模块级日志
 
 
+def _ensure_csv_field_size_limit(raw_content: str) -> None:
+    """根据原始内容动态调整CSV字段大小限制，避免解析超长单元格时抛出异常。"""
+
+    if not raw_content:
+        return
+
+    current_limit = csv.field_size_limit()
+    desired_limit = max(len(raw_content), current_limit)
+    if desired_limit <= current_limit:
+        return
+
+    new_limit = desired_limit
+    while new_limit > current_limit:
+        try:
+            csv.field_size_limit(new_limit)
+            return
+        except OverflowError:
+            new_limit = (new_limit + current_limit) // 2
+            if new_limit <= current_limit:
+                break
+
+    logger.warning(
+        "csv_field_size_limit_adjust_failed desired=%s current=%s", desired_limit, current_limit
+    )
+
+
 def _strip_tags(metadata: dict | None) -> dict:
     """移除元数据中遗留的标签键。"""
     if not metadata:
@@ -231,6 +257,7 @@ def get_document_content(
         if raw_content:
             stream = io.StringIO(raw_content.lstrip("\ufeff"))
             try:
+                _ensure_csv_field_size_limit(raw_content)
                 reader = csv.reader(stream)
             except csv.Error as exc:  # pragma: no cover - 极端格式错误
                 logger.warning("parse_csv_failed uuid=%s error=%s", doc_uuid, exc)
