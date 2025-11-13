@@ -5,7 +5,8 @@ tests/
 qdrant_storage/
 data/
 .vscode/
-frontend/node_modules/
-frontend/dist/
-!frontend/tests/
-legacy_frontend/
+frontend_admin/node_modules/
+frontend_admin/dist/
+!frontend_admin/tests/
+frontend_client/node_modules/
+frontend_client/dist/

@@ -10,7 +10,8 @@
   - [一、环境要求](#一环境要求)
   - [二、环境变量（统一清单）](#二环境变量统一清单)
     - [后端（根目录 `.env`）](#后端根目录-env)
-    - [前端（`frontend/.env.local`）](#前端frontendenvlocal)
+    - [管理端前端（`frontend_admin/.env.local`）](#管理端前端frontend_adminenvlocal)
+    - [客户端前端（`frontend_client/.env.local`）](#客户端前端frontend_clientenvlocal)
   - [三、快速启动（后端 + 依赖服务 + 前端）](#三快速启动后端--依赖服务--前端)
     - [1) 克隆仓库 \& Python 依赖](#1-克隆仓库--python-依赖)
     - [2) 配置环境变量](#2-配置环境变量)
@@ -33,7 +34,7 @@
 
 ## 二、环境变量（统一清单）
 
-> 后端读取项目根目录的 `.env`；前端读取 `frontend/.env.local`。
+> 后端读取项目根目录的 `.env`；前端分别读取 `frontend_admin/.env.local`（管理端）与 `frontend_client/.env.local`（客户端）。
 
 ### 后端（根目录 `.env`）
 ```dotenv
@@ -69,11 +70,18 @@ CSV_FIELD_SIZE_LIMIT=10485760
 set -a && source .env && set +a
 ```
 
-### 前端（`frontend/.env.local`）
+### 管理端前端（`frontend_admin/.env.local`）
 ```dotenv
 # 后端 API 基地址（保持与后端 uvicorn 端口一致）
 VUE_APP_API_BASE_URL=http://localhost:8000/api
 # 前端本地存储的 Token 键名
+VUE_APP_TOKEN_STORAGE_KEY=archive_ai_token
+```
+
+### 客户端前端（`frontend_client/.env.local`）
+```dotenv
+# 若客户端也需要直连后端，可复用同一套配置
+VUE_APP_API_BASE_URL=http://localhost:8000/api
 VUE_APP_TOKEN_STORAGE_KEY=archive_ai_token
 ```
 
@@ -122,12 +130,18 @@ uvicorn app.main:app --reload
 
 ### 6) 启动前端（Vue CLI）
 ```bash
-cd frontend
-npm install          # 首次安装依赖
-npm run serve        # 启动开发服务器（默认 http://localhost:8080）
+# 管理端
+cd frontend_admin
+npm install
+npm run serve
+
+# 客户端
+cd frontend_client
+npm install
+npm run serve
 ```
 
-> 首次访问请确认后端已启动，并使用管理员或已注册账号登录。
+> 请先确认后端已启动；如需同时开发两个前端，可分别在不同终端运行。
 
 ---
 
@@ -145,12 +159,18 @@ alembic upgrade head
 python -m app.scripts.bootstrap_admin
 ```
 
-**前端（在 frontend/ 目录）**
+**前端（在各自目录）**
 ```bash
-npm run serve     # 开发
-npm run build     # 生产打包（输出到 frontend/dist/）
-npm run lint      # 代码检查（如配置）
-npm run test:unit # 单测（如配置）
+# frontend_admin/
+npm run serve
+npm run build
+npm run lint
+npm run test:unit
+
+# frontend_client/
+npm run serve
+npm run build
+npm run lint
 ```
 
 **容器**
@@ -195,8 +215,8 @@ curl -X POST http://localhost:8000/chats/7/messages \
 ---
 
 ## 六、故障排查速记
-- **`npm: command not found`**：先安装 Node.js（推荐 nvm 安装 LTS），再进 `frontend/` 执行 `npm install`。
-- **前端 404 或无法登录**：确认 `frontend/.env.local` 的 `VUE_APP_API_BASE_URL` 指向后端；后端 `uvicorn` 正常运行。
+- **`npm: command not found`**：先安装 Node.js（推荐 nvm 安装 LTS），再进前端目录（如 `frontend_admin/` 或 `frontend_client/`）执行 `npm install`。
+- **前端 404 或无法登录**：确认 `frontend_admin/.env.local` 或 `frontend_client/.env.local` 的 `VUE_APP_API_BASE_URL` 指向后端；后端 `uvicorn` 正常运行。
 - **数据库连接失败**：检查 `DATABASE_URL`、Postgres 容器是否启动、端口是否占用。
 - **Qdrant 写入/查询失败**：检查 `QDRANT_URL`、容器是否正常、集合名与代码一致。
 - **管理员缺失**：运行 `python -m app.scripts.bootstrap_admin` 重新注入。
