@@ -307,6 +307,8 @@ const isSaving = ref(false);
 
 const chunkPageSize = 100;
 const CELL_PREVIEW_LENGTH = 60;
+const DEFAULT_CSV_LIMIT = 10;
+const DEFAULT_TEXT_LIMIT = 100;
 const chunkPageIndex = ref(0);
 const contentPageIndex = ref(0);
 const isContentExpanded = ref(false);
@@ -369,6 +371,7 @@ const editErrors = reactive({
 });
 
 const document = computed(() => documentsStore.activeDocument);
+const documentSource = computed(() => document.value?.doc_metadata?.source || 'text');
 const chunkPage = computed(() => documentsStore.activeChunkPage);
 const isLoadingChunks = computed(() => documentsStore.isLoadingChunks);
 const chunkTotal = computed(() => {
@@ -394,6 +397,29 @@ const domainName = computed(() => {
   if (!document.value) return '—';
   return domain?.name || t('documents.unknownDomain', { id: document.value.domain_id });
 });
+
+function resolveContentLimit(page, fallbackLimit) {
+  const defaultFallback = documentSource.value === 'csv'
+    ? DEFAULT_CSV_LIMIT
+    : DEFAULT_TEXT_LIMIT;
+  const fallback = typeof fallbackLimit === 'number' && fallbackLimit > 0
+    ? fallbackLimit
+    : defaultFallback;
+  if (!page) {
+    return fallback;
+  }
+  const rawLimit = page.limit && page.limit > 0 ? page.limit : fallback;
+  if (page.mode === 'csv') {
+    return Math.min(rawLimit, DEFAULT_CSV_LIMIT);
+  }
+  if (page.mode === 'text') {
+    return rawLimit;
+  }
+  if (documentSource.value === 'csv') {
+    return Math.min(rawLimit, DEFAULT_CSV_LIMIT);
+  }
+  return rawLimit;
+}
 
 const chunkPageOptions = computed(() => {
   const total = chunkTotal.value;
@@ -445,10 +471,13 @@ const normalizedRows = computed(() => {
   if (!page || page.mode !== 'csv') return [];
   const headers = contentHeaders.value;
   const targetLength = headers.length || 0;
+  const limit = resolveContentLimit(page);
+  const rows = Array.isArray(page.rows) ? page.rows : [];
+  const limitedRows = limit ? rows.slice(0, limit) : rows;
   if (!targetLength) {
-    return Array.isArray(page.rows) ? page.rows : [];
+    return limitedRows;
   }
-  return (Array.isArray(page.rows) ? page.rows : []).map((row) => {
+  return limitedRows.map((row) => {
     const cells = Array.isArray(row) ? [...row] : [String(row ?? '')];
     if (cells.length < targetLength) {
       return [...cells, ...Array(targetLength - cells.length).fill('')];
@@ -491,7 +520,7 @@ const contentRangeLabel = computed(() => {
 const contentPageOptions = computed(() => {
   const page = contentPage.value;
   if (!page || !page.total) return [];
-  const limit = page.limit || (page.mode === 'csv' ? 20 : 100);
+  const limit = resolveContentLimit(page);
   if (!limit || page.total <= limit) return [];
   const totalPages = Math.ceil(page.total / limit);
   return Array.from({ length: totalPages }, (_, index) => {
@@ -565,7 +594,7 @@ watch(contentPage, (page) => {
     disconnectTableObservers();
     return;
   }
-  const limit = page.limit || (page.mode === 'csv' ? 20 : 100);
+  const limit = resolveContentLimit(page);
   const derived = limit ? Math.floor((page.offset ?? 0) / limit) : 0;
   contentPageIndex.value = derived;
   contentError.value = '';
@@ -774,29 +803,21 @@ function getContentUnit(mode) {
 async function loadContentPage(index) {
   if (!document.value) return;
   const current = contentPage.value;
-  const baseLimit = current?.limit && current.limit > 0
-    ? current.limit
-    : current?.mode === 'csv'
-      ? 20
-      : 100;
+  const baseLimit = resolveContentLimit(current);
   const params = {};
-  const limitForOffset = current?.limit && current.limit > 0 ? current.limit : baseLimit;
-  if (index > 0) {
-    params.offset = index * limitForOffset;
-  }
-  if (current?.limit && current.limit > 0) {
-    params.limit = current.limit;
-  } else if (current && !current.limit && baseLimit) {
-    params.limit = baseLimit;
-  } else if (!current && index > 0) {
-    params.limit = baseLimit;
+  const limitForOffset = baseLimit;
+  if (limitForOffset && limitForOffset > 0) {
+    params.limit = limitForOffset;
+    if (index > 0) {
+      params.offset = index * limitForOffset;
+    }
+  } else if (current?.limit && current.limit > 0 && index > 0) {
+    params.offset = index * current.limit;
   }
   contentError.value = '';
   try {
     const data = await documentsStore.loadDocumentContent(document.value.uuid, params);
-    const effectiveLimit = data?.limit && data.limit > 0
-      ? data.limit
-      : limitForOffset || (data?.mode === 'csv' ? 20 : 100);
+    const effectiveLimit = resolveContentLimit(data, limitForOffset);
     const derivedIndex = effectiveLimit > 0
       ? Math.floor((data?.offset ?? 0) / effectiveLimit)
       : 0;
