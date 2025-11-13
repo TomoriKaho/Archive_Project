@@ -1,11 +1,12 @@
-# Archive Project（精简版）
+# Archive Project
 
-基于 **FastAPI** 的文档管理与对话服务 + **Vue 3 (Vue CLI)** 前端。README 已精简：统一了环境变量说明、统一了启动命令，删去了冗余的讲解性段落与老的静态 HTML 前端内容。
+为外国语学院开发的档案库RAG问答系统。
+基于 **FastAPI** 的文档管理与对话服务 + **Vue 3 (Vue CLI)** 前端。
 
 ---
 
 ## 目录
-- [Archive Project（精简版）](#archive-project精简版)
+- [Archive Project](#archive-project)
   - [目录](#目录)
   - [一、环境要求](#一环境要求)
   - [二、环境变量（统一清单）](#二环境变量统一清单)
@@ -19,7 +20,7 @@
     - [5) 启动后端（FastAPI）](#5-启动后端fastapi)
     - [6) 启动前端（Vue CLI）](#6-启动前端vue-cli)
   - [四、常用命令](#四常用命令)
-  - [五、RAG 相关（可选）](#五rag-相关可选)
+  - [五、RAG 相关](#五rag-相关)
   - [六、故障排查速记](#六故障排查速记)
 
 ---
@@ -162,9 +163,7 @@ docker logs -f qdrant
 
 ---
 
-## 五、RAG 相关（可选）
-
-> 若暂未启用 RAG，可跳过本节。需要时：
+## 五、RAG 相关
 
 ```bash
 # 启动/准备 Ollama（本机）
