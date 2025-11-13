@@ -88,6 +88,7 @@
               </ol>
               <div
                 v-else-if="contentPage && contentPage.mode === 'csv' && normalizedRows.length"
+                ref="tableWrapperRef"
                 class="document-content__table-wrapper"
               >
                 <table class="document-content__table">
@@ -285,7 +286,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
@@ -317,6 +318,47 @@ const previewContent = reactive({
   value: '',
   rowNumber: 0
 });
+const tableWrapperRef = ref(null);
+const isTableScrollable = ref(false);
+let tableWrapperResizeObserver = null;
+let tableResizeObserver = null;
+
+function disconnectTableObservers() {
+  if (tableWrapperResizeObserver) {
+    tableWrapperResizeObserver.disconnect();
+    tableWrapperResizeObserver = null;
+  }
+  if (tableResizeObserver) {
+    tableResizeObserver.disconnect();
+    tableResizeObserver = null;
+  }
+}
+
+function observeTableDimensions(wrapper) {
+  if (typeof ResizeObserver === 'undefined' || !wrapper) return;
+  const table = wrapper.querySelector('.document-content__table');
+  disconnectTableObservers();
+  tableWrapperResizeObserver = new ResizeObserver(() => {
+    scheduleTableScrollMeasurement();
+  });
+  tableWrapperResizeObserver.observe(wrapper);
+  if (table) {
+    tableResizeObserver = new ResizeObserver(() => {
+      scheduleTableScrollMeasurement();
+    });
+    tableResizeObserver.observe(table);
+  }
+}
+
+function scheduleTableScrollMeasurement() {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => {
+      updateTableScrollState();
+    });
+    return;
+  }
+  updateTableScrollState();
+}
 
 const editForm = reactive({
   title: ''
@@ -519,13 +561,99 @@ watch(chunkTotal, (total) => {
 watch(contentPage, (page) => {
   if (!page) {
     contentPageIndex.value = 0;
+    isTableScrollable.value = false;
+    disconnectTableObservers();
     return;
   }
   const limit = page.limit || (page.mode === 'csv' ? 20 : 100);
   const derived = limit ? Math.floor((page.offset ?? 0) / limit) : 0;
   contentPageIndex.value = derived;
   contentError.value = '';
+  if (page.mode !== 'csv') {
+    isTableScrollable.value = false;
+    disconnectTableObservers();
+    return;
+  }
+  nextTick(() => {
+    const wrapper = tableWrapperRef.value;
+    if (wrapper) {
+      observeTableDimensions(wrapper);
+      updateTableScrollState();
+    }
+  });
 });
+
+function updateTableScrollState() {
+  const page = contentPage.value;
+  const wrapper = tableWrapperRef.value;
+  if (!page || page.mode !== 'csv' || !wrapper) {
+    isTableScrollable.value = false;
+    return;
+  }
+  const scrollableWidth = wrapper.scrollWidth;
+  const visibleWidth = wrapper.clientWidth;
+  const overflowAllowance = 1; // compensate for fractional pixel rounding
+  isTableScrollable.value = scrollableWidth - visibleWidth > overflowAllowance;
+}
+
+function handleTableWheel(event) {
+  if (!isTableScrollable.value) return;
+  const wrapper = tableWrapperRef.value;
+  if (!wrapper) return;
+  const { deltaY, deltaX } = event;
+  if (Math.abs(deltaY) <= Math.abs(deltaX) || Math.abs(deltaY) < 1) {
+    return;
+  }
+  const previousScrollLeft = wrapper.scrollLeft;
+  wrapper.scrollLeft += deltaY;
+  if (wrapper.scrollLeft !== previousScrollLeft) {
+    event.preventDefault();
+  }
+}
+
+watch(
+  tableWrapperRef,
+  (element, previous) => {
+    if (previous) {
+      previous.removeEventListener('wheel', handleTableWheel);
+    }
+    disconnectTableObservers();
+    if (!element) {
+      isTableScrollable.value = false;
+      return;
+    }
+    element.addEventListener('wheel', handleTableWheel, { passive: false });
+    nextTick(() => {
+      observeTableDimensions(element);
+      updateTableScrollState();
+    });
+  }
+);
+
+watch(
+  () => [
+    contentPage.value?.mode,
+    normalizedRows.value.length,
+    contentHeaders.value.length,
+    contentPage.value?.offset,
+    contentPage.value?.limit
+  ],
+  () => {
+    nextTick(() => {
+      if (contentPage.value?.mode !== 'csv') {
+        disconnectTableObservers();
+        isTableScrollable.value = false;
+        return;
+      }
+      const wrapper = tableWrapperRef.value;
+      if (wrapper) {
+        observeTableDimensions(wrapper);
+        updateTableScrollState();
+      }
+    });
+  },
+  { immediate: true }
+);
 
 watch(
   document,
@@ -568,6 +696,16 @@ watch(
 );
 
 onMounted(async () => {
+  window.addEventListener('resize', updateTableScrollState);
+  nextTick(() => {
+    if (contentPage.value?.mode === 'csv') {
+      const wrapper = tableWrapperRef.value;
+      if (wrapper) {
+        observeTableDimensions(wrapper);
+      }
+    }
+    updateTableScrollState();
+  });
   if (!domainsStore.items.length) {
     await domainsStore.loadDomains();
   }
@@ -577,6 +715,15 @@ onMounted(async () => {
   } catch (error) {
     loadError.value = t('documentDetail.loadError');
   }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateTableScrollState);
+  const wrapper = tableWrapperRef.value;
+  if (wrapper) {
+    wrapper.removeEventListener('wheel', handleTableWheel);
+  }
+  disconnectTableObservers();
 });
 
 watch(
@@ -752,6 +899,8 @@ async function remove() {
 
 <style scoped>
 .document-detail {
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
 }
 
@@ -797,11 +946,20 @@ async function remove() {
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+  max-width: 100%;
+  min-width: 0;
 }
 
 .document-detail__source {
-  overflow: hidden;
+  width: 100%;
   max-width: 100%;
+  overflow: hidden;
+}
+
+.document-detail__source details {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .document-detail__content pre {
@@ -930,7 +1088,7 @@ async function remove() {
   gap: 16px;
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .document-detail__loading-text,
@@ -1004,14 +1162,15 @@ async function remove() {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow-x: auto;
+  overflow-y: hidden;
   width: 100%;
   max-width: 100%;
 }
 
 .document-content__table {
-  width: 100%;
+  min-width: max(100%, 480px);
+  width: max-content;
   border-collapse: collapse;
-  min-width: 480px;
   background: #ffffff;
 }
 

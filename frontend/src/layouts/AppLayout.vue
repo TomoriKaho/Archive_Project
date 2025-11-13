@@ -34,11 +34,20 @@ const title = computed(() =>
 </script>
 
 <style scoped>
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
 .content-area {
   padding: 24px;
   flex: 1;
   min-height: calc(100vh - 64px);
   background: #f5f6fa;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 @media (max-width: 960px) {
