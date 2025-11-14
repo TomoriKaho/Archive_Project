@@ -264,7 +264,7 @@ const languagePack = {
       create: 'New',
       rename: 'Rename',
       delete: 'Delete',
-      empty: 'No conversations yet. Click “New” to start.',
+      empty: 'No conversations yet.\nClick “New” to start.',
       goHome: 'Back to home'
     },
     chatWindow: {

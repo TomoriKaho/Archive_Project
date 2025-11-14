@@ -38,7 +38,7 @@
       </ul>
     </section>
     <section v-else class="chat-sidebar__empty">
-      <p>{{ texts.empty }}</p>
+      <p class="chat-sidebar__empty-text">{{ texts.empty }}</p>
     </section>
     <footer class="chat-sidebar__footer">
       <button class="chat-sidebar__home" type="button" @click="$emit('go-home')">{{ texts.goHome }}</button>
@@ -201,6 +201,7 @@ function formatTitle(rawTitle) {
   font-weight: 600;
   color: #1f2a56;
   cursor: pointer;
+  min-width: 0;
 }
 
 .chat-sidebar__item-title {
@@ -214,6 +215,7 @@ function formatTitle(rawTitle) {
   align-items: center;
   gap: 0.5rem;
   margin-left: 0.5rem;
+  flex-shrink: 0;
 }
 
 .chat-sidebar__icon {
@@ -236,10 +238,18 @@ function formatTitle(rawTitle) {
 }
 
 .chat-sidebar__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 2rem 1rem;
+  text-align: center;
+}
+
+.chat-sidebar__empty-text {
+  margin: 0;
   color: #6f7dae;
   font-size: 0.9rem;
-  text-align: center;
+  white-space: pre-line;
 }
 
 .chat-sidebar__footer {
