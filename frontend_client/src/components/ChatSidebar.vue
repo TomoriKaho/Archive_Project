@@ -5,9 +5,11 @@
         <h2 class="chat-sidebar__title">会话历史</h2>
         <p class="chat-sidebar__subtitle">管理你的提问与回答</p>
       </div>
-      <button class="chat-sidebar__create" type="button" @click="$emit('create')">
-        + 新建
-      </button>
+      <div class="chat-sidebar__header-actions">
+        <button class="chat-sidebar__create" type="button" @click="$emit('create')">
+          + 新建
+        </button>
+      </div>
     </header>
     <section class="chat-sidebar__list" v-if="conversations.length">
       <ul>
@@ -58,18 +60,11 @@ const props = defineProps({
 const emit = defineEmits(['select', 'create', 'rename', 'delete', 'go-home']);
 
 function handleRename(conversation) {
-  const nextTitle = window.prompt('请输入新的会话名称', conversation.title || '');
-  if (nextTitle === null) {
-    return;
-  }
-  emit('rename', { id: conversation.id, title: nextTitle.trim() });
+  emit('rename', conversation);
 }
 
 function handleDelete(conversation) {
-  if (!window.confirm('确定删除该会话吗？该操作不可撤销。')) {
-    return;
-  }
-  emit('delete', conversation.id);
+  emit('delete', conversation);
 }
 </script>
 
@@ -92,6 +87,12 @@ function handleDelete(conversation) {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+.chat-sidebar__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .chat-sidebar__title {

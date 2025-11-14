@@ -1,8 +1,7 @@
 <template>
   <div class="chat-window">
     <header class="chat-window__header">
-      <div>
-        <h1 class="chat-window__title">{{ title }}</h1>
+      <div class="chat-window__info">
         <p class="chat-window__subtitle" v-if="activeDomainNames.length">
           已选择领域：{{ activeDomainNames.join('、') }}
         </p>
@@ -56,6 +55,7 @@
       <div v-else class="chat-window__empty">
         <p>开始新的对话，系统将基于选定的知识域为你解答。</p>
       </div>
+      <div v-if="isSending" class="chat-window__thinking">助手正在思考…</div>
     </main>
 
     <form class="chat-window__composer" @submit.prevent="handleSubmit">
@@ -80,10 +80,6 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
-  title: {
-    type: String,
-    default: '新的会话'
-  },
   messages: {
     type: Array,
     default: () => []
@@ -209,7 +205,7 @@ onMounted(scrollToBottom);
   flex-direction: column;
   height: 100vh;
   background: linear-gradient(180deg, #f7f8fc 0%, #ffffff 100%);
-  padding: 2rem 2.5rem 2rem 2rem;
+  padding: 2rem 2.5rem 2rem 4.5rem;
 }
 
 .chat-window__header {
@@ -221,15 +217,12 @@ onMounted(scrollToBottom);
   border-bottom: 1px solid rgba(126, 139, 196, 0.25);
 }
 
-.chat-window__title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1d2b4d;
+.chat-window__info {
+  flex: 1;
 }
 
 .chat-window__subtitle {
-  margin: 0.4rem 0 0;
+  margin: 0;
   color: #6071a3;
   font-size: 0.9rem;
 }
@@ -332,6 +325,16 @@ onMounted(scrollToBottom);
   color: #7c89ba;
   height: 100%;
   text-align: center;
+}
+
+.chat-window__thinking {
+  align-self: flex-start;
+  padding: 0.65rem 1.1rem;
+  border-radius: 12px;
+  background: rgba(123, 91, 255, 0.12);
+  color: #5a50b5;
+  font-weight: 600;
+  box-shadow: 0 12px 24px rgba(123, 91, 255, 0.15);
 }
 
 .chat-message {

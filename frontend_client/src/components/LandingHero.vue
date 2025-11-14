@@ -1,16 +1,16 @@
 <template>
   <section class="landing-hero">
     <div class="landing-hero__content">
-      <h1 class="landing-hero__title">Archive AI 助手</h1>
+      <h1 class="landing-hero__title">欢迎使用档案库 AI 助手</h1>
       <p class="landing-hero__subtitle">在这里快速检索档案知识并与智能助手对话。</p>
       <form class="landing-hero__form" @submit.prevent="handleSubmit">
         <input
           v-model="query"
           class="landing-hero__input"
           type="text"
-          placeholder="请输入问题，按下回车或点击发送"
+          placeholder="试着输入一个问题，例如：张小明是谁？"
         />
-        <button class="landing-hero__submit" type="submit">开始对话</button>
+        <button class="landing-hero__submit" type="submit" :disabled="!canSubmit">开始对话</button>
       </form>
       <div class="landing-hero__actions">
         <button type="button" class="landing-hero__history" @click="$emit('show-history')">
@@ -22,7 +22,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
   modelValue: {
@@ -34,6 +34,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'submit', 'show-history']);
 
 const query = ref(props.modelValue);
+const canSubmit = computed(() => Boolean(query.value?.trim()));
 
 watch(
   () => props.modelValue,
@@ -49,7 +50,11 @@ watch(query, (value) => {
 });
 
 function handleSubmit() {
-  emit('submit', query.value?.trim() || '');
+  const value = query.value?.trim() || '';
+  if (!value) {
+    return;
+  }
+  emit('submit', value);
 }
 </script>
 
@@ -119,6 +124,17 @@ function handleSubmit() {
 .landing-hero__submit:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(72, 102, 255, 0.28);
+}
+
+.landing-hero__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+}
+
+.landing-hero__submit:disabled:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .landing-hero__actions {

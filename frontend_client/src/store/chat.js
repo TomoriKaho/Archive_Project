@@ -86,7 +86,24 @@ export const useChatStore = defineStore('client-chat', {
       this.isLoading = true;
       try {
         const { data } = await fetchConversationMessages(conversationId);
-        this.messages = data;
+        if (conversationId !== this.activeConversationId) {
+          return;
+        }
+        const pendingMessages = this.messages.filter((item) =>
+          typeof item?.id === 'string' && item.id.startsWith('temp-')
+        );
+        if (pendingMessages.length) {
+          const existingIds = new Set(data.map((item) => item.id));
+          const merged = [...data];
+          pendingMessages.forEach((message) => {
+            if (!existingIds.has(message.id)) {
+              merged.push(message);
+            }
+          });
+          this.messages = merged;
+        } else {
+          this.messages = data;
+        }
       } finally {
         this.isLoading = false;
       }
@@ -96,29 +113,27 @@ export const useChatStore = defineStore('client-chat', {
       if (!authStore.user) {
         throw new Error('用户未登录');
       }
-      this.isSending = true;
-      try {
-        const trimmedTitle = title?.trim();
-        const finalTitle = trimmedTitle && trimmedTitle.length ? trimmedTitle : '新的会话';
-        const { data } = await createConversationRequest({
-          user_id: authStore.user.id,
-          title: finalTitle
+      const trimmedTitle = title?.trim();
+      const finalTitle = trimmedTitle && trimmedTitle.length ? trimmedTitle : '新的会话';
+      const { data } = await createConversationRequest({
+        user_id: authStore.user.id,
+        title: finalTitle
+      });
+      await this.loadConversations();
+      this.activeConversationId = data.id;
+      const normalizedDomains = normalizeDomainIds(domainIds);
+      this.setConversationDomains(data.id, normalizedDomains);
+      this.messages = [];
+      if (initialMessage && initialMessage.trim()) {
+        const payload = {
+          content: initialMessage,
+          domain_ids: normalizedDomains
+        };
+        this.sendMessage(data.id, payload).catch((error) => {
+          console.error('初始消息发送失败', error);
         });
-        await this.loadConversations();
-        this.activeConversationId = data.id;
-        const normalizedDomains = normalizeDomainIds(domainIds);
-        this.setConversationDomains(data.id, normalizedDomains);
-        this.messages = [];
-        if (initialMessage && initialMessage.trim()) {
-          await this.sendMessage(data.id, {
-            content: initialMessage,
-            domain_ids: normalizedDomains
-          });
-        }
-        return data.id;
-      } finally {
-        this.isSending = false;
       }
+      return data.id;
     },
     async sendMessage(conversationId, payload) {
       if (!conversationId) {

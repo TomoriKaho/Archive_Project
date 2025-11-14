@@ -16,11 +16,13 @@ const query = ref('');
 
 async function handleSubmit(value) {
   const content = value.trim();
-  const hasContent = Boolean(content);
+  if (!content) {
+    return;
+  }
   try {
     const conversationId = await chatStore.createConversation({
-      title: hasContent ? content.slice(0, 30) : '新的会话',
-      initialMessage: hasContent ? content : ''
+      title: content.slice(0, 30),
+      initialMessage: content
     });
     router.push({ name: 'chat', params: { conversationId } });
   } catch (error) {
