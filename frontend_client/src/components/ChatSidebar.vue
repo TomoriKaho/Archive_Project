@@ -23,7 +23,7 @@
             type="button"
             @click="$emit('select', conversation.id)"
           >
-            <span class="chat-sidebar__item-title">{{ conversation.title || '未命名会话' }}</span>
+            <span class="chat-sidebar__item-title">{{ formatTitle(conversation.title) }}</span>
           </button>
           <div class="chat-sidebar__item-actions">
             <button type="button" class="chat-sidebar__icon" @click="handleRename(conversation)">
@@ -59,12 +59,23 @@ const props = defineProps({
 
 const emit = defineEmits(['select', 'create', 'rename', 'delete', 'go-home']);
 
+const DEFAULT_TITLE = '未命名会话';
+const MAX_TITLE_LENGTH = 18;
+
 function handleRename(conversation) {
   emit('rename', conversation);
 }
 
 function handleDelete(conversation) {
   emit('delete', conversation);
+}
+
+function formatTitle(rawTitle) {
+  const normalized = (rawTitle || DEFAULT_TITLE).trim() || DEFAULT_TITLE;
+  if (normalized.length <= MAX_TITLE_LENGTH) {
+    return normalized;
+  }
+  return `${normalized.slice(0, MAX_TITLE_LENGTH)}...`;
 }
 </script>
 

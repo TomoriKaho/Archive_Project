@@ -1,20 +1,21 @@
 <template>
   <section class="landing-hero">
     <div class="landing-hero__content">
-      <h1 class="landing-hero__title">欢迎使用档案库 AI 助手</h1>
-      <p class="landing-hero__subtitle">在这里快速检索档案知识并与智能助手对话。</p>
+      <h1 class="landing-hero__title">{{ texts.title }}</h1>
+      <p class="landing-hero__subtitle">{{ texts.subtitle }}</p>
       <form class="landing-hero__form" @submit.prevent="handleSubmit">
-        <input
+        <textarea
+          ref="textareaRef"
           v-model="query"
           class="landing-hero__input"
-          type="text"
-          placeholder="试着输入一个问题，例如：张小明是谁？"
-        />
-        <button class="landing-hero__submit" type="submit" :disabled="!canSubmit">开始对话</button>
+          rows="1"
+          :placeholder="texts.placeholder"
+        ></textarea>
+        <button class="landing-hero__submit" type="submit" :disabled="!canSubmit">{{ texts.submit }}</button>
       </form>
       <div class="landing-hero__actions">
         <button type="button" class="landing-hero__history" @click="$emit('show-history')">
-          查看历史会话
+          {{ texts.history }}
         </button>
       </div>
     </div>
@@ -22,12 +23,16 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
   modelValue: {
     type: String,
     default: ''
+  },
+  texts: {
+    type: Object,
+    required: true
   }
 });
 
@@ -35,18 +40,21 @@ const emit = defineEmits(['update:modelValue', 'submit', 'show-history']);
 
 const query = ref(props.modelValue);
 const canSubmit = computed(() => Boolean(query.value?.trim()));
+const textareaRef = ref(null);
 
 watch(
   () => props.modelValue,
   (value) => {
     if (value !== query.value) {
       query.value = value;
+      nextTick(adjustTextareaHeight);
     }
   }
 );
 
 watch(query, (value) => {
   emit('update:modelValue', value);
+  nextTick(adjustTextareaHeight);
 });
 
 function handleSubmit() {
@@ -56,6 +64,19 @@ function handleSubmit() {
   }
   emit('submit', value);
 }
+
+function adjustTextareaHeight() {
+  const el = textareaRef.value;
+  if (!el) {
+    return;
+  }
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
+
+onMounted(() => {
+  nextTick(adjustTextareaHeight);
+});
 </script>
 
 <style scoped lang="scss">
@@ -91,12 +112,14 @@ function handleSubmit() {
   color: #4c5c8b;
 }
 
+
 .landing-hero__form {
   display: flex;
   gap: 0.75rem;
+  align-items: stretch;
   background-color: #fff;
   padding: 0.75rem 0.75rem 0.75rem 1.25rem;
-  border-radius: 999px;
+  border-radius: 24px;
   box-shadow: inset 0 0 0 1px #d9e1ff;
 }
 
@@ -107,6 +130,13 @@ function handleSubmit() {
   outline: none;
   background: transparent;
   color: #1a1a1a;
+  resize: none;
+  line-height: 1.5;
+  min-height: 2.75rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  font-family: inherit;
+  padding: 0;
 }
 
 .landing-hero__submit {
@@ -142,19 +172,21 @@ function handleSubmit() {
 }
 
 .landing-hero__history {
-  background: none;
-  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #cdd5ff;
   font-size: 0.95rem;
   color: #4866ff;
   font-weight: 600;
   cursor: pointer;
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  transition: background-color 0.2s ease;
+  padding: 0.55rem 1.5rem;
+  border-radius: 16px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 6px 16px rgba(72, 102, 255, 0.12);
 }
 
 .landing-hero__history:hover {
-  background-color: rgba(72, 102, 255, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(72, 102, 255, 0.18);
 }
 
 @media (max-width: 600px) {
@@ -164,8 +196,8 @@ function handleSubmit() {
 
   .landing-hero__form {
     flex-direction: column;
-    border-radius: 24px;
-    padding: 0.75rem;
+    border-radius: 20px;
+    padding: 0.75rem 0.75rem 0.95rem;
   }
 
   .landing-hero__submit {

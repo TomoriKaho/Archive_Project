@@ -1,18 +1,91 @@
 <template>
   <div class="landing-view">
-    <LandingHero v-model="query" @submit="handleSubmit" @show-history="openHistory" />
+    <LandingHero v-model="query" :texts="heroTexts" @submit="handleSubmit" @show-history="openHistory" />
+    <div class="landing-view__quick-actions">
+      <button
+        type="button"
+        class="landing-view__fab landing-view__fab--language"
+        :aria-label="languageAriaLabel"
+        @click="toggleLanguage"
+      >
+        <span class="landing-view__fab-icon" aria-hidden="true">{{ languageFlag }}</span>
+        <span class="landing-view__fab-label">{{ languageLabel }}</span>
+      </button>
+      <button
+        type="button"
+        class="landing-view__fab landing-view__fab--logout"
+        :aria-label="heroTexts.logoutAria"
+        @click="handleLogout"
+      >
+        <span class="landing-view__fab-icon" aria-hidden="true">🚪</span>
+        <span class="landing-view__fab-label">{{ heroTexts.logout }}</span>
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import LandingHero from '@/components/LandingHero.vue';
 import { useChatStore } from '@/store/chat';
+import { useAuthStore } from '@/store/auth';
 
 const router = useRouter();
 const chatStore = useChatStore();
+const authStore = useAuthStore();
+
 const query = ref('');
+const language = ref('zh');
+
+const languagePack = {
+  zh: {
+    label: '中文',
+    flag: '🇨🇳',
+    toggleAria: '切换到英文界面',
+    hero: {
+      title: '欢迎使用档案库 AI 助手',
+      subtitle: '在这里快速检索档案知识并与智能助手对话。',
+      placeholder: '试着输入一个问题，例如：张小明是谁？',
+      submit: '开始对话',
+      history: '查看历史会话',
+      logout: '退出登录',
+      logoutAria: '退出当前账号'
+    }
+  },
+  en: {
+    label: 'English',
+    flag: '🇺🇸',
+    toggleAria: 'Switch to Chinese interface',
+    hero: {
+      title: 'Welcome to the Archives AI Assistant',
+      subtitle: 'Quickly search archival knowledge and chat with the assistant here.',
+      placeholder: 'Try asking a question, e.g. Who is Zhang Xiaoming?',
+      submit: 'Start Chatting',
+      history: 'View Conversation History',
+      logout: 'Log out',
+      logoutAria: 'Log out of the current account'
+    }
+  }
+};
+
+const heroTexts = computed(() => languagePack[language.value].hero);
+const languageLabel = computed(() => languagePack[language.value].label);
+const languageFlag = computed(() => languagePack[language.value].flag);
+const languageAriaLabel = computed(() => languagePack[language.value].toggleAria);
+
+watch(
+  language,
+  (value) => {
+    const locale = value === 'zh' ? 'zh-CN' : 'en-US';
+    document.documentElement.setAttribute('lang', locale);
+  },
+  { immediate: true }
+);
+
+function toggleLanguage() {
+  language.value = language.value === 'zh' ? 'en' : 'zh';
+}
 
 async function handleSubmit(value) {
   const content = value.trim();
@@ -33,11 +106,80 @@ async function handleSubmit(value) {
 function openHistory() {
   router.push({ name: 'chat' });
 }
+
+function handleLogout() {
+  authStore.logout();
+}
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .landing-view {
+  position: relative;
   min-height: 100vh;
   background: transparent;
+}
+
+.landing-view__quick-actions {
+  position: fixed;
+  right: 2rem;
+  bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  z-index: 20;
+}
+
+.landing-view__fab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 18px;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 16px 40px rgba(28, 39, 84, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.landing-view__fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 48px rgba(28, 39, 84, 0.24);
+}
+
+.landing-view__fab--language {
+  background: linear-gradient(135deg, #ffffff 0%, #f4f7ff 100%);
+  color: #1c2754;
+}
+
+.landing-view__fab--logout {
+  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+  color: #fff;
+}
+
+.landing-view__fab-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.landing-view__fab-label {
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .landing-view__quick-actions {
+    right: 1.25rem;
+    bottom: 1.25rem;
+  }
+
+  .landing-view__fab {
+    padding: 0.55rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .landing-view__fab-icon {
+    font-size: 1rem;
+  }
 }
 </style>
