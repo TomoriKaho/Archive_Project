@@ -174,7 +174,7 @@ const languagePack = {
         submitting: '创建中…',
         domainButton: '选择知识域',
         domainBadge: (count) => `已选${count}`,
-        domainHint: '选择后发送消息时仅使用勾选的知识域。',
+        domainHint: '选择后发送消息时仅检索勾选的知识域，不勾选默认从全部知识域检索。',
         domainApply: '应用',
         domainClear: '清除'
       }
@@ -208,7 +208,7 @@ const languagePack = {
       noDomains: '未限定知识域，将在全部知识库中检索。',
       domainToggleOpen: '选择知识域',
       domainToggleClose: '收起知识域',
-      domainHint: '选择后发送消息时仅使用勾选的知识域。',
+      domainHint: '选择后发送消息时仅检索勾选的知识域，不勾选默认从全部知识域检索。',
       domainApply: '应用',
       domainClear: '清除',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
@@ -238,7 +238,8 @@ const languagePack = {
         submitting: 'Creating…',
         domainButton: 'Choose Domains',
         domainBadge: (count) => `${count} selected`,
-        domainHint: 'After applying, only the chosen domains will be used for answers.',
+        domainHint:
+          'When selected, messages will only search the checked domains. Leave unchecked to search all domains.',
         domainApply: 'Apply',
         domainClear: 'Clear'
       }
@@ -272,7 +273,8 @@ const languagePack = {
       noDomains: 'No domain filter. Searching the entire knowledge base.',
       domainToggleOpen: 'Choose domains',
       domainToggleClose: 'Hide domains',
-      domainHint: 'After applying, only the selected domains will be used for answers.',
+      domainHint:
+        'When selected, messages will only search the checked domains. Leave unchecked to search all domains.',
       domainApply: 'Apply',
       domainClear: 'Clear',
       empty: 'Start a new conversation and the assistant will answer based on the selected domains.',

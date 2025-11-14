@@ -72,7 +72,7 @@ const languagePack = {
         submitting: '创建中…',
         domainButton: '选择知识域',
         domainBadge: (count) => `已选${count}`,
-        domainHint: '选择后发送消息时仅使用勾选的知识域。',
+        domainHint: '选择后发送消息时仅检索勾选的知识域，不勾选默认从全部知识域检索。',
         domainApply: '应用',
         domainClear: '清除'
       }
@@ -94,7 +94,8 @@ const languagePack = {
         submitting: 'Creating…',
         domainButton: 'Choose Domains',
         domainBadge: (count) => `${count} selected`,
-        domainHint: 'When selected, the assistant will respond using only these domains.',
+        domainHint:
+          'When selected, messages will only search the checked domains. Leave unchecked to search all domains.',
         domainApply: 'Apply',
         domainClear: 'Clear'
       }
