@@ -2,18 +2,16 @@
   <div class="chat-window">
     <header class="chat-window__header">
       <div class="chat-window__info">
-        <p class="chat-window__subtitle" v-if="activeDomainNames.length">
-          已选择领域：{{ activeDomainNames.join('、') }}
-        </p>
-        <p class="chat-window__subtitle" v-else>未限定领域，将在全部知识库中检索。</p>
+        <p class="chat-window__subtitle" v-if="activeDomainNames.length">{{ selectedDomainsText }}</p>
+        <p class="chat-window__subtitle" v-else>{{ texts.noDomains }}</p>
       </div>
       <div v-if="domains.length" class="chat-window__domains">
         <button type="button" class="chat-window__domains-toggle" @click="togglePanel">
-          {{ domainsPanelOpen ? '收起领域' : '选择领域' }}
+          {{ domainsPanelOpen ? texts.domainToggleClose : texts.domainToggleOpen }}
         </button>
         <transition name="fade">
           <div v-if="domainsPanelOpen" class="chat-window__domains-panel">
-            <p class="chat-window__domains-hint">选择后发送消息时仅使用勾选的知识域。</p>
+            <p class="chat-window__domains-hint">{{ texts.domainHint }}</p>
             <div class="chat-window__domains-grid">
               <label v-for="domain in domains" :key="domain.id" class="chat-window__domains-option">
                 <input
@@ -26,10 +24,8 @@
               </label>
             </div>
             <div class="chat-window__domains-actions">
-              <button type="button" class="chat-window__domains-apply" @click="applyDomains">应用</button>
-              <button type="button" class="chat-window__domains-clear" @click="clearDomains">
-                清除
-              </button>
+              <button type="button" class="chat-window__domains-apply" @click="applyDomains">{{ texts.domainApply }}</button>
+              <button type="button" class="chat-window__domains-clear" @click="clearDomains">{{ texts.domainClear }}</button>
             </div>
           </div>
         </transition>
@@ -53,23 +49,23 @@
         </article>
       </template>
       <div v-else class="chat-window__empty">
-        <p>开始新的对话，系统将基于选定的知识域为你解答。</p>
+        <p>{{ texts.empty }}</p>
       </div>
-      <div v-if="isSending" class="chat-window__thinking">助手正在思考…</div>
+      <div v-if="isSending" class="chat-window__thinking">{{ texts.thinking }}</div>
     </main>
 
     <form class="chat-window__composer" @submit.prevent="handleSubmit">
       <textarea
         v-model="draft"
         class="chat-window__input"
-        placeholder="输入问题，Shift+Enter 换行"
+        :placeholder="texts.placeholder"
         rows="3"
         @keydown.enter.exact.prevent="handleSubmit"
         @keydown.enter.shift.stop
       ></textarea>
       <div class="chat-window__composer-actions">
         <button type="submit" class="chat-window__send" :disabled="isSending || !draft.trim()">
-          {{ isSending ? '发送中…' : '发送' }}
+          {{ isSending ? texts.sending : texts.send }}
         </button>
       </div>
     </form>
@@ -99,6 +95,29 @@ const props = defineProps({
   initialDomainsOpen: {
     type: Boolean,
     default: false
+  },
+  texts: {
+    type: Object,
+    default: () => ({
+      selectedDomainsLabel: '已选择领域：',
+      noDomains: '未限定领域，将在全部知识库中检索。',
+      domainToggleOpen: '选择领域',
+      domainToggleClose: '收起领域',
+      domainHint: '选择后发送消息时仅使用勾选的知识域。',
+      domainApply: '应用',
+      domainClear: '清除',
+      empty: '开始新的对话，系统将基于选定的知识域为你解答。',
+      thinking: '助手正在思考…',
+      placeholder: '输入问题，Shift+Enter 换行',
+      send: '发送',
+      sending: '发送中…',
+      domainJoiner: '、',
+      roles: {
+        user: '我',
+        assistant: '助手',
+        system: '系统'
+      }
+    })
   }
 });
 
@@ -133,6 +152,22 @@ watch(
     scrollToBottom();
   }
 );
+
+const activeDomainNames = computed(() => {
+  if (!props.domains.length || !props.selectedDomains.length) {
+    return [];
+  }
+  return props.domains
+    .filter((domain) => props.selectedDomains.includes(domain.id))
+    .map((domain) => domain.name);
+});
+
+const selectedDomainsText = computed(() => {
+  const label = props.texts.selectedDomainsLabel || '';
+  const joiner = props.texts.domainJoiner ?? '、';
+  const names = activeDomainNames.value.join(joiner);
+  return label ? `${label} ${names}` : names;
+});
 
 function togglePanel() {
   domainsPanelOpen.value = !domainsPanelOpen.value;
@@ -172,24 +207,12 @@ function handleSubmit() {
 }
 
 function renderRole(role) {
-  if (role === 'assistant') {
-    return '助手';
+  const mapping = props.texts.roles || {};
+  if (role && mapping[role]) {
+    return mapping[role];
   }
-  if (role === 'system') {
-    return '系统';
-  }
-  return '我';
+  return mapping.user || '我';
 }
-
-const activeDomainNames = computed(() => {
-  if (!props.domains.length || !props.selectedDomains.length) {
-    return [];
-  }
-  const names = props.domains
-    .filter((domain) => props.selectedDomains.includes(domain.id))
-    .map((domain) => domain.name);
-  return names;
-});
 
 function formatTime(value) {
   const date = new Date(value);
@@ -401,12 +424,12 @@ onMounted(scrollToBottom);
 .chat-window__input {
   width: 100%;
   border: none;
+  outline: none;
   resize: none;
   font-size: 1rem;
-  line-height: 1.5;
+  font-family: inherit;
+  line-height: 1.6;
   background: transparent;
-  color: #1a1a1a;
-  outline: none;
 }
 
 .chat-window__composer-actions {
@@ -417,41 +440,21 @@ onMounted(scrollToBottom);
 .chat-window__send {
   border: none;
   border-radius: 999px;
-  padding: 0.55rem 1.6rem;
-  font-size: 1rem;
+  padding: 0.6rem 1.6rem;
   font-weight: 600;
   background: linear-gradient(135deg, #4866ff, #7b5bff);
   color: #fff;
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chat-window__send:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(72, 102, 255, 0.25);
 }
 
 .chat-window__send:disabled {
-  opacity: 0.5;
+  opacity: 0.65;
   cursor: not-allowed;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 960px) {
-  .chat-window {
-    padding: 1.25rem 1rem 1.5rem;
-  }
-
-  .chat-window__messages {
-    padding-right: 0;
-  }
-
-  .chat-message {
-    max-width: 100%;
-  }
 }
 </style>

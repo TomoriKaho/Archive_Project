@@ -4,6 +4,7 @@
       v-if="!isSidebarCollapsed"
       :conversations="conversations"
       :active-conversation-id="activeConversationId"
+      :texts="texts.sidebar"
       @select="handleSelectConversation"
       @create="handleCreateConversation"
       @rename="handleRenameConversation"
@@ -16,7 +17,7 @@
         type="button"
         class="chat-view__sidebar-collapse"
         @click="collapseSidebar"
-        aria-label="折叠会话历史侧边栏"
+        :aria-label="texts.collapseSidebarAria"
       >
         <svg class="chat-view__sidebar-collapse-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path
@@ -28,14 +29,14 @@
             stroke-linejoin="round"
           />
         </svg>
-        <span class="chat-view__sr-only">折叠会话历史侧边栏</span>
+        <span class="chat-view__sr-only">{{ texts.collapseSidebarSr }}</span>
       </button>
       <button
         v-if="isSidebarCollapsed"
         type="button"
         class="chat-view__sidebar-expand"
         @click="expandSidebar"
-        aria-label="展开会话历史侧边栏"
+        :aria-label="texts.expandSidebarAria"
       >
         <svg class="chat-view__sidebar-expand-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path
@@ -47,7 +48,7 @@
             stroke-linejoin="round"
           />
         </svg>
-        <span class="chat-view__sr-only">展开会话历史侧边栏</span>
+        <span class="chat-view__sr-only">{{ texts.expandSidebarSr }}</span>
       </button>
       <ChatWindow
         v-if="activeConversation"
@@ -56,53 +57,48 @@
         :domains="domainOptions"
         :selected-domains="activeDomains"
         :initial-domains-open="shouldOpenDomains"
+        :texts="texts.chatWindow"
         @send="handleSendMessage"
         @update:domains="updateActiveDomains"
       />
       <div v-else class="chat-view__placeholder">
         <div class="chat-view__welcome">
-          <h2>欢迎使用档案库 AI 助手</h2>
-          <p>在左侧选择会话，或在下方输入问题开始对话。</p>
-          <form class="chat-view__search" @submit.prevent="handlePlaceholderSubmit">
-            <input
-              v-model="placeholderQuery"
-              class="chat-view__search-input"
-              type="text"
-              placeholder="请输入问题，按下回车或点击发送"
-            />
-            <button
-              type="submit"
-              class="chat-view__search-button"
-              :disabled="isPlaceholderSubmitting || !placeholderQuery.trim()"
-            >
-              {{ isPlaceholderSubmitting ? '创建中…' : '开始对话' }}
-            </button>
-          </form>
+          <h2>{{ texts.placeholder.title }}</h2>
+          <p>{{ texts.placeholder.subtitle }}</p>
+          <QueryComposer
+            v-model="placeholderQuery"
+            :texts="texts.placeholder.composer"
+            :domains="domainOptions"
+            :selected-domains="selectedDomains"
+            :submitting="isPlaceholderSubmitting"
+            @submit="handlePlaceholderSubmit"
+            @update:domains="updatePreferredDomains"
+          />
         </div>
       </div>
     </div>
 
     <transition name="chat-dialog-fade">
       <div v-if="showRenameDialog" class="chat-dialog-overlay">
-        <div class="chat-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-dialog-title">
-          <h3 id="rename-dialog-title" class="chat-dialog__title">重命名会话</h3>
+        <div class="chat-dialog" role="dialog" aria-modal="true" :aria-labelledby="renameDialogId">
+          <h3 :id="renameDialogId" class="chat-dialog__title">{{ texts.renameDialog.title }}</h3>
           <form class="chat-dialog__form" @submit.prevent="submitRenameDialog">
             <label class="chat-dialog__label">
-              新的名称
+              {{ texts.renameDialog.label }}
               <input
                 v-model="renameTitle"
                 class="chat-dialog__input"
                 type="text"
-                placeholder="请输入新的会话名称"
+                :placeholder="texts.renameDialog.placeholder"
                 :disabled="isRenamingConversation"
               />
             </label>
             <div class="chat-dialog__actions">
               <button type="button" class="chat-dialog__button" @click="closeRenameDialog" :disabled="isRenamingConversation">
-                取消
+                {{ texts.renameDialog.cancel }}
               </button>
               <button type="submit" class="chat-dialog__button chat-dialog__button--primary" :disabled="isRenamingConversation">
-                {{ isRenamingConversation ? '保存中…' : '保存' }}
+                {{ isRenamingConversation ? texts.renameDialog.saving : texts.renameDialog.save }}
               </button>
             </div>
           </form>
@@ -112,14 +108,14 @@
 
     <transition name="chat-dialog-fade">
       <div v-if="showDeleteDialog" class="chat-dialog-overlay">
-        <div class="chat-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
-          <h3 id="delete-dialog-title" class="chat-dialog__title">删除会话</h3>
+        <div class="chat-dialog" role="dialog" aria-modal="true" :aria-labelledby="deleteDialogId">
+          <h3 :id="deleteDialogId" class="chat-dialog__title">{{ texts.deleteDialog.title }}</h3>
           <p class="chat-dialog__message">
-            确定要删除 “{{ deleteTarget?.title || '未命名会话' }}” 吗？该操作不可撤销。
+            {{ texts.deleteDialog.message(deleteTarget?.title) }}
           </p>
           <div class="chat-dialog__actions">
             <button type="button" class="chat-dialog__button" @click="closeDeleteDialog" :disabled="isDeletingConversation">
-              取消
+              {{ texts.deleteDialog.cancel }}
             </button>
             <button
               type="button"
@@ -127,7 +123,7 @@
               @click="confirmDeleteDialog"
               :disabled="isDeletingConversation"
             >
-              {{ isDeletingConversation ? '删除中…' : '删除' }}
+              {{ isDeletingConversation ? texts.deleteDialog.confirming : texts.deleteDialog.confirm }}
             </button>
           </div>
         </div>
@@ -141,13 +137,16 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ChatSidebar from '@/components/ChatSidebar.vue';
 import ChatWindow from '@/components/ChatWindow.vue';
+import QueryComposer from '@/components/QueryComposer.vue';
 import { useChatStore } from '@/store/chat';
 import { useDomainsStore } from '@/store/domains';
+import { usePreferencesStore } from '@/store/preferences';
 
 const route = useRoute();
 const router = useRouter();
 const chatStore = useChatStore();
 const domainsStore = useDomainsStore();
+const preferencesStore = usePreferencesStore();
 
 const conversations = computed(() => chatStore.conversations);
 const activeConversation = computed(() => chatStore.activeConversation);
@@ -156,6 +155,142 @@ const isSending = computed(() => chatStore.isSending);
 const activeConversationId = computed(() => chatStore.activeConversationId);
 const domainOptions = computed(() => domainsStore.items);
 const activeDomains = computed(() => chatStore.getConversationDomains(chatStore.activeConversationId));
+const selectedDomains = computed(() => preferencesStore.preferredDomainIds);
+
+const language = computed(() => preferencesStore.language);
+
+const languagePack = {
+  zh: {
+    collapseSidebarAria: '折叠会话历史侧边栏',
+    collapseSidebarSr: '折叠会话历史侧边栏',
+    expandSidebarAria: '展开会话历史侧边栏',
+    expandSidebarSr: '展开会话历史侧边栏',
+    placeholder: {
+      title: '欢迎使用档案库 AI 助手',
+      subtitle: '在左侧选择会话，或在下方输入问题开始对话。',
+      composer: {
+        placeholder: '请输入问题，例如：档案编号 123 的内容是什么？',
+        submit: '开始对话',
+        submitting: '创建中…',
+        domainButton: '选择领域',
+        domainBadge: (count) => `已选${count}`,
+        domainHint: '选择后发送消息时仅使用勾选的知识域。',
+        domainApply: '应用',
+        domainClear: '清除'
+      }
+    },
+    renameDialog: {
+      title: '重命名会话',
+      label: '新的名称',
+      placeholder: '请输入新的会话名称',
+      cancel: '取消',
+      save: '保存',
+      saving: '保存中…'
+    },
+    deleteDialog: {
+      title: '删除会话',
+      message: (title) => `确定要删除 “${title || '未命名会话'}” 吗？该操作不可撤销。`,
+      cancel: '取消',
+      confirm: '删除',
+      confirming: '删除中…'
+    },
+    sidebar: {
+      title: '会话历史',
+      subtitle: '管理你的提问与回答',
+      create: '新建',
+      rename: '重命名',
+      delete: '删除',
+      empty: '还没有会话，点击“新建”开始提问。',
+      goHome: '返回主页'
+    },
+    chatWindow: {
+      selectedDomainsLabel: '已选择领域：',
+      noDomains: '未限定领域，将在全部知识库中检索。',
+      domainToggleOpen: '选择领域',
+      domainToggleClose: '收起领域',
+      domainHint: '选择后发送消息时仅使用勾选的知识域。',
+      domainApply: '应用',
+      domainClear: '清除',
+      empty: '开始新的对话，系统将基于选定的知识域为你解答。',
+      thinking: '助手正在思考…',
+      placeholder: '输入问题，Shift+Enter 换行',
+      send: '发送',
+      sending: '发送中…',
+      domainJoiner: '、',
+      roles: {
+        user: '我',
+        assistant: '助手',
+        system: '系统'
+      }
+    }
+  },
+  en: {
+    collapseSidebarAria: 'Collapse conversation history sidebar',
+    collapseSidebarSr: 'Collapse conversation history sidebar',
+    expandSidebarAria: 'Expand conversation history sidebar',
+    expandSidebarSr: 'Expand conversation history sidebar',
+    placeholder: {
+      title: 'Welcome to the Archives AI Assistant',
+      subtitle: 'Pick a conversation on the left or start a new one below.',
+      composer: {
+        placeholder: 'Ask something, e.g. What is inside file 123?',
+        submit: 'Start chatting',
+        submitting: 'Creating…',
+        domainButton: 'Choose Domains',
+        domainBadge: (count) => `${count} selected`,
+        domainHint: 'After applying, only the chosen domains will be used for answers.',
+        domainApply: 'Apply',
+        domainClear: 'Clear'
+      }
+    },
+    renameDialog: {
+      title: 'Rename conversation',
+      label: 'New name',
+      placeholder: 'Enter a new conversation name',
+      cancel: 'Cancel',
+      save: 'Save',
+      saving: 'Saving…'
+    },
+    deleteDialog: {
+      title: 'Delete conversation',
+      message: (title) => `Are you sure you want to delete “${title || 'Untitled conversation'}”? This action cannot be undone.`,
+      cancel: 'Cancel',
+      confirm: 'Delete',
+      confirming: 'Deleting…'
+    },
+    sidebar: {
+      title: 'Conversation history',
+      subtitle: 'Manage your questions and answers',
+      create: 'New',
+      rename: 'Rename',
+      delete: 'Delete',
+      empty: 'No conversations yet. Click “New” to start.',
+      goHome: 'Back to home'
+    },
+    chatWindow: {
+      selectedDomainsLabel: 'Selected domains:',
+      noDomains: 'No domain filter. Searching the entire knowledge base.',
+      domainToggleOpen: 'Choose domains',
+      domainToggleClose: 'Hide domains',
+      domainHint: 'After applying, only the selected domains will be used for answers.',
+      domainApply: 'Apply',
+      domainClear: 'Clear',
+      empty: 'Start a new conversation and the assistant will answer based on the selected domains.',
+      thinking: 'Assistant is thinking…',
+      placeholder: 'Type your question. Shift+Enter for a new line.',
+      send: 'Send',
+      sending: 'Sending…',
+      domainJoiner: ', ',
+      roles: {
+        user: 'Me',
+        assistant: 'Assistant',
+        system: 'System'
+      }
+    }
+  }
+};
+
+const texts = computed(() => languagePack[language.value]);
 
 const showRenameDialog = ref(false);
 const renameTarget = ref(null);
@@ -170,6 +305,9 @@ const placeholderQuery = ref('');
 const isPlaceholderSubmitting = ref(false);
 const isSidebarCollapsed = ref(false);
 const shouldOpenDomains = ref(false);
+
+const renameDialogId = 'chat-rename-dialog';
+const deleteDialogId = 'chat-delete-dialog';
 
 onMounted(async () => {
   await domainsStore.loadDomains();
@@ -217,6 +355,15 @@ watch(
       router.replace({ name: 'chat', params: { conversationId } });
     }
   }
+);
+
+watch(
+  language,
+  (value) => {
+    const locale = value === 'zh' ? 'zh-CN' : 'en-US';
+    document.documentElement.setAttribute('lang', locale);
+  },
+  { immediate: true }
 );
 
 async function syncFromRoute({ fallbackToFirst }) {
@@ -289,6 +436,10 @@ function updateActiveDomains(domainIds) {
   chatStore.setConversationDomains(chatStore.activeConversationId, domainIds);
 }
 
+function updatePreferredDomains(domainIds) {
+  preferencesStore.setPreferredDomainIds(domainIds);
+}
+
 function goHome() {
   router.push({ name: 'landing' });
 }
@@ -353,8 +504,8 @@ function expandSidebar() {
   isSidebarCollapsed.value = false;
 }
 
-async function handlePlaceholderSubmit() {
-  const content = placeholderQuery.value.trim();
+async function handlePlaceholderSubmit(value) {
+  const content = value.trim();
   if (!content || isPlaceholderSubmitting.value) {
     return;
   }
@@ -362,7 +513,8 @@ async function handlePlaceholderSubmit() {
   try {
     const conversationId = await chatStore.createConversation({
       title: content.slice(0, 30),
-      initialMessage: content
+      initialMessage: content,
+      domainIds: selectedDomains.value
     });
     placeholderQuery.value = '';
     router.push({ name: 'chat', params: { conversationId } });
@@ -398,29 +550,25 @@ async function handlePlaceholderSubmit() {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 1px solid #d9e1ff;
-  background: rgba(255, 255, 255, 0.9);
-  color: #4b5d96;
+  border: none;
+  background: rgba(255, 255, 255, 0.85);
+  color: #4a5cc8;
   cursor: pointer;
-  box-shadow: 0 12px 24px rgba(72, 102, 255, 0.15);
-  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-  z-index: 10;
+  box-shadow: 0 10px 24px rgba(74, 92, 200, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  z-index: 5;
 }
+
 .chat-view__sidebar-collapse:hover,
 .chat-view__sidebar-expand:hover {
-  background-color: #eef1fb;
-  color: #1f2a56;
-  box-shadow: 0 16px 30px rgba(72, 102, 255, 0.22);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 32px rgba(74, 92, 200, 0.25);
 }
 
-.chat-view__sidebar-collapse-icon {
-  width: 20px;
-  height: 20px;
-}
-
+.chat-view__sidebar-collapse-icon,
 .chat-view__sidebar-expand-icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
 }
 
 .chat-view__sr-only {
@@ -436,133 +584,85 @@ async function handlePlaceholderSubmit() {
 }
 
 .chat-view__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 100vh;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  color: #5d6aa2;
-}
-
-.chat-view__placeholder h2 {
-  margin-bottom: 0.75rem;
-  font-size: 1.6rem;
-  color: #1f2a56;
+  padding: 4rem 1.5rem;
 }
 
 .chat-view__welcome {
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 2rem;
+  width: min(640px, 100%);
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.75);
-  box-shadow: 0 20px 40px rgba(102, 120, 255, 0.12);
+  padding: 3rem 2.5rem;
+  text-align: center;
+  box-shadow: 0 24px 48px rgba(18, 43, 90, 0.12);
+}
+
+.chat-view__welcome h2 {
+  margin-bottom: 0.75rem;
+  font-size: 2rem;
+  color: #1d2b4d;
 }
 
 .chat-view__welcome p {
-  margin: 0;
+  margin-bottom: 2rem;
   color: #5a6b97;
-  line-height: 1.6;
 }
 
-.chat-view__search {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.chat-view--collapsed .chat-sidebar {
+  display: none;
 }
 
-.chat-view__search-input {
-  width: 100%;
-  padding: 0.8rem 1rem;
-  border-radius: 14px;
-  border: 1px solid #d5dbff;
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 1rem;
-  box-shadow: inset 0 1px 2px rgba(31, 42, 86, 0.05);
-}
-
-.chat-view__search-input:focus {
-  outline: none;
-  border-color: #7b5bff;
-  box-shadow: 0 0 0 4px rgba(123, 91, 255, 0.15);
-}
-
-.chat-view__search-button {
-  width: 100%;
-  padding: 0.85rem 1rem;
-  border-radius: 14px;
-  border: none;
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.chat-view__search-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.75;
-  box-shadow: none;
-}
-
-.chat-view__search-button:not(:disabled):hover {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 30px rgba(72, 102, 255, 0.25);
+.chat-view--collapsed .chat-view__sidebar-expand {
+  left: 1.5rem;
 }
 
 .chat-dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  display: grid;
-  place-items: center;
+  background: rgba(9, 17, 51, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 50;
-  padding: 1.5rem;
 }
 
 .chat-dialog {
-  width: min(420px, 100%);
   background: #fff;
   border-radius: 20px;
-  padding: 1.75rem;
-  box-shadow: 0 20px 40px rgba(31, 42, 86, 0.18);
+  padding: 2rem;
+  width: min(420px, 90%);
+  box-shadow: 0 24px 48px rgba(17, 30, 75, 0.2);
 }
 
 .chat-dialog__title {
-  margin: 0 0 1rem;
-  font-size: 1.25rem;
+  margin: 0 0 1.25rem;
+  font-size: 1.35rem;
   color: #1f2a56;
-  font-weight: 700;
 }
 
 .chat-dialog__form {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .chat-dialog__label {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  color: #4a5cc8;
-  font-weight: 600;
   font-size: 0.95rem;
+  color: #4a5cc8;
 }
 
 .chat-dialog__input {
-  padding: 0.75rem 1rem;
+  border: 1px solid #dfe4ff;
   border-radius: 12px;
-  border: 1px solid #d5dbff;
+  padding: 0.65rem 0.75rem;
   font-size: 1rem;
-}
-
-.chat-dialog__input:focus {
   outline: none;
-  border-color: #7b5bff;
-  box-shadow: 0 0 0 4px rgba(123, 91, 255, 0.15);
 }
 
 .chat-dialog__actions {
@@ -572,37 +672,26 @@ async function handlePlaceholderSubmit() {
 }
 
 .chat-dialog__button {
-  min-width: 96px;
-  padding: 0.6rem 1rem;
+  border: none;
   border-radius: 10px;
-  border: 1px solid #d5dbff;
-  background: #fff;
-  color: #4a5cc8;
+  padding: 0.5rem 1.2rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.chat-dialog__button:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
 }
 
 .chat-dialog__button--primary {
   background: linear-gradient(135deg, #4866ff, #7b5bff);
-  border-color: transparent;
   color: #fff;
 }
 
 .chat-dialog__button--danger {
-  background: #fef2f4;
-  border-color: #f9cfd6;
-  color: #cf3c4f;
+  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+  color: #fff;
 }
 
 .chat-dialog__message {
-  margin: 0 0 1.5rem;
-  color: #5d6aa2;
+  margin: 0 0 1.25rem;
+  color: #5a6b97;
   line-height: 1.6;
 }
 
@@ -617,12 +706,24 @@ async function handlePlaceholderSubmit() {
 }
 
 @media (max-width: 960px) {
-  .chat-view {
-    flex-direction: column;
+  .chat-view__sidebar-collapse,
+  .chat-view__sidebar-expand {
+    top: 1rem;
+    left: 1rem;
   }
 
-  .chat-view__main {
-    order: 2;
+  .chat-view__welcome {
+    padding: 2.5rem 1.75rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .chat-view__welcome h2 {
+    font-size: 1.75rem;
+  }
+
+  .chat-view__welcome {
+    padding: 2.25rem 1.5rem;
   }
 }
 </style>

@@ -2,12 +2,12 @@
   <aside class="chat-sidebar">
     <header class="chat-sidebar__header">
       <div>
-        <h2 class="chat-sidebar__title">会话历史</h2>
-        <p class="chat-sidebar__subtitle">管理你的提问与回答</p>
+        <h2 class="chat-sidebar__title">{{ texts.title }}</h2>
+        <p class="chat-sidebar__subtitle">{{ texts.subtitle }}</p>
       </div>
       <div class="chat-sidebar__header-actions">
         <button class="chat-sidebar__create" type="button" @click="$emit('create')">
-          + 新建
+          + {{ texts.create }}
         </button>
       </div>
     </header>
@@ -27,20 +27,20 @@
           </button>
           <div class="chat-sidebar__item-actions">
             <button type="button" class="chat-sidebar__icon" @click="handleRename(conversation)">
-              重命名
+              {{ texts.rename }}
             </button>
             <button type="button" class="chat-sidebar__icon chat-sidebar__icon--danger" @click="handleDelete(conversation)">
-              删除
+              {{ texts.delete }}
             </button>
           </div>
         </li>
       </ul>
     </section>
     <section v-else class="chat-sidebar__empty">
-      <p>还没有会话，点击“新建”开始提问。</p>
+      <p>{{ texts.empty }}</p>
     </section>
     <footer class="chat-sidebar__footer">
-      <button class="chat-sidebar__home" type="button" @click="$emit('go-home')">返回主页</button>
+      <button class="chat-sidebar__home" type="button" @click="$emit('go-home')">{{ texts.goHome }}</button>
     </footer>
   </aside>
 </template>
@@ -54,6 +54,18 @@ const props = defineProps({
   activeConversationId: {
     type: Number,
     default: null
+  },
+  texts: {
+    type: Object,
+    default: () => ({
+      title: '会话历史',
+      subtitle: '管理你的提问与回答',
+      create: '新建',
+      rename: '重命名',
+      delete: '删除',
+      empty: '还没有会话，点击“新建”开始提问。',
+      goHome: '返回主页'
+    })
   }
 });
 
@@ -201,59 +213,36 @@ function formatTitle(rawTitle) {
 }
 
 .chat-sidebar__icon:hover {
-  background-color: rgba(82, 96, 165, 0.12);
+  background-color: rgba(82, 96, 165, 0.15);
 }
 
 .chat-sidebar__icon--danger {
-  color: #cf3c4f;
-}
-
-.chat-sidebar__icon--danger:hover {
-  background-color: rgba(207, 60, 79, 0.12);
+  color: #ff6b6b;
 }
 
 .chat-sidebar__empty {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  color: #6b7ab3;
-  text-align: center;
+  padding: 2rem 1rem;
+  color: #6f7dae;
   font-size: 0.9rem;
-  padding: 1.5rem;
+  text-align: center;
 }
 
 .chat-sidebar__footer {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
 }
 
 .chat-sidebar__home {
   width: 100%;
-  border: 1px solid #cdd5ff;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 12px;
-  padding: 0.65rem 1rem;
-  font-size: 0.95rem;
-  font-weight: 600;
+  border: none;
+  background: rgba(74, 92, 200, 0.12);
   color: #4a5cc8;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
 }
 
 .chat-sidebar__home:hover {
-  background-color: rgba(74, 92, 200, 0.1);
-}
-
-@media (max-width: 960px) {
-  .chat-sidebar {
-    position: fixed;
-    z-index: 20;
-    height: 100vh;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-  }
-
-  .chat-sidebar--visible {
-    transform: translateX(0);
-  }
+  background: rgba(74, 92, 200, 0.2);
 }
 </style>

@@ -3,9 +3,12 @@
     <LandingHero
       v-model="query"
       :texts="heroTexts"
+      :domains="domainOptions"
+      :selected-domains="selectedDomains"
+      :submitting="isCreatingConversation"
       @submit="handleSubmit"
       @show-history="openHistory"
-      @select-domain="openDomainSelection"
+      @update:domains="updateDomains"
     />
     <div class="landing-view__quick-actions">
       <button
@@ -31,18 +34,26 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import LandingHero from '@/components/LandingHero.vue';
 import { useChatStore } from '@/store/chat';
 import { useAuthStore } from '@/store/auth';
+import { useDomainsStore } from '@/store/domains';
+import { usePreferencesStore } from '@/store/preferences';
 
 const router = useRouter();
 const chatStore = useChatStore();
 const authStore = useAuthStore();
+const domainsStore = useDomainsStore();
+const preferencesStore = usePreferencesStore();
 
 const query = ref('');
-const language = ref('zh');
+const isCreatingConversation = ref(false);
+
+const language = computed(() => preferencesStore.language);
+const selectedDomains = computed(() => preferencesStore.preferredDomainIds);
+const domainOptions = computed(() => domainsStore.items);
 
 const languagePack = {
   zh: {
@@ -52,12 +63,19 @@ const languagePack = {
     hero: {
       title: '欢迎使用档案库 AI 助手',
       subtitle: '在这里快速检索档案知识并与智能助手对话。',
-      placeholder: '试着输入一个问题，例如：张小明是谁？',
-      submit: '开始对话',
-      domain: '选择领域',
       history: '查看历史会话',
       logout: '退出登录',
-      logoutAria: '退出当前账号'
+      logoutAria: '退出当前账号',
+      composer: {
+        placeholder: '试着输入一个问题，例如：张小明是谁？',
+        submit: '开始对话',
+        submitting: '创建中…',
+        domainButton: '选择领域',
+        domainBadge: (count) => `已选${count}`,
+        domainHint: '选择后发送消息时仅使用勾选的知识域。',
+        domainApply: '应用',
+        domainClear: '清除'
+      }
     }
   },
   en: {
@@ -67,12 +85,19 @@ const languagePack = {
     hero: {
       title: 'Welcome to the Archives AI Assistant',
       subtitle: 'Quickly search archival knowledge and chat with the assistant here.',
-      placeholder: 'Try asking a question, e.g. Who is Zhang Xiaoming?',
-      submit: 'Start Chatting',
-      domain: 'Choose Domain',
       history: 'View Conversation History',
       logout: 'Log out',
-      logoutAria: 'Log out of the current account'
+      logoutAria: 'Log out of the current account',
+      composer: {
+        placeholder: 'Try asking a question, e.g. Who is Zhang Xiaoming?',
+        submit: 'Start Chatting',
+        submitting: 'Creating…',
+        domainButton: 'Choose Domains',
+        domainBadge: (count) => `${count} selected`,
+        domainHint: 'When selected, the assistant will respond using only these domains.',
+        domainApply: 'Apply',
+        domainClear: 'Clear'
+      }
     }
   }
 };
@@ -91,23 +116,33 @@ watch(
   { immediate: true }
 );
 
+onMounted(() => {
+  domainsStore.loadDomains({ force: false }).catch((error) => {
+    console.error('加载领域失败', error);
+  });
+});
+
 function toggleLanguage() {
-  language.value = language.value === 'zh' ? 'en' : 'zh';
+  preferencesStore.toggleLanguage();
 }
 
 async function handleSubmit(value) {
   const content = value.trim();
-  if (!content) {
+  if (!content || isCreatingConversation.value) {
     return;
   }
+  isCreatingConversation.value = true;
   try {
     const conversationId = await chatStore.createConversation({
       title: content.slice(0, 30),
-      initialMessage: content
+      initialMessage: content,
+      domainIds: selectedDomains.value
     });
     router.push({ name: 'chat', params: { conversationId } });
   } catch (error) {
     console.error('创建会话失败', error);
+  } finally {
+    isCreatingConversation.value = false;
   }
 }
 
@@ -115,8 +150,8 @@ function openHistory() {
   router.push({ name: 'chat' });
 }
 
-function openDomainSelection() {
-  router.push({ name: 'chat', query: { openDomains: '1' } });
+function updateDomains(domainIds) {
+  preferencesStore.setPreferredDomainIds(domainIds);
 }
 
 function handleLogout() {
