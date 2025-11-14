@@ -1,0 +1,440 @@
+<template>
+  <div class="chat-window">
+    <header class="chat-window__header">
+      <div>
+        <h1 class="chat-window__title">{{ title }}</h1>
+        <p class="chat-window__subtitle" v-if="activeDomainNames.length">
+          已选择领域：{{ activeDomainNames.join('、') }}
+        </p>
+        <p class="chat-window__subtitle" v-else>未限定领域，将在全部知识库中检索。</p>
+      </div>
+      <div v-if="domains.length" class="chat-window__domains">
+        <button type="button" class="chat-window__domains-toggle" @click="togglePanel">
+          {{ domainsPanelOpen ? '收起领域' : '选择领域' }}
+        </button>
+        <transition name="fade">
+          <div v-if="domainsPanelOpen" class="chat-window__domains-panel">
+            <p class="chat-window__domains-hint">选择后发送消息时仅使用勾选的知识域。</p>
+            <div class="chat-window__domains-grid">
+              <label v-for="domain in domains" :key="domain.id" class="chat-window__domains-option">
+                <input
+                  type="checkbox"
+                  :value="domain.id"
+                  :checked="pendingSelection.has(domain.id)"
+                  @change="toggleDomain(domain.id)"
+                />
+                <span>{{ domain.name }}</span>
+              </label>
+            </div>
+            <div class="chat-window__domains-actions">
+              <button type="button" class="chat-window__domains-apply" @click="applyDomains">应用</button>
+              <button type="button" class="chat-window__domains-clear" @click="clearDomains">
+                清除
+              </button>
+            </div>
+          </div>
+        </transition>
+      </div>
+    </header>
+
+    <main class="chat-window__messages" ref="messageContainer">
+      <template v-if="messages.length">
+        <article
+          v-for="message in messages"
+          :key="message.id"
+          :class="['chat-message', `chat-message--${message.role || 'user'}`]"
+        >
+          <div class="chat-message__meta">
+            <span class="chat-message__role">{{ renderRole(message.role) }}</span>
+            <time v-if="message.created_at" class="chat-message__time">
+              {{ formatTime(message.created_at) }}
+            </time>
+          </div>
+          <div class="chat-message__content">{{ message.content }}</div>
+        </article>
+      </template>
+      <div v-else class="chat-window__empty">
+        <p>开始新的对话，系统将基于选定的知识域为你解答。</p>
+      </div>
+    </main>
+
+    <form class="chat-window__composer" @submit.prevent="handleSubmit">
+      <textarea
+        v-model="draft"
+        class="chat-window__input"
+        placeholder="输入问题，Shift+Enter 换行"
+        rows="3"
+        @keydown.enter.exact.prevent="handleSubmit"
+        @keydown.enter.shift.stop
+      ></textarea>
+      <div class="chat-window__composer-actions">
+        <button type="submit" class="chat-window__send" :disabled="isSending || !draft.trim()">
+          {{ isSending ? '发送中…' : '发送' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</template>
+
+<script setup>
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+
+const props = defineProps({
+  title: {
+    type: String,
+    default: '新的会话'
+  },
+  messages: {
+    type: Array,
+    default: () => []
+  },
+  isSending: {
+    type: Boolean,
+    default: false
+  },
+  domains: {
+    type: Array,
+    default: () => []
+  },
+  selectedDomains: {
+    type: Array,
+    default: () => []
+  }
+});
+
+const emit = defineEmits(['send', 'update:domains']);
+
+const draft = ref('');
+const domainsPanelOpen = ref(false);
+const pendingSelection = ref(new Set(props.selectedDomains));
+const messageContainer = ref(null);
+
+watch(
+  () => props.selectedDomains,
+  (domains) => {
+    pendingSelection.value = new Set(domains);
+  }
+);
+
+watch(
+  () => props.messages.length,
+  async () => {
+    await nextTick();
+    scrollToBottom();
+  }
+);
+
+function togglePanel() {
+  domainsPanelOpen.value = !domainsPanelOpen.value;
+}
+
+function toggleDomain(id) {
+  const next = new Set(pendingSelection.value);
+  const numericId = Number(id);
+  if (next.has(numericId)) {
+    next.delete(numericId);
+  } else {
+    next.add(numericId);
+  }
+  pendingSelection.value = next;
+}
+
+function applyDomains() {
+  emit('update:domains', Array.from(pendingSelection.value));
+  domainsPanelOpen.value = false;
+}
+
+function clearDomains() {
+  pendingSelection.value = new Set();
+  emit('update:domains', []);
+}
+
+function handleSubmit() {
+  const content = draft.value.trim();
+  if (!content || props.isSending) {
+    return;
+  }
+  emit('send', {
+    content,
+    domain_ids: Array.from(pendingSelection.value)
+  });
+  draft.value = '';
+}
+
+function renderRole(role) {
+  if (role === 'assistant') {
+    return '助手';
+  }
+  if (role === 'system') {
+    return '系统';
+  }
+  return '我';
+}
+
+const activeDomainNames = computed(() => {
+  if (!props.domains.length || !props.selectedDomains.length) {
+    return [];
+  }
+  const names = props.domains
+    .filter((domain) => props.selectedDomains.includes(domain.id))
+    .map((domain) => domain.name);
+  return names;
+});
+
+function formatTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return `${date.getHours().toString().padStart(2, '0')}:${date
+    .getMinutes()
+    .toString()
+    .padStart(2, '0')}`;
+}
+
+function scrollToBottom() {
+  if (!messageContainer.value) {
+    return;
+  }
+  const element = messageContainer.value;
+  element.scrollTop = element.scrollHeight;
+}
+
+onMounted(scrollToBottom);
+</script>
+
+<style scoped lang="scss">
+.chat-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: linear-gradient(180deg, #f7f8fc 0%, #ffffff 100%);
+  padding: 2rem 2.5rem 2rem 2rem;
+}
+
+.chat-window__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(126, 139, 196, 0.25);
+}
+
+.chat-window__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1d2b4d;
+}
+
+.chat-window__subtitle {
+  margin: 0.4rem 0 0;
+  color: #6071a3;
+  font-size: 0.9rem;
+}
+
+.chat-window__domains {
+  position: relative;
+}
+
+.chat-window__domains-toggle {
+  border: 1px solid #cdd5ff;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #4a5cc8;
+}
+
+.chat-window__domains-panel {
+  position: absolute;
+  right: 0;
+  top: 110%;
+  width: 320px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(26, 40, 90, 0.15);
+  padding: 1rem 1.25rem 1.25rem;
+  z-index: 10;
+}
+
+.chat-window__domains-hint {
+  margin: 0 0 0.75rem;
+  color: #6f7dae;
+  font-size: 0.85rem;
+}
+
+.chat-window__domains-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.chat-window__domains-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.chat-window__domains-option:hover {
+  background-color: rgba(74, 92, 200, 0.08);
+}
+
+.chat-window__domains-option input {
+  accent-color: #4a5cc8;
+}
+
+.chat-window__domains-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.chat-window__domains-apply {
+  border: none;
+  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chat-window__domains-clear {
+  border: none;
+  background: none;
+  color: #8a95c7;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-window__messages {
+  flex: 1;
+  overflow-y: auto;
+  margin: 1.5rem 0;
+  padding-right: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.chat-window__empty {
+  display: grid;
+  place-items: center;
+  color: #7c89ba;
+  height: 100%;
+  text-align: center;
+}
+
+.chat-message {
+  max-width: 80%;
+  padding: 1rem 1.25rem;
+  border-radius: 24px;
+  box-shadow: 0 12px 24px rgba(29, 43, 77, 0.08);
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-message--user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  color: #fff;
+}
+
+.chat-message--assistant {
+  align-self: flex-start;
+  background: #ffffff;
+  color: #1d2b4d;
+}
+
+.chat-message--system {
+  align-self: center;
+  background: rgba(255, 255, 255, 0.75);
+  color: #4a5cc8;
+}
+
+.chat-message__meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.chat-window__composer {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #dfe4ff;
+  border-radius: 24px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 12px 28px rgba(26, 40, 90, 0.08);
+}
+
+.chat-window__input {
+  width: 100%;
+  border: none;
+  resize: none;
+  font-size: 1rem;
+  line-height: 1.5;
+  background: transparent;
+  color: #1a1a1a;
+  outline: none;
+}
+
+.chat-window__composer-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.chat-window__send {
+  border: none;
+  border-radius: 999px;
+  padding: 0.55rem 1.6rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.chat-window__send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 960px) {
+  .chat-window {
+    padding: 1.25rem 1rem 1.5rem;
+  }
+
+  .chat-window__messages {
+    padding-right: 0;
+  }
+
+  .chat-message {
+    max-width: 100%;
+  }
+}
+</style>

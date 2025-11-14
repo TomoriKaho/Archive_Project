@@ -14,7 +14,7 @@ This directory contains the Vue 3 single-page application that replaces the orig
 ## Project setup
 
 ```bash
-cd frontend
+cd frontend_admin
 npm install
 ```
 
@@ -28,7 +28,7 @@ Edit the file as needed:
 
 ```
 VUE_APP_API_BASE_URL=http://localhost:8000/api
-VUE_APP_TOKEN_STORAGE_KEY=archive_ai_token
+VUE_APP_TOKEN_STORAGE_KEY=archive_ai_admin_token
 ```
 
 ## Development server
