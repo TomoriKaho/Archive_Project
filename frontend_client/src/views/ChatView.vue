@@ -55,6 +55,7 @@
         :is-sending="isSending"
         :domains="domainOptions"
         :selected-domains="activeDomains"
+        :initial-domains-open="shouldOpenDomains"
         @send="handleSendMessage"
         @update:domains="updateActiveDomains"
       />
@@ -136,7 +137,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ChatSidebar from '@/components/ChatSidebar.vue';
 import ChatWindow from '@/components/ChatWindow.vue';
@@ -168,12 +169,38 @@ const isDeletingConversation = ref(false);
 const placeholderQuery = ref('');
 const isPlaceholderSubmitting = ref(false);
 const isSidebarCollapsed = ref(false);
+const shouldOpenDomains = ref(false);
 
 onMounted(async () => {
   await domainsStore.loadDomains();
   await chatStore.loadConversations();
   await syncFromRoute({ fallbackToFirst: true });
 });
+
+watch(
+  () => route.query.openDomains,
+  (value) => {
+    if (value == null) {
+      return;
+    }
+    shouldOpenDomains.value = true;
+    const rest = { ...route.query };
+    delete rest.openDomains;
+    router.replace({ name: route.name || 'chat', params: { ...route.params }, query: rest });
+  },
+  { immediate: true }
+);
+
+watch(
+  [shouldOpenDomains, activeConversation],
+  ([open, conversation]) => {
+    if (open && conversation) {
+      nextTick(() => {
+        shouldOpenDomains.value = false;
+      });
+    }
+  }
+);
 
 watch(
   () => route.params.conversationId,

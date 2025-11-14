@@ -1,6 +1,12 @@
 <template>
   <div class="landing-view">
-    <LandingHero v-model="query" :texts="heroTexts" @submit="handleSubmit" @show-history="openHistory" />
+    <LandingHero
+      v-model="query"
+      :texts="heroTexts"
+      @submit="handleSubmit"
+      @show-history="openHistory"
+      @select-domain="openDomainSelection"
+    />
     <div class="landing-view__quick-actions">
       <button
         type="button"
@@ -48,6 +54,7 @@ const languagePack = {
       subtitle: '在这里快速检索档案知识并与智能助手对话。',
       placeholder: '试着输入一个问题，例如：张小明是谁？',
       submit: '开始对话',
+      domain: '选择领域',
       history: '查看历史会话',
       logout: '退出登录',
       logoutAria: '退出当前账号'
@@ -62,6 +69,7 @@ const languagePack = {
       subtitle: 'Quickly search archival knowledge and chat with the assistant here.',
       placeholder: 'Try asking a question, e.g. Who is Zhang Xiaoming?',
       submit: 'Start Chatting',
+      domain: 'Choose Domain',
       history: 'View Conversation History',
       logout: 'Log out',
       logoutAria: 'Log out of the current account'
@@ -105,6 +113,10 @@ async function handleSubmit(value) {
 
 function openHistory() {
   router.push({ name: 'chat' });
+}
+
+function openDomainSelection() {
+  router.push({ name: 'chat', query: { openDomains: '1' } });
 }
 
 function handleLogout() {

@@ -3,15 +3,26 @@
     <div class="landing-hero__content">
       <h1 class="landing-hero__title">{{ texts.title }}</h1>
       <p class="landing-hero__subtitle">{{ texts.subtitle }}</p>
-      <form class="landing-hero__form" @submit.prevent="handleSubmit">
-        <textarea
-          ref="textareaRef"
-          v-model="query"
-          class="landing-hero__input"
-          rows="1"
-          :placeholder="texts.placeholder"
-        ></textarea>
-        <button class="landing-hero__submit" type="submit" :disabled="!canSubmit">{{ texts.submit }}</button>
+      <form class="landing-hero__composer" @submit.prevent="handleSubmit">
+        <div class="landing-hero__card">
+          <div class="landing-hero__input-wrap">
+            <textarea
+              ref="textareaRef"
+              v-model="query"
+              class="landing-hero__input"
+              rows="1"
+              :placeholder="texts.placeholder"
+            ></textarea>
+          </div>
+          <div class="landing-hero__controls">
+            <button type="button" class="landing-hero__domain" @click="$emit('select-domain')">
+              <span class="landing-hero__domain-icon" aria-hidden="true">＋</span>
+              <span class="landing-hero__domain-text">{{ texts.domain }}</span>
+              <span class="landing-hero__domain-caret" aria-hidden="true">▾</span>
+            </button>
+            <button class="landing-hero__submit" type="submit" :disabled="!canSubmit">{{ texts.submit }}</button>
+          </div>
+        </div>
       </form>
       <div class="landing-hero__actions">
         <button type="button" class="landing-hero__history" @click="$emit('show-history')">
@@ -36,7 +47,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:modelValue', 'submit', 'show-history']);
+const emit = defineEmits(['update:modelValue', 'submit', 'show-history', 'select-domain']);
 
 const query = ref(props.modelValue);
 const canSubmit = computed(() => Boolean(query.value?.trim()));
@@ -113,42 +124,96 @@ onMounted(() => {
 }
 
 
-.landing-hero__form {
+.landing-hero__composer {
+  margin: 0;
+  width: 100%;
+}
+
+.landing-hero__card {
   display: flex;
-  gap: 0.75rem;
-  align-items: stretch;
+  flex-direction: column;
   background-color: #fff;
-  padding: 0.75rem 0.75rem 0.75rem 1.25rem;
-  border-radius: 24px;
-  box-shadow: inset 0 0 0 1px #d9e1ff;
+  padding: 1rem 1rem 1rem 1.5rem;
+  border-radius: 28px;
+  box-shadow: inset 0 0 0 1px rgba(162, 177, 255, 0.6), 0 18px 46px rgba(29, 56, 147, 0.12);
+  gap: 1rem;
+}
+
+.landing-hero__input-wrap {
+  display: flex;
 }
 
 .landing-hero__input {
-  flex: 1;
+  width: 100%;
   border: none;
-  font-size: 1rem;
+  font-size: 1.05rem;
   outline: none;
   background: transparent;
   color: #1a1a1a;
   resize: none;
-  line-height: 1.5;
-  min-height: 2.75rem;
-  max-height: 10rem;
+  line-height: 1.6;
+  min-height: 3rem;
+  max-height: 12rem;
   overflow-y: auto;
   font-family: inherit;
   padding: 0;
 }
 
+.landing-hero__controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(189, 201, 255, 0.6);
+}
+
+.landing-hero__domain {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  background: rgba(230, 234, 255, 0.75);
+  color: #3550ff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 18px;
+  padding: 0.65rem 1.1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.landing-hero__domain:hover {
+  background: rgba(204, 212, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.landing-hero__domain-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.landing-hero__domain-text {
+  line-height: 1;
+}
+
+.landing-hero__domain-caret {
+  font-size: 0.85rem;
+  color: #3550ff;
+  transform: translateY(1px);
+}
+
 .landing-hero__submit {
   border: none;
   border-radius: 999px;
-  padding: 0.75rem 1.75rem;
+  padding: 0.75rem 1.85rem;
   font-size: 1rem;
   font-weight: 600;
   background: linear-gradient(135deg, #4866ff, #7b5bff);
   color: #fff;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
 }
 
 .landing-hero__submit:hover {
@@ -194,14 +259,19 @@ onMounted(() => {
     padding: 2.25rem 1.75rem;
   }
 
-  .landing-hero__form {
-    flex-direction: column;
-    border-radius: 20px;
-    padding: 0.75rem 0.75rem 0.95rem;
+  .landing-hero__card {
+    padding: 1rem;
   }
 
+  .landing-hero__controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .landing-hero__domain,
   .landing-hero__submit {
     width: 100%;
+    justify-content: center;
   }
 }
 </style>

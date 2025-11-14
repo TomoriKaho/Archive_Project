@@ -95,6 +95,10 @@ const props = defineProps({
   selectedDomains: {
     type: Array,
     default: () => []
+  },
+  initialDomainsOpen: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -104,6 +108,16 @@ const draft = ref('');
 const domainsPanelOpen = ref(false);
 const pendingSelection = ref(new Set(props.selectedDomains));
 const messageContainer = ref(null);
+
+watch(
+  () => props.initialDomainsOpen,
+  (value) => {
+    if (value) {
+      domainsPanelOpen.value = true;
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   () => props.selectedDomains,
