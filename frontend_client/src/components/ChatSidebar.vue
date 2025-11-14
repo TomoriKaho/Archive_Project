@@ -7,7 +7,8 @@
       </div>
       <div class="chat-sidebar__header-actions">
         <button class="chat-sidebar__create" type="button" @click="$emit('create')">
-          + {{ texts.create }}
+          <span class="chat-sidebar__create-icon" aria-hidden="true">+</span>
+          <span class="chat-sidebar__create-label">{{ texts.create }}</span>
         </button>
       </div>
     </header>
@@ -132,14 +133,28 @@ function formatTitle(rawTitle) {
 }
 
 .chat-sidebar__create {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   border: none;
   background: linear-gradient(135deg, #4866ff, #7b5bff);
   color: #fff;
   font-weight: 600;
-  padding: 0.55rem 1.2rem;
+  padding: 0.55rem 1.4rem;
   border-radius: 999px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  white-space: nowrap;
+}
+
+.chat-sidebar__create-icon {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.chat-sidebar__create-label {
+  line-height: 1;
 }
 
 .chat-sidebar__create:hover {
@@ -228,7 +243,8 @@ function formatTitle(rawTitle) {
 }
 
 .chat-sidebar__footer {
-  margin-top: 1.5rem;
+  margin-top: auto;
+  padding-top: 1.5rem;
 }
 
 .chat-sidebar__home {

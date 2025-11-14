@@ -8,6 +8,8 @@
           class="query-composer__input"
           rows="1"
           :placeholder="texts.placeholder"
+          @keydown.enter.exact.prevent="handleSubmit"
+          @keydown.enter.shift.stop
         ></textarea>
       </div>
       <div class="query-composer__controls">

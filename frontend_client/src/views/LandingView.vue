@@ -70,7 +70,7 @@ const languagePack = {
         placeholder: '试着输入一个问题，例如：张小明是谁？',
         submit: '开始对话',
         submitting: '创建中…',
-        domainButton: '选择领域',
+        domainButton: '选择知识域',
         domainBadge: (count) => `已选${count}`,
         domainHint: '选择后发送消息时仅使用勾选的知识域。',
         domainApply: '应用',
@@ -138,6 +138,8 @@ async function handleSubmit(value) {
       initialMessage: content,
       domainIds: selectedDomains.value
     });
+    preferencesStore.setPreferredDomainIds([]);
+    query.value = '';
     router.push({ name: 'chat', params: { conversationId } });
   } catch (error) {
     console.error('创建会话失败', error);

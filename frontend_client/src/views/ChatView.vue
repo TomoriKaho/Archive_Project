@@ -169,10 +169,10 @@ const languagePack = {
       title: '欢迎使用档案库 AI 助手',
       subtitle: '在左侧选择会话，或在下方输入问题开始对话。',
       composer: {
-        placeholder: '请输入问题，例如：档案编号 123 的内容是什么？',
+        placeholder: '请输入问题，例如：张小明是谁？',
         submit: '开始对话',
         submitting: '创建中…',
-        domainButton: '选择领域',
+        domainButton: '选择知识域',
         domainBadge: (count) => `已选${count}`,
         domainHint: '选择后发送消息时仅使用勾选的知识域。',
         domainApply: '应用',
@@ -189,7 +189,7 @@ const languagePack = {
     },
     deleteDialog: {
       title: '删除会话',
-      message: (title) => `确定要删除 “${title || '未命名会话'}” 吗？该操作不可撤销。`,
+      message: (title) => `确定要删除会话 “${title || '未命名会话'}” 吗？该操作不可撤销。`,
       cancel: '取消',
       confirm: '删除',
       confirming: '删除中…'
@@ -204,10 +204,10 @@ const languagePack = {
       goHome: '返回主页'
     },
     chatWindow: {
-      selectedDomainsLabel: '已选择领域：',
-      noDomains: '未限定领域，将在全部知识库中检索。',
-      domainToggleOpen: '选择领域',
-      domainToggleClose: '收起领域',
+      selectedDomainsLabel: '已选择知识域：',
+      noDomains: '未限定知识域，将在全部知识库中检索。',
+      domainToggleOpen: '选择知识域',
+      domainToggleClose: '收起知识域',
       domainHint: '选择后发送消息时仅使用勾选的知识域。',
       domainApply: '应用',
       domainClear: '清除',
@@ -233,7 +233,7 @@ const languagePack = {
       title: 'Welcome to the Archives AI Assistant',
       subtitle: 'Pick a conversation on the left or start a new one below.',
       composer: {
-        placeholder: 'Ask something, e.g. What is inside file 123?',
+        placeholder: 'Ask something, e.g. Who is Zhang Xiaoming?',
         submit: 'Start chatting',
         submitting: 'Creating…',
         domainButton: 'Choose Domains',
@@ -259,7 +259,7 @@ const languagePack = {
       confirming: 'Deleting…'
     },
     sidebar: {
-      title: 'Conversation history',
+      title: 'History',
       subtitle: 'Manage your questions and answers',
       create: 'New',
       rename: 'Rename',
@@ -394,6 +394,7 @@ async function handleSelectConversation(conversationId) {
 }
 
 async function handleCreateConversation() {
+  preferencesStore.setPreferredDomainIds([]);
   placeholderQuery.value = '';
   await chatStore.selectConversation(null);
   if (route.name !== 'chat' || route.params.conversationId) {
@@ -517,6 +518,7 @@ async function handlePlaceholderSubmit(value) {
       domainIds: selectedDomains.value
     });
     placeholderQuery.value = '';
+    preferencesStore.setPreferredDomainIds([]);
     router.push({ name: 'chat', params: { conversationId } });
   } catch (error) {
     console.error('创建会话失败', error);

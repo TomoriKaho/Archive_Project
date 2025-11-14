@@ -99,10 +99,10 @@ const props = defineProps({
   texts: {
     type: Object,
     default: () => ({
-      selectedDomainsLabel: '已选择领域：',
-      noDomains: '未限定领域，将在全部知识库中检索。',
-      domainToggleOpen: '选择领域',
-      domainToggleClose: '收起领域',
+      selectedDomainsLabel: '已选择知识域：',
+      noDomains: '未限定知识域，将在全部知识库中检索。',
+      domainToggleOpen: '选择知识域',
+      domainToggleClose: '收起知识域',
       domainHint: '选择后发送消息时仅使用勾选的知识域。',
       domainApply: '应用',
       domainClear: '清除',
