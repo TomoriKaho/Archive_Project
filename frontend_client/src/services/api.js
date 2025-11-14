@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.VUE_APP_API_BASE_URL || '/api';
 const TOKEN_STORAGE_KEY =
-  process.env.VUE_APP_TOKEN_STORAGE_KEY || 'archive_ai_token';
+  process.env.VUE_APP_TOKEN_STORAGE_KEY || 'archive_ai_client_token';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
