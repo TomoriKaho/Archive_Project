@@ -26,7 +26,7 @@
         :aria-label="heroTexts.logoutAria"
         @click="handleLogout"
       >
-        <span class="landing-view__fab-icon" aria-hidden="true">🚪</span>
+        <span class="landing-view__fab-icon" aria-hidden="true">⏻</span>
         <span class="landing-view__fab-label">{{ heroTexts.logout }}</span>
       </button>
     </div>

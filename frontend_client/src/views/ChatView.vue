@@ -172,7 +172,7 @@ const languagePack = {
       subtitle: '管理你的提问与回答',
       create: '新建会话',
       collapse: '收起历史',
-      expand: '展开历史',
+      expand: '展开',
       rename: '重命名',
       delete: '删除',
       empty: '还没有会话，点击“新建会话”开始提问。',
@@ -598,6 +598,10 @@ async function handlePlaceholderSubmit(value) {
 
 .chat-view--collapsed .chat-sidebar {
   display: none;
+}
+
+.chat-view--collapsed :deep(.chat-window) {
+  padding-left: 6.25rem;
 }
 
 .chat-view--collapsed .chat-view__sidebar-expand {
