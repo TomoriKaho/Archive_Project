@@ -175,10 +175,10 @@ function handleLogout() {
 
 .landing-view__quick-actions {
   position: fixed;
+  top: 1.5rem;
   right: 2rem;
-  bottom: 2rem;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
   z-index: 20;
 }
@@ -224,7 +224,7 @@ function handleLogout() {
 @media (max-width: 768px) {
   .landing-view__quick-actions {
     right: 1.25rem;
-    bottom: 1.25rem;
+    top: 1rem;
   }
 
   .landing-view__fab {

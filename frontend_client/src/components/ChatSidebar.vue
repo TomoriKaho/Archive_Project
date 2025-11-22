@@ -1,15 +1,17 @@
 <template>
   <aside class="chat-sidebar">
     <header class="chat-sidebar__header">
-      <div>
-        <h2 class="chat-sidebar__title">{{ texts.title }}</h2>
-        <p class="chat-sidebar__subtitle">{{ texts.subtitle }}</p>
-      </div>
       <div class="chat-sidebar__header-actions">
+        <button class="chat-sidebar__home" type="button" @click="$emit('go-home')">{{ texts.goHome }}</button>
         <button class="chat-sidebar__create" type="button" @click="$emit('create')">
           <span class="chat-sidebar__create-icon" aria-hidden="true">+</span>
           <span class="chat-sidebar__create-label">{{ texts.create }}</span>
         </button>
+      </div>
+      <hr class="chat-sidebar__divider" aria-hidden="true" />
+      <div>
+        <h2 class="chat-sidebar__title">{{ texts.title }}</h2>
+        <p class="chat-sidebar__subtitle">{{ texts.subtitle }}</p>
       </div>
     </header>
     <section class="chat-sidebar__list" v-if="conversations.length">
@@ -40,9 +42,6 @@
     <section v-else class="chat-sidebar__empty">
       <p class="chat-sidebar__empty-text">{{ texts.empty }}</p>
     </section>
-    <footer class="chat-sidebar__footer">
-      <button class="chat-sidebar__home" type="button" @click="$emit('go-home')">{{ texts.goHome }}</button>
-    </footer>
   </aside>
 </template>
 
@@ -107,16 +106,16 @@ function formatTitle(rawTitle) {
 
 .chat-sidebar__header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
 }
 
 .chat-sidebar__header-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: flex-end;
+  gap: 0.65rem;
 }
 
 .chat-sidebar__title {
@@ -160,6 +159,12 @@ function formatTitle(rawTitle) {
 .chat-sidebar__create:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(72, 102, 255, 0.25);
+}
+
+.chat-sidebar__divider {
+  border: none;
+  border-top: 1px solid #d8e0ff;
+  margin: 0;
 }
 
 .chat-sidebar__list {
@@ -252,18 +257,12 @@ function formatTitle(rawTitle) {
   white-space: pre-line;
 }
 
-.chat-sidebar__footer {
-  margin-top: auto;
-  padding-top: 1.5rem;
-}
-
 .chat-sidebar__home {
-  width: 100%;
   border: none;
   background: rgba(74, 92, 200, 0.12);
   color: #4a5cc8;
   font-weight: 600;
-  padding: 0.6rem 1rem;
+  padding: 0.55rem 1.25rem;
   border-radius: 12px;
   cursor: pointer;
 }

@@ -201,7 +201,7 @@ const languagePack = {
       rename: '重命名',
       delete: '删除',
       empty: '还没有会话，点击“新建”开始提问。',
-      goHome: '返回主页'
+      goHome: '首页'
     },
     chatWindow: {
       selectedDomainsLabel: '已选择知识域：',
@@ -266,7 +266,7 @@ const languagePack = {
       rename: 'Rename',
       delete: 'Delete',
       empty: 'No conversations yet.\nClick “New” to start.',
-      goHome: 'Back to home'
+      goHome: 'Home'
     },
     chatWindow: {
       selectedDomainsLabel: 'Selected domains:',

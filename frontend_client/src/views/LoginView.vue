@@ -148,10 +148,11 @@ async function handleSubmit() {
   background-attachment: fixed;
 }
 
+
 .login-page__language {
   position: absolute;
+  top: 1.5rem;
   right: 1.5rem;
-  bottom: 1.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -291,7 +292,7 @@ async function handleSubmit() {
 
   .login-page__language {
     right: 1rem;
-    bottom: 1rem;
+    top: 1rem;
     padding: 0.5rem 0.95rem;
     font-size: 0.9rem;
   }
