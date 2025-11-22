@@ -10,27 +10,9 @@
       @rename="handleRenameConversation"
       @delete="handleDeleteConversation"
       @go-home="goHome"
+      @collapse="collapseSidebar"
     />
     <div class="chat-view__main">
-      <button
-        v-if="!isSidebarCollapsed"
-        type="button"
-        class="chat-view__sidebar-collapse"
-        @click="collapseSidebar"
-        :aria-label="texts.collapseSidebarAria"
-      >
-        <svg class="chat-view__sidebar-collapse-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path
-            d="M10.5 6.75l-4.5 5.25 4.5 5.25M18 5.25v13.5"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span class="chat-view__sr-only">{{ texts.collapseSidebarSr }}</span>
-      </button>
       <button
         v-if="isSidebarCollapsed"
         type="button"
@@ -38,17 +20,8 @@
         @click="expandSidebar"
         :aria-label="texts.expandSidebarAria"
       >
-        <svg class="chat-view__sidebar-expand-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path
-            d="M13.5 6.75l4.5 5.25-4.5 5.25M6 5.25v13.5"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span class="chat-view__sr-only">{{ texts.expandSidebarSr }}</span>
+        <span class="chat-view__sidebar-expand-icon" aria-hidden="true">⟩</span>
+        <span>{{ texts.sidebar.expand }}</span>
       </button>
       <ChatWindow
         v-if="activeConversation"
@@ -163,8 +136,8 @@ const languagePack = {
   zh: {
     collapseSidebarAria: '折叠会话历史侧边栏',
     collapseSidebarSr: '折叠会话历史侧边栏',
-    expandSidebarAria: '展开会话历史侧边栏',
-    expandSidebarSr: '展开会话历史侧边栏',
+    expandSidebarAria: '展开历史侧边栏',
+    expandSidebarSr: '展开历史侧边栏',
     placeholder: {
       title: '创建新对话',
       subtitle: '在左侧选择会话，或在下方输入问题开始对话。',
@@ -197,11 +170,13 @@ const languagePack = {
     sidebar: {
       title: '会话历史',
       subtitle: '管理你的提问与回答',
-      create: '新建',
+      create: '新建会话',
+      collapse: '收起历史',
+      expand: '展开历史',
       rename: '重命名',
       delete: '删除',
-      empty: '还没有会话，点击“新建”开始提问。',
-      goHome: '首页'
+      empty: '还没有会话，点击“新建会话”开始提问。',
+      goHome: '返回首页'
     },
     chatWindow: {
       selectedDomainsLabel: '已选择知识域：',
@@ -263,6 +238,8 @@ const languagePack = {
       title: 'History',
       subtitle: 'Manage your questions and answers',
       create: 'New',
+      collapse: 'Collapse history',
+      expand: 'Expand history',
       rename: 'Rename',
       delete: 'Delete',
       empty: 'No conversations yet.\nClick “New” to start.',
@@ -548,36 +525,35 @@ async function handlePlaceholderSubmit(value) {
   min-width: 0;
 }
 
-.chat-view__sidebar-collapse,
 .chat-view__sidebar-expand {
   position: absolute;
   top: 1.5rem;
   left: 1.5rem;
-  width: 44px;
-  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  gap: 0.4rem;
+  border-radius: 12px;
   border: none;
-  background: rgba(255, 255, 255, 0.85);
-  color: #4a5cc8;
+  background: #fff;
+  color: #1f2a56;
+  font-weight: 600;
+  padding: 0.65rem 1rem;
   cursor: pointer;
   box-shadow: 0 10px 24px rgba(74, 92, 200, 0.18);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   z-index: 5;
 }
 
-.chat-view__sidebar-collapse:hover,
 .chat-view__sidebar-expand:hover {
   transform: translateY(-2px);
   box-shadow: 0 18px 32px rgba(74, 92, 200, 0.25);
 }
 
-.chat-view__sidebar-collapse-icon,
+
 .chat-view__sidebar-expand-icon {
-  width: 24px;
-  height: 24px;
+  font-weight: 700;
+  color: #4a5cc8;
 }
 
 .chat-view__sr-only {
@@ -715,7 +691,6 @@ async function handlePlaceholderSubmit(value) {
 }
 
 @media (max-width: 960px) {
-  .chat-view__sidebar-collapse,
   .chat-view__sidebar-expand {
     top: 1rem;
     left: 1rem;

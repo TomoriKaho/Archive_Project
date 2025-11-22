@@ -3,9 +3,9 @@
     <header class="chat-sidebar__header">
       <div class="chat-sidebar__header-actions">
         <button class="chat-sidebar__home" type="button" @click="$emit('go-home')">{{ texts.goHome }}</button>
-        <button class="chat-sidebar__create" type="button" @click="$emit('create')">
-          <span class="chat-sidebar__create-icon" aria-hidden="true">+</span>
-          <span class="chat-sidebar__create-label">{{ texts.create }}</span>
+        <button class="chat-sidebar__collapse" type="button" @click="$emit('collapse')">
+          <span class="chat-sidebar__collapse-icon" aria-hidden="true">⟨</span>
+          <span>{{ texts.collapse }}</span>
         </button>
       </div>
       <hr class="chat-sidebar__divider" aria-hidden="true" />
@@ -42,6 +42,13 @@
     <section v-else class="chat-sidebar__empty">
       <p class="chat-sidebar__empty-text">{{ texts.empty }}</p>
     </section>
+
+    <footer class="chat-sidebar__footer">
+      <button class="chat-sidebar__create" type="button" @click="$emit('create')">
+        <span class="chat-sidebar__create-icon" aria-hidden="true">+</span>
+        <span class="chat-sidebar__create-label">{{ texts.create }}</span>
+      </button>
+    </footer>
   </aside>
 </template>
 
@@ -60,16 +67,17 @@ const props = defineProps({
     default: () => ({
       title: '会话历史',
       subtitle: '管理你的提问与回答',
-      create: '新建',
+      create: '新建会话',
       rename: '重命名',
       delete: '删除',
-      empty: '还没有会话，点击“新建”开始提问。',
-      goHome: '返回主页'
+      empty: '还没有会话，点击“新建会话”开始提问。',
+      goHome: '返回主页',
+      collapse: '收起历史'
     })
   }
 });
 
-const emit = defineEmits(['select', 'create', 'rename', 'delete', 'go-home']);
+const emit = defineEmits(['select', 'create', 'rename', 'delete', 'go-home', 'collapse']);
 
 const DEFAULT_TITLE = '未命名会话';
 const MAX_TITLE_LENGTH = 18;
@@ -107,15 +115,15 @@ function formatTitle(rawTitle) {
 .chat-sidebar__header {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  margin-bottom: 1.25rem;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .chat-sidebar__header-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.65rem;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .chat-sidebar__title {
@@ -139,11 +147,13 @@ function formatTitle(rawTitle) {
   background: linear-gradient(135deg, #4866ff, #7b5bff);
   color: #fff;
   font-weight: 600;
-  padding: 0.55rem 1.4rem;
-  border-radius: 999px;
+  padding: 0.85rem 1.4rem;
+  border-radius: 14px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   white-space: nowrap;
+  width: 100%;
+  justify-content: center;
 }
 
 .chat-sidebar__create-icon {
@@ -165,6 +175,11 @@ function formatTitle(rawTitle) {
   border: none;
   border-top: 1px solid #d8e0ff;
   margin: 0;
+}
+
+.chat-sidebar__footer {
+  margin-top: auto;
+  padding-top: 1rem;
 }
 
 .chat-sidebar__list {
@@ -262,12 +277,36 @@ function formatTitle(rawTitle) {
   background: rgba(74, 92, 200, 0.12);
   color: #4a5cc8;
   font-weight: 600;
-  padding: 0.55rem 1.25rem;
+  padding: 0.55rem 1.2rem;
   border-radius: 12px;
   cursor: pointer;
 }
 
 .chat-sidebar__home:hover {
   background: rgba(74, 92, 200, 0.2);
+}
+
+.chat-sidebar__collapse {
+  border: 1px solid #d8e0ff;
+  background: #fff;
+  color: #1f2a56;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  border-radius: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.chat-sidebar__collapse:hover {
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.chat-sidebar__collapse-icon {
+  font-weight: 700;
+  color: #4a5cc8;
 }
 </style>
