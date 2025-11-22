@@ -1,5 +1,6 @@
 <template>
   <div class="login-page">
+    <BrandBadge class="login-page__brand" />
     <button
       type="button"
       class="login-page__language"
@@ -33,6 +34,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import BrandBadge from '@/components/BrandBadge.vue';
 import { useAuthStore } from '@/store/auth';
 import { usePreferencesStore } from '@/store/preferences';
 
@@ -134,6 +136,13 @@ async function handleSubmit() {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
+}
+
+.login-page__brand {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 2;
 }
 
 .login-page__language {
@@ -248,6 +257,11 @@ async function handleSubmit() {
 @media (max-width: 640px) {
   .login-page {
     padding: 1.5rem;
+  }
+
+  .login-page__brand {
+    top: 1rem;
+    left: 1rem;
   }
 
   .login-page__language {

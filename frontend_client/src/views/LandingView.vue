@@ -1,5 +1,6 @@
 <template>
   <div class="landing-view">
+    <BrandBadge class="landing-view__brand" />
     <LandingHero
       v-model="query"
       :texts="heroTexts"
@@ -36,6 +37,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import BrandBadge from '@/components/BrandBadge.vue';
 import LandingHero from '@/components/LandingHero.vue';
 import { useChatStore } from '@/store/chat';
 import { useAuthStore } from '@/store/auth';
@@ -174,6 +176,13 @@ function handleLogout() {
   isolation: isolate;
 }
 
+.landing-view__brand {
+  position: fixed;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 30;
+}
+
 .landing-view__quick-actions {
   position: fixed;
   right: 2rem;
@@ -223,6 +232,11 @@ function handleLogout() {
 }
 
 @media (max-width: 768px) {
+  .landing-view__brand {
+    top: 1rem;
+    left: 1rem;
+  }
+
   .landing-view__quick-actions {
     right: 1.25rem;
     bottom: 1.25rem;
