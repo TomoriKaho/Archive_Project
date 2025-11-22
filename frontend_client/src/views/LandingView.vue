@@ -62,12 +62,11 @@ const languagePack = {
     toggleAria: '切换到英文界面',
     hero: {
       title: '欢迎使用档案库 AI 助手',
-      subtitle: '在这里快速检索档案知识并与智能助手对话。',
       history: '查看历史会话',
       logout: '退出登录',
       logoutAria: '退出当前账号',
       composer: {
-        placeholder: '试着输入一个问题，例如：张小明是谁？',
+        placeholder: '在这里快速检索知识并与智能助手对话',
         submit: '开始对话',
         submitting: '创建中…',
         domainButton: '选择知识域',
@@ -83,13 +82,13 @@ const languagePack = {
     flag: '🇺🇸',
     toggleAria: 'Switch to Chinese interface',
     hero: {
-      title: 'Welcome to the Archives AI Assistant',
-      subtitle: 'Quickly search archival knowledge and chat with the assistant here.',
+      title: 'Pacific Silk Road Archives',
+      subtitle: 'Welcome to the Archives AI Assistant',
       history: 'View Conversation History',
       logout: 'Log out',
       logoutAria: 'Log out of the current account',
       composer: {
-        placeholder: 'Try asking a question, e.g. Who is Zhang Xiaoming?',
+        placeholder: 'Quickly search archival knowledge and chat with the assistant here.',
         submit: 'Start Chatting',
         submitting: 'Creating…',
         domainButton: 'Choose Domains',
