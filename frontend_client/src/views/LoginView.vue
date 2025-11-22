@@ -62,8 +62,8 @@ const languagePack = {
       toggleAria: '切换到英文界面'
     },
     texts: {
-      title: '登录 Archive AI',
-      subtitle: '使用个人账号访问客户端对话体验。',
+      title: '登录到档案库 AI 助手',
+      subtitle: '使用个人账号访问档案库 AI 助手进行对话体验。',
       emailLabel: '邮箱',
       emailPlaceholder: 'you@example.com',
       passwordLabel: '密码',

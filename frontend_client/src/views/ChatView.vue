@@ -166,10 +166,10 @@ const languagePack = {
     expandSidebarAria: '展开会话历史侧边栏',
     expandSidebarSr: '展开会话历史侧边栏',
     placeholder: {
-      title: '欢迎使用档案库 AI 助手',
+      title: '创建新对话',
       subtitle: '在左侧选择会话，或在下方输入问题开始对话。',
       composer: {
-        placeholder: '请输入问题，例如：张小明是谁？',
+        placeholder: '询问任何问题',
         submit: '开始对话',
         submitting: '创建中…',
         domainButton: '选择知识域',
@@ -230,10 +230,10 @@ const languagePack = {
     expandSidebarAria: 'Expand conversation history sidebar',
     expandSidebarSr: 'Expand conversation history sidebar',
     placeholder: {
-      title: 'Welcome to the Archives AI Assistant',
+      title: 'Create a new conversation',
       subtitle: 'Pick a conversation on the left or start a new one below.',
       composer: {
-        placeholder: 'Ask something, e.g. Who is Zhang Xiaoming?',
+        placeholder: 'Ask anything',
         submit: 'Start chatting',
         submitting: 'Creating…',
         domainButton: 'Choose Domains',

@@ -108,7 +108,7 @@ const languagePack = {
       errorFallback: '注册失败，请稍后重试。',
       emailTaken: '邮箱已被使用，请直接登录或更换邮箱。',
       haveAccount: '已经有账号了？',
-      loginLink: '去登录',
+      loginLink: '点击登录',
       validation: {
         nameRequired: '请输入姓名。',
         nameTooLong: '姓名长度需在 30 字以内。',
