@@ -8,6 +8,11 @@ const routes = [
     component: () => import('@/views/LoginView.vue')
   },
   {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/views/RegisterView.vue')
+  },
+  {
     path: '/',
     name: 'landing',
     component: () => import('@/views/LandingView.vue'),
@@ -42,7 +47,7 @@ router.beforeEach(async (to, from, next) => {
     });
   }
 
-  if (to.name === 'login' && authStore.isAuthenticated) {
+  if (['login', 'register'].includes(to.name) && authStore.isAuthenticated) {
     return next({ name: 'landing' });
   }
 

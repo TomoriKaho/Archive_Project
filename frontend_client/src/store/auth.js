@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import router from '@/router';
 import { configureApi, getStoredToken, persistToken } from '@/services/api';
-import { loginRequest, fetchCurrentUser } from '@/services/auth';
+import { loginRequest, registerRequest, fetchCurrentUser } from '@/services/auth';
 
 export const useAuthStore = defineStore('client-auth', {
   state: () => ({
@@ -65,6 +65,19 @@ export const useAuthStore = defineStore('client-auth', {
         persistToken(token);
         configureApi(this);
         await this.refreshUser();
+        return true;
+      } catch (error) {
+        this.error = error;
+        throw error;
+      } finally {
+        this.status = 'idle';
+      }
+    },
+    async register(payload) {
+      this.status = 'loading';
+      this.error = null;
+      try {
+        await registerRequest(payload);
         return true;
       } catch (error) {
         this.error = error;

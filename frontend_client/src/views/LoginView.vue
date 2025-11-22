@@ -12,6 +12,7 @@
     <div class="login-card">
       <h1 class="login-card__title">{{ texts.title }}</h1>
       <p class="login-card__subtitle">{{ texts.subtitle }}</p>
+      <p v-if="successMessage" class="login-form__success">{{ successMessage }}</p>
       <form class="login-form" @submit.prevent="handleSubmit">
         <label class="login-form__field">
           <span>{{ texts.emailLabel }}</span>
@@ -25,6 +26,10 @@
         <button class="login-form__submit" type="submit" :disabled="isSubmitting">
           {{ isSubmitting ? texts.submitting : texts.submit }}
         </button>
+        <p class="login-form__hint">
+          {{ texts.registerCta }}
+          <RouterLink class="login-form__link" :to="{ name: 'register' }">{{ texts.registerLink }}</RouterLink>
+        </p>
       </form>
     </div>
   </div>
@@ -47,6 +52,7 @@ const preferencesStore = usePreferencesStore();
 const isSubmitting = computed(() => authStore.status === 'loading');
 
 const language = computed(() => preferencesStore.language);
+const successMessage = computed(() => (route.query.registered ? texts.value.registerSuccess : ''));
 
 const languagePack = {
   zh: {
@@ -64,7 +70,10 @@ const languagePack = {
       passwordPlaceholder: '请输入密码',
       submit: '登录',
       submitting: '登录中…',
-      errorFallback: '登录失败，请稍后重试。'
+      errorFallback: '登录失败，请稍后重试。',
+      registerCta: '还没有账号？',
+      registerLink: '点击注册',
+      registerSuccess: '账号已创建，请登录。'
     }
   },
   en: {
@@ -82,7 +91,10 @@ const languagePack = {
       passwordPlaceholder: 'Enter your password',
       submit: 'Sign in',
       submitting: 'Signing in…',
-      errorFallback: 'Sign-in failed. Please try again later.'
+      errorFallback: 'Sign-in failed. Please try again later.',
+      registerCta: "Don't have an account?",
+      registerLink: 'Create one',
+      registerSuccess: 'Account created. Please sign in.'
     }
   }
 };
@@ -222,6 +234,16 @@ async function handleSubmit() {
   box-shadow: 0 0 0 3px rgba(123, 91, 255, 0.2);
 }
 
+.login-form__success {
+  margin: 0 0 1rem;
+  color: #1f8a4c;
+  background: rgba(31, 138, 76, 0.08);
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 138, 76, 0.2);
+  font-weight: 600;
+}
+
 .login-form__error {
   margin: -0.5rem 0 0;
   color: #cf3c4f;
@@ -243,6 +265,23 @@ async function handleSubmit() {
 .login-form__submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.login-form__hint {
+  margin: 0.5rem 0 0;
+  text-align: center;
+  color: #4a5b87;
+  font-weight: 600;
+}
+
+.login-form__link {
+  color: #4866ff;
+  text-decoration: none;
+  margin-left: 0.35rem;
+}
+
+.login-form__link:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 640px) {
