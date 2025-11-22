@@ -81,7 +81,8 @@ function updateDomains(domainIds) {
   justify-content: center;
   min-height: 100vh;
   padding: 2rem 1.5rem 6rem;
-  background: linear-gradient(180deg, #f4f7ff 0%, #ffffff 45%, #eef2ff 100%);
+  position: relative;
+  z-index: 1;
 }
 
 .landing-hero__content {

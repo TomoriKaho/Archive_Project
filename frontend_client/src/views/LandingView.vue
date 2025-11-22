@@ -166,7 +166,12 @@ function handleLogout() {
 .landing-view {
   position: relative;
   min-height: 100vh;
-  background: transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
+    url('@/assets/pacific-map.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  isolation: isolate;
 }
 
 .landing-view__quick-actions {

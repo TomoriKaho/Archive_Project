@@ -128,8 +128,12 @@ async function handleSubmit() {
   justify-content: center;
   min-height: 100vh;
   padding: 2rem;
-  background: linear-gradient(135deg, #dbe4ff, #f5f5ff);
   position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
+    url('@/assets/pacific-map.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
 }
 
 .login-page__language {
@@ -148,6 +152,7 @@ async function handleSubmit() {
   cursor: pointer;
   box-shadow: 0 16px 40px rgba(28, 39, 84, 0.18);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  z-index: 1;
 }
 
 .login-page__language:hover {
@@ -171,6 +176,8 @@ async function handleSubmit() {
   padding: 2.75rem 2.5rem;
   box-shadow: 0 30px 60px rgba(26, 43, 90, 0.16);
   backdrop-filter: blur(8px);
+  position: relative;
+  z-index: 1;
 }
 
 .login-card__title {

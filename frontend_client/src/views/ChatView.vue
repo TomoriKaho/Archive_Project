@@ -534,7 +534,12 @@ async function handlePlaceholderSubmit(value) {
 .chat-view {
   display: flex;
   min-height: 100vh;
-  background: #eef1fb;
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
+    url('@/assets/pacific-map.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
 }
 
 .chat-view__main {
