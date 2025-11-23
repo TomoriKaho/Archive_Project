@@ -178,7 +178,7 @@ function handleLogout() {
   align-items: flex-start;
   padding: 7rem 1.5rem;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
-    url('@/assets/pacific-map.png');
+    url('@/assets/pacific-map2.png');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -220,12 +220,12 @@ function handleLogout() {
 }
 
 .landing-view__fab--history {
-  background: linear-gradient(135deg, #e3f4ff 0%, #bde5ff 100%);
-  color: #1f8fe5;
+  background: linear-gradient(135deg, #90c8ed 0%, #59b6f4 100%);
+  color: #103a5a;
 }
 
 .landing-view__fab--logout {
-  background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+  background: linear-gradient(135deg, #f03e3e, #fc742a);
   color: #fff;
 }
 

@@ -462,7 +462,7 @@ function expandSidebar() {
   min-height: 100vh;
   position: relative;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
-    url('@/assets/pacific-map.png');
+    url('@/assets/pacific-map2.png');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -565,12 +565,12 @@ function expandSidebar() {
 .chat-view__welcome h2 {
   margin: 0;
   font-size: 2rem;
-  color: #1d2b4d;
+  color: #0f0000;
 }
 
 .chat-view__welcome p {
   margin: 0;
-  color: #5a6b97;
+  color: #273c70;
 }
 
 .chat-view--collapsed .chat-sidebar {
