@@ -10,7 +10,11 @@
           {{ domainsPanelOpen ? texts.domainToggleClose : texts.domainToggleOpen }}
         </button>
         <transition name="fade">
-          <div v-if="domainsPanelOpen" class="chat-window__domains-panel">
+          <div
+            v-if="domainsPanelOpen"
+            class="chat-window__domains-panel"
+            :class="{ 'chat-window__domains-panel--scrollable': shouldScrollDomains }"
+          >
             <p class="chat-window__domains-hint">{{ texts.domainHint }}</p>
             <div class="chat-window__domains-grid">
               <label v-for="domain in domains" :key="domain.id" class="chat-window__domains-option">
@@ -103,7 +107,7 @@ const props = defineProps({
       noDomains: '未限定知识域，将在全部知识库中检索。',
       domainToggleOpen: '选择知识域',
       domainToggleClose: '收起知识域',
-      domainHint: '选择后发送消息时仅检索勾选的知识域，不勾选默认从全部知识域检索。',
+      domainHint: '选择后仅检索勾选的知识域，不勾选默认从全部知识域检索。',
       domainApply: '应用',
       domainClear: '清除',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
@@ -168,6 +172,8 @@ const selectedDomainsText = computed(() => {
   const names = activeDomainNames.value.join(joiner);
   return label ? `${label} ${names}` : names;
 });
+
+const shouldScrollDomains = computed(() => props.domains.length > 2);
 
 function togglePanel() {
   domainsPanelOpen.value = !domainsPanelOpen.value;
@@ -282,14 +288,29 @@ onMounted(scrollToBottom);
   position: absolute;
   right: 0;
   top: 110%;
-  width: 320px;
-  max-height: 360px;
-  overflow-y: auto;
+  width: 256px;
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 18px 40px rgba(26, 40, 90, 0.15);
   padding: 1rem 1.25rem 1.25rem;
   z-index: 10;
+}
+
+.chat-window__domains-panel--scrollable {
+  --chat-window-domain-row-height: 2.55rem;
+  --chat-window-domain-row-gap: 0.5rem;
+
+  max-height: 256px;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+}
+
+.chat-window__domains-panel--scrollable .chat-window__domains-grid {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: calc(var(--chat-window-domain-row-height) * 2 + var(--chat-window-domain-row-gap));
 }
 
 .chat-window__domains-hint {
@@ -310,6 +331,7 @@ onMounted(scrollToBottom);
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.65rem;
+  min-height: var(--chat-window-domain-row-height, auto);
   border-radius: 10px;
   transition: background-color 0.2s ease;
 }

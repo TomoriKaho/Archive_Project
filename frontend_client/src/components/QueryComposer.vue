@@ -21,7 +21,11 @@
             <span class="query-composer__domains-caret" aria-hidden="true">▾</span>
           </button>
           <transition name="query-composer-fade">
-            <div v-if="domainsPanelOpen" class="query-composer__domains-panel">
+            <div
+              v-if="domainsPanelOpen"
+              class="query-composer__domains-panel"
+              :class="{ 'query-composer__domains-panel--scrollable': hasScrollableDomains }"
+            >
               <p class="query-composer__domains-hint">{{ texts.domainHint }}</p>
               <div class="query-composer__domains-grid">
                 <label v-for="domain in domains" :key="domain.id" class="query-composer__domains-option">
@@ -111,6 +115,8 @@ watch(
 const canSubmit = computed(() => Boolean(draft.value?.trim()));
 
 const selectedDomainsCount = computed(() => pendingSelection.value.size);
+
+const hasScrollableDomains = computed(() => props.domains.length > 2);
 
 const domainBadge = computed(() => {
   const count = selectedDomainsCount.value;
@@ -271,14 +277,29 @@ onMounted(() => {
   position: absolute;
   left: 0;
   top: 110%;
-  width: 320px;
-  max-height: 360px;
-  overflow-y: auto;
+  width: 300px;
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 18px 40px rgba(26, 40, 90, 0.15);
   padding: 1rem 1.25rem 1.25rem;
   z-index: 10;
+}
+
+.query-composer__domains-panel--scrollable {
+  --query-composer-domain-row-height: 2.55rem;
+  --query-composer-domain-row-gap: 0.5rem;
+
+  max-height: 200px;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+}
+
+.query-composer__domains-panel--scrollable .query-composer__domains-grid {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: calc(var(--query-composer-domain-row-height) * 2 + var(--query-composer-domain-row-gap));
 }
 
 .query-composer__domains-hint {
@@ -299,6 +320,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.65rem;
+  min-height: var(--query-composer-domain-row-height, auto);
   border-radius: 10px;
   transition: background-color 0.2s ease;
 }
