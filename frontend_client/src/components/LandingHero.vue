@@ -12,11 +12,6 @@
         @submit="handleSubmit"
         @update:domains="updateDomains"
       />
-      <div class="landing-hero__actions">
-        <button type="button" class="landing-hero__history" @click="$emit('show-history')">
-          {{ texts.history }}
-        </button>
-      </div>
     </div>
   </section>
 </template>
@@ -48,7 +43,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:modelValue', 'submit', 'show-history', 'update:domains']);
+const emit = defineEmits(['update:modelValue', 'submit', 'update:domains']);
 
 const query = ref(props.modelValue);
 
@@ -88,11 +83,9 @@ function updateDomains(domainIds) {
 .landing-hero__content {
   width: min(720px, 100%);
   text-align: center;
-  background-color: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(12px);
-  padding: 3rem 2.5rem;
-  border-radius: 24px;
-  box-shadow: 0 24px 48px rgba(15, 46, 94, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 .landing-hero__title {
@@ -103,36 +96,14 @@ function updateDomains(domainIds) {
 }
 
 .landing-hero__subtitle {
-  margin: 0 0 2.5rem;
+  margin: 0;
   font-size: 1.1rem;
   color: #4c5c8b;
 }
 
-.landing-hero__actions {
-  margin-top: 1.75rem;
-}
-
-.landing-hero__history {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #cdd5ff;
-  font-size: 0.95rem;
-  color: #4866ff;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0.55rem 1.5rem;
-  border-radius: 16px;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-  box-shadow: 0 6px 16px rgba(72, 102, 255, 0.12);
-}
-
-.landing-hero__history:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(72, 102, 255, 0.18);
-}
-
 @media (max-width: 600px) {
   .landing-hero__content {
-    padding: 2.25rem 1.75rem;
+    padding: 0;
   }
 }
 </style>

@@ -275,7 +275,7 @@ onMounted(scrollToBottom);
   padding: 0.5rem 1.25rem;
   font-weight: 600;
   cursor: pointer;
-  color: #4a5cc8;
+  color: #1f8fe5;
 }
 
 .chat-window__domains-panel {
@@ -315,11 +315,11 @@ onMounted(scrollToBottom);
 }
 
 .chat-window__domains-option:hover {
-  background-color: rgba(74, 92, 200, 0.08);
+  background-color: rgba(31, 143, 229, 0.08);
 }
 
 .chat-window__domains-option input {
-  accent-color: #4a5cc8;
+  accent-color: #1f8fe5;
 }
 
 .chat-window__domains-actions {
@@ -330,7 +330,7 @@ onMounted(scrollToBottom);
 
 .chat-window__domains-apply {
   border: none;
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   color: #fff;
   font-weight: 600;
   padding: 0.45rem 1.1rem;
@@ -387,7 +387,7 @@ onMounted(scrollToBottom);
 
 .chat-message--user {
   align-self: flex-end;
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   color: #fff;
 }
 
@@ -442,7 +442,7 @@ onMounted(scrollToBottom);
   border-radius: 999px;
   padding: 0.6rem 1.6rem;
   font-weight: 600;
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   color: #fff;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -450,7 +450,7 @@ onMounted(scrollToBottom);
 
 .chat-window__send:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(72, 102, 255, 0.25);
+  box-shadow: 0 12px 24px rgba(31, 143, 229, 0.25);
 }
 
 .chat-window__send:disabled {

@@ -231,8 +231,8 @@ async function handleSubmit() {
 
 .login-form__field input:focus {
   outline: none;
-  border-color: #7b5bff;
-  box-shadow: 0 0 0 3px rgba(123, 91, 255, 0.2);
+  border-color: #1f8fe5;
+  box-shadow: 0 0 0 3px rgba(31, 143, 229, 0.2);
 }
 
 .login-form__success {
@@ -257,7 +257,7 @@ async function handleSubmit() {
   padding: 0.9rem;
   font-size: 1.05rem;
   font-weight: 600;
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   color: #fff;
   cursor: pointer;
   transition: opacity 0.2s ease;

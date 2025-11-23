@@ -702,7 +702,7 @@ async function handlePlaceholderSubmit(value) {
 }
 
 .chat-dialog__button--primary {
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   color: #fff;
 }
 

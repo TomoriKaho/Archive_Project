@@ -229,8 +229,8 @@ onMounted(() => {
   align-items: center;
   gap: 0.35rem;
   border: none;
-  background: rgba(230, 234, 255, 0.75);
-  color: #3550ff;
+  background: rgba(218, 239, 255, 0.85);
+  color: #1f8fe5;
   font-weight: 600;
   font-size: 0.95rem;
   border-radius: 18px;
@@ -240,7 +240,7 @@ onMounted(() => {
 }
 
 .query-composer__domains-button:hover {
-  background: rgba(204, 212, 255, 0.95);
+  background: rgba(193, 229, 255, 0.95);
   transform: translateY(-1px);
 }
 
@@ -255,12 +255,12 @@ onMounted(() => {
 
 .query-composer__domains-caret {
   font-size: 0.85rem;
-  color: #3550ff;
+  color: #1f8fe5;
   transform: translateY(1px);
 }
 
 .query-composer__domains-badge {
-  background: #3550ff;
+  background: #1f8fe5;
   color: #fff;
   border-radius: 12px;
   padding: 0.1rem 0.5rem;
@@ -304,11 +304,11 @@ onMounted(() => {
 }
 
 .query-composer__domains-option:hover {
-  background-color: rgba(74, 92, 200, 0.08);
+  background-color: rgba(31, 143, 229, 0.12);
 }
 
 .query-composer__domains-option input {
-  accent-color: #4a5cc8;
+  accent-color: #1f8fe5;
 }
 
 .query-composer__domains-actions {
@@ -319,7 +319,7 @@ onMounted(() => {
 
 .query-composer__domains-apply {
   border: none;
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   color: #fff;
   font-weight: 600;
   padding: 0.45rem 1.1rem;
@@ -341,7 +341,7 @@ onMounted(() => {
   padding: 0.75rem 1.85rem;
   font-size: 1rem;
   font-weight: 600;
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   color: #fff;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -350,7 +350,7 @@ onMounted(() => {
 
 .query-composer__submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(72, 102, 255, 0.28);
+  box-shadow: 0 12px 24px rgba(31, 143, 229, 0.28);
 }
 
 .query-composer__submit:disabled {

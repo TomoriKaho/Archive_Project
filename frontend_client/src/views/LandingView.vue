@@ -7,10 +7,18 @@
       :selected-domains="selectedDomains"
       :submitting="isCreatingConversation"
       @submit="handleSubmit"
-      @show-history="openHistory"
       @update:domains="updateDomains"
     />
     <div class="landing-view__quick-actions">
+      <button
+        type="button"
+        class="landing-view__fab landing-view__fab--history"
+        :aria-label="heroTexts.history"
+        @click="openHistory"
+      >
+        <span class="landing-view__fab-icon" aria-hidden="true">🕘</span>
+        <span class="landing-view__fab-label">{{ heroTexts.history }}</span>
+      </button>
       <button
         type="button"
         class="landing-view__fab landing-view__fab--language"
@@ -165,6 +173,10 @@ function handleLogout() {
 .landing-view {
   position: relative;
   min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 3rem 1.5rem 5rem;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
     url('@/assets/pacific-map.png');
   background-size: cover;
@@ -205,6 +217,11 @@ function handleLogout() {
 .landing-view__fab--language {
   background: linear-gradient(135deg, #ffffff 0%, #f4f7ff 100%);
   color: #1c2754;
+}
+
+.landing-view__fab--history {
+  background: linear-gradient(135deg, #e3f4ff 0%, #bde5ff 100%);
+  color: #1f8fe5;
 }
 
 .landing-view__fab--logout {
