@@ -8,6 +8,7 @@ import {
   sendConversationMessage
 } from '@/services/chat';
 import { useAuthStore } from './auth';
+import { usePreferencesStore } from './preferences';
 
 function normalizeDomainIds(rawValue) {
   if (!Array.isArray(rawValue)) {
@@ -114,7 +115,9 @@ export const useChatStore = defineStore('client-chat', {
         throw new Error('用户未登录');
       }
       const trimmedTitle = title?.trim();
-      const finalTitle = trimmedTitle && trimmedTitle.length ? trimmedTitle : '新的会话';
+      const preferencesStore = usePreferencesStore();
+      const defaultTitle = preferencesStore.language === 'en' ? 'New Conversation' : '新会话';
+      const finalTitle = trimmedTitle && trimmedTitle.length ? trimmedTitle : defaultTitle;
       const { data } = await createConversationRequest({
         user_id: authStore.user.id,
         title: finalTitle

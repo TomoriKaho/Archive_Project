@@ -42,15 +42,6 @@
         <div class="chat-view__welcome">
           <h2>{{ texts.placeholder.title }}</h2>
           <p>{{ texts.placeholder.subtitle }}</p>
-          <QueryComposer
-            v-model="placeholderQuery"
-            :texts="texts.placeholder.composer"
-            :domains="domainOptions"
-            :selected-domains="selectedDomains"
-            :submitting="isPlaceholderSubmitting"
-            @submit="handlePlaceholderSubmit"
-            @update:domains="updatePreferredDomains"
-          />
         </div>
       </div>
     </div>
@@ -114,7 +105,6 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import ChatSidebar from '@/components/ChatSidebar.vue';
 import ChatWindow from '@/components/ChatWindow.vue';
-import QueryComposer from '@/components/QueryComposer.vue';
 import { useChatStore } from '@/store/chat';
 import { useDomainsStore } from '@/store/domains';
 import { usePreferencesStore } from '@/store/preferences';
@@ -132,7 +122,6 @@ const isSending = computed(() => chatStore.isSending);
 const activeConversationId = computed(() => chatStore.activeConversationId);
 const domainOptions = computed(() => domainsStore.items);
 const activeDomains = computed(() => chatStore.getConversationDomains(chatStore.activeConversationId));
-const selectedDomains = computed(() => preferencesStore.preferredDomainIds);
 
 const language = computed(() => preferencesStore.language);
 
@@ -144,17 +133,7 @@ const languagePack = {
     expandSidebarSr: '展开侧边栏',
     placeholder: {
       title: '创建新对话',
-      subtitle: '在左侧选择会话，或在下方输入问题开始对话。',
-      composer: {
-        placeholder: '询问任何问题',
-        submit: '开始对话',
-        submitting: '创建中…',
-        domainButton: '选择知识域',
-        domainBadge: (count) => `已选${count}`,
-        domainHint: '选择后仅检索勾选的知识域，不勾选默认从全部知识域检索。',
-        domainApply: '应用',
-        domainClear: '清除'
-      }
+      subtitle: '点击左侧的“新建会话”按钮开始新的对话。'
     },
     renameDialog: {
       title: '重命名会话',
@@ -210,18 +189,7 @@ const languagePack = {
     expandSidebarSr: 'Expand',
     placeholder: {
       title: 'Create a new conversation',
-      subtitle: 'Pick a conversation on the left or start a new one below.',
-      composer: {
-        placeholder: 'Ask anything',
-        submit: 'Start chatting',
-        submitting: 'Creating…',
-        domainButton: 'Choose Domains',
-        domainBadge: (count) => `${count} selected`,
-        domainHint:
-          'When selected, messages will only search the checked domains. Leave unchecked to search all domains.',
-        domainApply: 'Apply',
-        domainClear: 'Clear'
-      }
+      subtitle: 'Click “New” on the left to start a conversation.'
     },
     renameDialog: {
       title: 'Rename conversation',
@@ -284,8 +252,6 @@ const showDeleteDialog = ref(false);
 const deleteTarget = ref(null);
 const isDeletingConversation = ref(false);
 
-const placeholderQuery = ref('');
-const isPlaceholderSubmitting = ref(false);
 const isSidebarCollapsed = ref(false);
 const shouldOpenDomains = ref(false);
 
@@ -378,10 +344,13 @@ async function handleSelectConversation(conversationId) {
 
 async function handleCreateConversation() {
   preferencesStore.setPreferredDomainIds([]);
-  placeholderQuery.value = '';
-  await chatStore.selectConversation(null);
-  if (route.name !== 'chat' || route.params.conversationId) {
-    router.push({ name: 'chat' });
+  try {
+    const conversationId = await chatStore.createConversation({
+      title: language.value === 'en' ? 'New Conversation' : '新会话'
+    });
+    router.push({ name: 'chat', params: { conversationId } });
+  } catch (error) {
+    console.error('创建会话失败', error);
   }
 }
 
@@ -418,10 +387,6 @@ function updateActiveDomains(domainIds) {
     return;
   }
   chatStore.setConversationDomains(chatStore.activeConversationId, domainIds);
-}
-
-function updatePreferredDomains(domainIds) {
-  preferencesStore.setPreferredDomainIds(domainIds);
 }
 
 function goHome() {
@@ -488,27 +453,7 @@ function expandSidebar() {
   isSidebarCollapsed.value = false;
 }
 
-async function handlePlaceholderSubmit(value) {
-  const content = value.trim();
-  if (!content || isPlaceholderSubmitting.value) {
-    return;
-  }
-  isPlaceholderSubmitting.value = true;
-  try {
-    const conversationId = await chatStore.createConversation({
-      title: content.slice(0, 30),
-      initialMessage: content,
-      domainIds: selectedDomains.value
-    });
-    placeholderQuery.value = '';
-    preferencesStore.setPreferredDomainIds([]);
-    router.push({ name: 'chat', params: { conversationId } });
-  } catch (error) {
-    console.error('创建会话失败', error);
-  } finally {
-    isPlaceholderSubmitting.value = false;
-  }
-}
+// Placeholder submission removed; users start chats from the sidebar "New" button.
 </script>
 
 <style scoped lang="scss">
