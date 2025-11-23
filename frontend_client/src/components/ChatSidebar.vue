@@ -30,7 +30,9 @@
             type="button"
             @click="$emit('select', conversation.id)"
           >
-            <span class="chat-sidebar__item-title">{{ formatTitle(conversation.title) }}</span>
+            <span class="chat-sidebar__item-title" :title="getFullTitle(conversation.title)">
+              {{ formatTitle(conversation.title) }}
+            </span>
           </button>
           <div class="chat-sidebar__item-actions">
             <button type="button" class="chat-sidebar__icon" @click="handleRename(conversation)">
@@ -95,11 +97,15 @@ function handleDelete(conversation) {
 }
 
 function formatTitle(rawTitle) {
-  const normalized = (rawTitle || DEFAULT_TITLE).trim() || DEFAULT_TITLE;
+  const normalized = getFullTitle(rawTitle);
   if (normalized.length <= MAX_TITLE_LENGTH) {
     return normalized;
   }
   return `${normalized.slice(0, MAX_TITLE_LENGTH)}...`;
+}
+
+function getFullTitle(rawTitle) {
+  return (rawTitle || DEFAULT_TITLE).trim() || DEFAULT_TITLE;
 }
 </script>
 

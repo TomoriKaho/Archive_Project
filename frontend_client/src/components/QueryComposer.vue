@@ -277,7 +277,7 @@ onMounted(() => {
   position: absolute;
   left: 0;
   top: 110%;
-  width: 300px;
+  width: 400px;
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 18px 40px rgba(26, 40, 90, 0.15);
@@ -289,7 +289,7 @@ onMounted(() => {
   --query-composer-domain-row-height: 2.55rem;
   --query-composer-domain-row-gap: 0.5rem;
 
-  max-height: 200px;
+  max-height: 300px;
   display: flex;
   flex-direction: column;
   overscroll-behavior: contain;

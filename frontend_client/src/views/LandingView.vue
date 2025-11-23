@@ -79,7 +79,7 @@ const languagePack = {
         submitting: '创建中…',
         domainButton: '选择知识域',
         domainBadge: (count) => `已选${count}`,
-        domainHint: '选择后仅检索勾选的知识域，不勾选默认从全部知识域检索。',
+        domainHint: '选择后仅检索勾选的知识域，不勾选默认从全部域检索。',
         domainApply: '应用',
         domainClear: '清除'
       }
@@ -175,8 +175,8 @@ function handleLogout() {
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 2rem 1.5rem;
+  align-items: flex-start;
+  padding: 7rem 1.5rem;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
     url('@/assets/pacific-map.png');
   background-size: cover;
