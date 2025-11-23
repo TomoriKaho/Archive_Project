@@ -82,8 +82,8 @@ const languagePack = {
     flag: '🇺🇸',
     toggleAria: 'Switch to Chinese interface',
     hero: {
-      title: 'Pacific Silk Road Archives',
-      subtitle: 'Welcome to the Archives AI Assistant',
+      title: 'Welcome to the Archives AI Assistant',
+      subtitle: '',
       history: 'View Conversation History',
       logout: 'Log out',
       logoutAria: 'Log out of the current account',

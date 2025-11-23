@@ -3,9 +3,13 @@
     <header class="chat-sidebar__header">
       <div class="chat-sidebar__header-actions">
         <button class="chat-sidebar__home" type="button" @click="$emit('go-home')">{{ texts.goHome }}</button>
-        <button class="chat-sidebar__collapse" type="button" @click="$emit('collapse')">
-          <span class="chat-sidebar__collapse-icon" aria-hidden="true">⟨</span>
-          <span>{{ texts.collapse }}</span>
+        <button class="chat-sidebar__collapse" type="button" @click="$emit('collapse')" :aria-label="texts.collapse">
+          <svg class="chat-sidebar__collapse-icon" viewBox="0 0 32 32" role="presentation" aria-hidden="true">
+            <line x1="21" y1="6" x2="21" y2="26" />
+            <path d="M13 10.5 8 16l5 5.5" />
+          </svg>
+          <span class="chat-sidebar__collapse-tooltip" role="tooltip">{{ texts.collapse }}</span>
+          <span class="chat-sidebar__sr-only">{{ texts.collapse }}</span>
         </button>
       </div>
       <hr class="chat-sidebar__divider" aria-hidden="true" />
@@ -72,7 +76,7 @@ const props = defineProps({
       delete: '删除',
       empty: '还没有会话，点击“新建会话”开始提问。',
       goHome: '返回主页',
-      collapse: '收起历史'
+      collapse: '收起边栏'
     })
   }
 });
@@ -291,13 +295,16 @@ function formatTitle(rawTitle) {
   background: #fff;
   color: #1f2a56;
   font-weight: 600;
-  padding: 0.55rem 1rem;
+  padding: 0.55rem;
   border-radius: 12px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
   transition: box-shadow 0.2s ease, transform 0.2s ease;
+  position: relative;
+  width: 44px;
+  height: 44px;
 }
 
 .chat-sidebar__collapse:hover {
@@ -306,7 +313,47 @@ function formatTitle(rawTitle) {
 }
 
 .chat-sidebar__collapse-icon {
-  font-weight: 700;
-  color: #4a5cc8;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: #4a5cc8;
+  stroke-width: 2.25px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat-sidebar__collapse-tooltip {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  background: #1f2a56;
+  color: #fff;
+  padding: 0.4rem 0.65rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 8px 20px rgba(31, 42, 86, 0.2);
+  z-index: 120;
+}
+
+.chat-sidebar__collapse:hover .chat-sidebar__collapse-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.chat-sidebar__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>

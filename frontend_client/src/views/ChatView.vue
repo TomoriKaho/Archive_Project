@@ -20,8 +20,12 @@
         @click="expandSidebar"
         :aria-label="texts.expandSidebarAria"
       >
-        <span class="chat-view__sidebar-expand-icon" aria-hidden="true">⟩</span>
-        <span>{{ texts.sidebar.expand }}</span>
+        <svg class="chat-view__sidebar-expand-icon" viewBox="0 0 32 32" role="presentation" aria-hidden="true">
+          <line x1="11" y1="6" x2="11" y2="26" />
+          <path d="M19 10.5 24 16l-5 5.5" />
+        </svg>
+        <span class="chat-view__sidebar-expand-tooltip" role="tooltip">{{ texts.sidebar.expand }}</span>
+        <span class="chat-view__sr-only">{{ texts.sidebar.expand }}</span>
       </button>
       <ChatWindow
         v-if="activeConversation"
@@ -134,10 +138,10 @@ const language = computed(() => preferencesStore.language);
 
 const languagePack = {
   zh: {
-    collapseSidebarAria: '折叠会话历史侧边栏',
-    collapseSidebarSr: '折叠会话历史侧边栏',
-    expandSidebarAria: '展开历史侧边栏',
-    expandSidebarSr: '展开历史侧边栏',
+    collapseSidebarAria: '折叠侧边栏',
+    collapseSidebarSr: '折叠侧边栏',
+    expandSidebarAria: '展开侧边栏',
+    expandSidebarSr: '展开侧边栏',
     placeholder: {
       title: '创建新对话',
       subtitle: '在左侧选择会话，或在下方输入问题开始对话。',
@@ -171,8 +175,8 @@ const languagePack = {
       title: '会话历史',
       subtitle: '管理你的提问与回答',
       create: '新建会话',
-      collapse: '收起历史',
-      expand: '展开',
+      collapse: '收起边栏',
+      expand: '展开边栏',
       rename: '重命名',
       delete: '删除',
       empty: '还没有会话，点击“新建会话”开始提问。',
@@ -200,10 +204,10 @@ const languagePack = {
     }
   },
   en: {
-    collapseSidebarAria: 'Collapse conversation history sidebar',
-    collapseSidebarSr: 'Collapse conversation history sidebar',
-    expandSidebarAria: 'Expand conversation history sidebar',
-    expandSidebarSr: 'Expand conversation history sidebar',
+    collapseSidebarAria: 'Collapse',
+    collapseSidebarSr: 'Collapse',
+    expandSidebarAria: 'Expand',
+    expandSidebarSr: 'Expand',
     placeholder: {
       title: 'Create a new conversation',
       subtitle: 'Pick a conversation on the left or start a new one below.',
@@ -238,8 +242,8 @@ const languagePack = {
       title: 'History',
       subtitle: 'Manage your questions and answers',
       create: 'New',
-      collapse: 'Collapse history',
-      expand: 'Expand history',
+      collapse: 'Collapse',
+      expand: 'Expand',
       rename: 'Rename',
       delete: 'Delete',
       empty: 'No conversations yet.\nClick “New” to start.',
@@ -532,17 +536,18 @@ async function handlePlaceholderSubmit(value) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
   border-radius: 12px;
   border: none;
   background: #fff;
   color: #1f2a56;
   font-weight: 600;
-  padding: 0.65rem 1rem;
+  padding: 0.65rem;
   cursor: pointer;
   box-shadow: 0 10px 24px rgba(74, 92, 200, 0.18);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   z-index: 5;
+  width: 48px;
+  height: 48px;
 }
 
 .chat-view__sidebar-expand:hover {
@@ -552,8 +557,36 @@ async function handlePlaceholderSubmit(value) {
 
 
 .chat-view__sidebar-expand-icon {
-  font-weight: 700;
-  color: #4a5cc8;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: #4a5cc8;
+  stroke-width: 2.25px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat-view__sidebar-expand-tooltip {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 12px);
+  transform: translateX(-50%) translateY(-6px);
+  background: #1f2a56;
+  color: #fff;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 10px 24px rgba(31, 42, 86, 0.22);
+  z-index: 120;
+}
+
+.chat-view__sidebar-expand:hover .chat-view__sidebar-expand-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .chat-view__sr-only {
