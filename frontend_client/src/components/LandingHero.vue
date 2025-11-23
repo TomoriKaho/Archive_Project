@@ -74,8 +74,8 @@ function updateDomains(domainIds) {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 2rem 1.5rem 6rem;
+  width: 100%;
+  padding: 1.5rem;
   position: relative;
   z-index: 1;
 }

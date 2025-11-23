@@ -176,7 +176,7 @@ function handleLogout() {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 3rem 1.5rem 5rem;
+  padding: 2rem 1.5rem;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
     url('@/assets/pacific-map.png');
   background-size: cover;
