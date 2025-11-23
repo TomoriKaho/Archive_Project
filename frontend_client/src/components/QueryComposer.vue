@@ -277,7 +277,7 @@ onMounted(() => {
   position: absolute;
   left: 0;
   top: 110%;
-  width: 400px;
+  width: 300px;
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 18px 40px rgba(26, 40, 90, 0.15);

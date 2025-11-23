@@ -107,7 +107,7 @@ const props = defineProps({
       noDomains: '未限定知识域，将在全部知识库中检索。',
       domainToggleOpen: '选择知识域',
       domainToggleClose: '收起知识域',
-      domainHint: '选择后仅检索勾选的知识域，不勾选默认从全部域检索。',
+      domainHint: '选择后仅检索勾选的知识域，                不勾选默认从全部知识域检索。',
       domainApply: '应用',
       domainClear: '清除',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
@@ -300,7 +300,7 @@ onMounted(scrollToBottom);
   --chat-window-domain-row-height: 2.55rem;
   --chat-window-domain-row-gap: 0.5rem;
 
-  max-height: 256px;
+  max-height: 600px;
   display: flex;
   flex-direction: column;
   overscroll-behavior: contain;
@@ -310,7 +310,7 @@ onMounted(scrollToBottom);
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  max-height: calc(var(--chat-window-domain-row-height) * 2 + var(--chat-window-domain-row-gap));
+  max-height: 300px;
 }
 
 .chat-window__domains-hint {
