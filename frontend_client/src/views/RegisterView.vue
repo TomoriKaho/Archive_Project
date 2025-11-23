@@ -363,7 +363,7 @@ async function handleSubmit() {
   padding: 0.9rem;
   font-size: 1.05rem;
   font-weight: 600;
-  background: linear-gradient(135deg, #4866ff, #7b5bff);
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   color: #fff;
   cursor: pointer;
   transition: opacity 0.2s ease;

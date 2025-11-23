@@ -610,22 +610,21 @@ async function handlePlaceholderSubmit(value) {
 }
 
 .chat-view__welcome {
-  width: min(640px, 100%);
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 24px;
-  padding: 3rem 2.5rem;
+  width: min(720px, 100%);
   text-align: center;
-  box-shadow: 0 24px 48px rgba(18, 43, 90, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .chat-view__welcome h2 {
-  margin-bottom: 0.75rem;
+  margin: 0;
   font-size: 2rem;
   color: #1d2b4d;
 }
 
 .chat-view__welcome p {
-  margin-bottom: 2rem;
+  margin: 0;
   color: #5a6b97;
 }
 
@@ -733,18 +732,11 @@ async function handlePlaceholderSubmit(value) {
     left: 1rem;
   }
 
-  .chat-view__welcome {
-    padding: 2.5rem 1.75rem;
-  }
 }
 
 @media (max-width: 720px) {
   .chat-view__welcome h2 {
     font-size: 1.75rem;
-  }
-
-  .chat-view__welcome {
-    padding: 2.25rem 1.5rem;
   }
 }
 </style>

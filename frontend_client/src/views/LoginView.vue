@@ -62,8 +62,8 @@ const languagePack = {
       toggleAria: '切换到英文界面'
     },
     texts: {
-      title: '登录到档案库 AI',
-      subtitle: '使用个人账号访问档案库 AI 助手进行对话体验。',
+      title: '太平洋丝绸之路',
+      subtitle: '登录后访问档案库 AI 助手进行对话体验。',
       emailLabel: '邮箱',
       emailPlaceholder: 'you@example.com',
       passwordLabel: '密码',
@@ -83,8 +83,8 @@ const languagePack = {
       toggleAria: 'Switch to the Chinese interface'
     },
     texts: {
-      title: 'Sign in to Archive AI',
-      subtitle: 'Use your account to access the client chat experience.',
+      title: 'Pacific Silk Road',
+      subtitle: 'Log in to access the Archives AI Assistant for a conversational experience.',
       emailLabel: 'Email',
       emailPlaceholder: 'you@example.com',
       passwordLabel: 'Password',

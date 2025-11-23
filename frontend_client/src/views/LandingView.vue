@@ -69,7 +69,7 @@ const languagePack = {
     flag: '🇨🇳',
     toggleAria: '切换到英文界面',
     hero: {
-      title: '欢迎使用档案库 AI 助手',
+      title: '太平洋丝绸之路・档案库智能助手',
       history: '查看历史会话',
       logout: '退出登录',
       logoutAria: '退出当前账号',
@@ -90,7 +90,7 @@ const languagePack = {
     flag: '🇺🇸',
     toggleAria: 'Switch to Chinese interface',
     hero: {
-      title: 'Welcome to the Archives AI Assistant',
+      title: 'Pacific Silk Road · AI Assistant',
       subtitle: '',
       history: 'View Conversation History',
       logout: 'Log out',
