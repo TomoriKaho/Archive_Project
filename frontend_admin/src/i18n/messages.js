@@ -1,7 +1,7 @@
 export const messages = {
   zh: {
     app: {
-      name: '人工智能档案库',
+      name: '太平洋丝绸之路档案库',
       switchToEnglish: 'Switch to English',
       switchToChinese: 'Switch to Chinese'
     },
@@ -38,8 +38,8 @@ export const messages = {
         missingToken: '服务器未返回访问令牌。'
       },
       login: {
-        title: '欢迎回来',
-        subtitle: '登录以继续管理档案。',
+        title: '太平洋丝绸之路档案库',
+        subtitle: '登录到太平洋丝绸之路档案库管理端。',
         emailLabel: '邮箱',
         emailPlaceholder: 'ni@example.com',
         passwordLabel: '密码',
@@ -469,7 +469,7 @@ export const messages = {
   },
   en: {
     app: {
-      name: 'Archive AI',
+      name: 'Pacific Silk Road',
       switchToEnglish: '切换为英文',
       switchToChinese: '切换为中文'
     },
@@ -506,8 +506,8 @@ export const messages = {
         missingToken: 'No access token received from the server.'
       },
       login: {
-        title: 'Welcome back',
-        subtitle: 'Sign in to continue managing your archives.',
+        title: 'Pacific Silk Road Admin',
+        subtitle: 'Sign in to continue managing the Pacific Silk Road archive.',
         emailLabel: 'Email',
         emailPlaceholder: 'you@example.com',
         passwordLabel: 'Password',
