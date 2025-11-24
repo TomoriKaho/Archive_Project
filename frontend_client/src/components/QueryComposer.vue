@@ -58,7 +58,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
   modelValue: {
@@ -83,12 +83,14 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:modelValue', 'submit', 'update:domains']);
+const emit = defineEmits(['update:modelValue', 'submit', 'update:domains', 'domains-panel-toggle']);
 
 const draft = ref(props.modelValue);
 const textareaRef = ref(null);
 const domainsPanelOpen = ref(false);
 const pendingSelection = ref(new Set(props.selectedDomains));
+let openDelayTimeout = null;
+let closeDelayTimeout = null;
 
 watch(
   () => props.modelValue,
@@ -134,7 +136,7 @@ const domainBadge = computed(() => {
 });
 
 function toggleDomains() {
-  domainsPanelOpen.value = !domainsPanelOpen.value;
+  setDomainsPanelOpen(!domainsPanelOpen.value);
 }
 
 function toggleDomain(id) {
@@ -150,12 +152,13 @@ function toggleDomain(id) {
 
 function applyDomains() {
   emit('update:domains', Array.from(pendingSelection.value));
-  domainsPanelOpen.value = false;
+  setDomainsPanelOpen(false);
 }
 
 function clearDomains() {
   pendingSelection.value = new Set();
   emit('update:domains', []);
+  setDomainsPanelOpen(false);
 }
 
 function handleSubmit() {
@@ -164,6 +167,26 @@ function handleSubmit() {
     return;
   }
   emit('submit', value);
+}
+
+function setDomainsPanelOpen(value) {
+  clearTimeout(openDelayTimeout);
+  clearTimeout(closeDelayTimeout);
+
+  if (value) {
+    emit('domains-panel-toggle', true);
+    openDelayTimeout = setTimeout(() => {
+      domainsPanelOpen.value = true;
+      openDelayTimeout = null;
+    }, 120);
+    return;
+  }
+
+  domainsPanelOpen.value = false;
+  closeDelayTimeout = setTimeout(() => {
+    emit('domains-panel-toggle', false);
+    closeDelayTimeout = null;
+  }, 120);
 }
 
 function adjustTextareaHeight() {
@@ -177,6 +200,11 @@ function adjustTextareaHeight() {
 
 onMounted(() => {
   nextTick(adjustTextareaHeight);
+});
+
+onBeforeUnmount(() => {
+  clearTimeout(openDelayTimeout);
+  clearTimeout(closeDelayTimeout);
 });
 </script>
 
@@ -289,7 +317,7 @@ onMounted(() => {
   --query-composer-domain-row-height: 2.55rem;
   --query-composer-domain-row-gap: 0.5rem;
 
-  max-height: 300px;
+  max-height: 306px;
   display: flex;
   flex-direction: column;
   overscroll-behavior: contain;
@@ -299,7 +327,7 @@ onMounted(() => {
   overflow-y: auto;
   flex: 1;
   min-height: 0;
-  max-height: calc(var(--query-composer-domain-row-height) * 2 + var(--query-composer-domain-row-gap));
+  max-height: 270px;
 }
 
 .query-composer__domains-hint {

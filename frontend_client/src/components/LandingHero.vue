@@ -1,8 +1,12 @@
 <template>
   <section class="landing-hero">
-    <div class="landing-hero__content">
-      <h1 class="landing-hero__title">{{ texts.title }}</h1>
-      <p class="landing-hero__subtitle">{{ texts.subtitle }}</p>
+    <div class="landing-hero__content" :class="{ 'landing-hero__content--domains-open': domainsPanelOpen }">
+      <transition name="landing-hero-fade">
+        <h1 v-if="!domainsPanelOpen" class="landing-hero__title">{{ texts.title }}</h1>
+      </transition>
+      <transition name="landing-hero-fade">
+        <p v-if="!domainsPanelOpen" class="landing-hero__subtitle">{{ texts.subtitle }}</p>
+      </transition>
       <QueryComposer
         v-model="query"
         :texts="texts.composer"
@@ -11,6 +15,7 @@
         :submitting="submitting"
         @submit="handleSubmit"
         @update:domains="updateDomains"
+        @domains-panel-toggle="handleDomainsPanelToggle"
       />
     </div>
   </section>
@@ -46,6 +51,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'submit', 'update:domains']);
 
 const query = ref(props.modelValue);
+const domainsPanelOpen = ref(false);
 
 watch(
   () => props.modelValue,
@@ -67,6 +73,10 @@ function handleSubmit(value) {
 function updateDomains(domainIds) {
   emit('update:domains', domainIds);
 }
+
+function handleDomainsPanelToggle(isOpen) {
+  domainsPanelOpen.value = isOpen;
+}
 </script>
 
 <style scoped lang="scss">
@@ -86,6 +96,7 @@ function updateDomains(domainIds) {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  transition: transform 0.25s ease, gap 0.2s ease;
 }
 
 .landing-hero__title {
@@ -101,9 +112,29 @@ function updateDomains(domainIds) {
   color: #4c5c8b;
 }
 
+.landing-hero__content--domains-open {
+  transform: translateY(-2.25rem);
+  gap: 0.75rem;
+}
+
+.landing-hero-fade-enter-active,
+.landing-hero-fade-leave-active {
+  transition: opacity 0.18s ease, max-height 0.18s ease;
+}
+
+.landing-hero-fade-enter-from,
+.landing-hero-fade-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
 @media (max-width: 600px) {
   .landing-hero__content {
     padding: 0;
+  }
+
+  .landing-hero__content--domains-open {
+    transform: translateY(-1.25rem);
   }
 }
 </style>
