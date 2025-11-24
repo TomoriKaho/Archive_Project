@@ -45,6 +45,33 @@ def chunk_text_sliding_window(text: str, size: int = 250, overlap: int = 50) -> 
     # 设计说明：滑动窗口保证相邻chunk存在overlap字符重叠，利于上层召回上下文。
 
 
+def _flatten_structured_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """将嵌套的结构化数据打平成以冒号分隔的键路径。"""
+
+    flattened: Dict[str, Any] = {}
+
+    def _walk(current_key: str, value: Any) -> None:
+        if isinstance(value, dict):
+            for child_key, child_value in value.items():
+                key_str = str(child_key).strip()
+                if not key_str:
+                    continue
+                next_key = f"{current_key}:{key_str}" if current_key else key_str
+                _walk(next_key, child_value)
+            return
+        if not current_key:
+            return
+        flattened[current_key] = value
+
+    for key, value in data.items():
+        key_str = str(key).strip()
+        if not key_str:
+            continue
+        _walk(key_str, value)
+
+    return flattened
+
+
 def _split_value_with_window(
     entity_name: str,
     key: str,
@@ -82,7 +109,7 @@ def chunk_structured_entities(
     chunks: List[str] = []  # 存放生成的文本段
     for entity in entities:
         name = str(entity.get("entity", "Entity"))  # 获取实体名称缺省为Entity
-        data = entity.get("data") or {}  # 取出属性字典
+        data = _flatten_structured_data(entity.get("data") or {})  # 取出并打平属性字典
         if not isinstance(data, dict):
             data = {}  # 异常结构时回退为空字典
         current = name  # 初始化当前段落以实体名开头
@@ -211,6 +238,65 @@ def parse_structured_entities_from_csv(csv_text: str) -> List[Dict[str, Any]]:
     ]
 
 
+def parse_structured_entities_from_json(json_text: str) -> List[Dict[str, Any]]:
+    """将JSON文本解析为实体列表，并展开嵌套字段。
+
+    兼容多种结构：
+    - {"entities": [...]} 或直接的数组
+    - 单个对象（会按唯一条目处理）
+    - 缺少 entity 字段时会尝试 name/title/id 等常见字段，最终回退为序号，避免因命名缺失导致400。
+    """
+
+    if not json_text:
+        return []
+
+    try:
+        parsed = json.loads(json_text)
+    except json.JSONDecodeError:
+        return []
+
+    if isinstance(parsed, dict) and isinstance(parsed.get("entities"), list):
+        candidates = parsed["entities"]
+    elif isinstance(parsed, list):
+        candidates = parsed
+    elif isinstance(parsed, dict):
+        candidates = [parsed]
+    else:
+        return []
+
+    entities: List[Dict[str, Any]] = []
+    for index, item in enumerate(candidates):
+        if not isinstance(item, dict):
+            continue
+
+        name_candidates = [
+            item.get("entity"),
+            item.get("name"),
+            item.get("title"),
+            item.get("id"),
+        ]
+        entity_name = ""
+        for candidate in name_candidates:
+            if candidate is None:
+                continue
+            candidate_str = str(candidate).strip()
+            if candidate_str:
+                entity_name = candidate_str
+                break
+        if not entity_name:
+            entity_name = f"Item{index + 1}"
+
+        data = item.get("data")
+        if not isinstance(data, dict):
+            data = {key: value for key, value in item.items() if key != "entity"}
+        flattened = _flatten_structured_data(data)
+        if not flattened:
+            continue
+        entities.append({"entity": entity_name, "data": flattened})
+
+    return entities
+
+
 def make_chunks(
     document: Document,
     content: str,
@@ -226,12 +312,7 @@ def make_chunks(
     structured_type = metadata.get("type") == "structured"  # 判断是否标记为结构化
     parsed_entities: List[Dict[str, Any]] | None = None  # 初始化解析结果
     if content:
-        try:
-            parsed = json.loads(content)  # 尝试解析JSON文本
-            if isinstance(parsed, dict) and isinstance(parsed.get("entities"), list):
-                parsed_entities = parsed["entities"]  # 提取实体列表
-        except json.JSONDecodeError:
-            logger.info("make_chunks json_decode_failed uuid=%s", document.uuid)  # 记录解析失败
+        parsed_entities = parse_structured_entities_from_json(content) or None
     if parsed_entities and structured_type:
         logger.info("make_chunks structured uuid=%s", document.uuid)  # 记录采用结构化策略
         return chunk_structured_entities(parsed_entities)  # 优先使用结构化拆分

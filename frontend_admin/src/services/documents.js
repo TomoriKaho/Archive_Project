@@ -26,6 +26,12 @@ export function uploadCsvDocument(domainId, formData) {
   });
 }
 
+export function uploadJsonDocument(domainId, formData) {
+  return apiClient.post(`/domains/${domainId}/documents`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+}
+
 export function updateDocument(domainId, documentId, payload) {
   return apiClient.patch(
     `/domains/${domainId}/documents/${documentId}`,

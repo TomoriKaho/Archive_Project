@@ -6,6 +6,7 @@ import {
   fetchDocumentContent,
   createTextDocument,
   uploadCsvDocument,
+  uploadJsonDocument,
   updateDocument,
   deleteDocument,
   cancelDocumentIndexing,
@@ -231,6 +232,29 @@ export const useDocumentsStore = defineStore('documents', {
         formData.append('mode', 'csv');
         formData.append('file', file);
         await uploadCsvDocument(domainId, formData);
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('documents.toast.uploadSuccess', { title })
+        });
+        this.removePendingUpload(pendingUpload.tempId);
+        await this.loadDocuments();
+      } catch (error) {
+        this.removePendingUpload(pendingUpload.tempId);
+        useUiStore().showToast({
+          type: 'error',
+          message: i18n.global.t('documents.toast.uploadError')
+        });
+        throw error;
+      }
+    },
+    async uploadJson({ domainId, title, file }) {
+      const pendingUpload = this.addPendingUpload({ domainId, title });
+      try {
+        const formData = new FormData();
+        formData.append('title', title);
+        formData.append('mode', 'json');
+        formData.append('file', file);
+        await uploadJsonDocument(domainId, formData);
         useUiStore().showToast({
           type: 'success',
           message: i18n.global.t('documents.toast.uploadSuccess', { title })

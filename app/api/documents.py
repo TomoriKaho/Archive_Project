@@ -38,6 +38,7 @@ from app.schemas.chunk import ChunkOut  # chunk输出schema
 from app.services.chunking import (
     make_chunks,
     parse_structured_entities_from_csv,
+    parse_structured_entities_from_json,
 )  # 文档切分服务
 from app.services.document_indexing import enqueue_document_indexing  # 文档向量化任务管理
 from app.services.rag_service import remove_vectors  # 自动管理向量库
@@ -151,6 +152,36 @@ def _reconstruct_text_from_chunks(chunks: Sequence) -> str:
     return reconstructed
 
 
+def _structured_entities_to_table(entities: Sequence[dict]) -> tuple[List[str], List[List[str]]]:
+    """将结构化实体转换为表格头与行。"""
+
+    headers: List[str] = ["entity"]
+    rows: List[List[str]] = []
+
+    for entity in entities:
+        data = entity.get("data") if isinstance(entity, dict) else None
+        if isinstance(data, dict):
+            for key in data.keys():
+                key_str = str(key)
+                if key_str and key_str not in headers:
+                    headers.append(key_str)
+
+    data_headers = headers[1:]
+    for entity in entities:
+        entity_name = str(entity.get("entity") or "") if isinstance(entity, dict) else ""
+        data = entity.get("data") if isinstance(entity, dict) else None
+        row: List[str] = [entity_name]
+        if isinstance(data, dict):
+            for key in data_headers:
+                value = data.get(key, "")
+                row.append("" if value is None else str(value))
+        else:
+            row.extend([""] * len(data_headers))
+        rows.append(row)
+
+    return headers if len(headers) > 1 else [], rows
+
+
 @router.get("/documents", response_model=DocumentListResponse)
 def list_documents(
     domain_id: Optional[int] = Query(default=None, description="按domain过滤，缺省返回全量"),  # 可选domain过滤
@@ -234,9 +265,14 @@ def get_document_content(
 
     metadata = doc.doc_metadata or {}
     source = str(metadata.get("source") or "").lower()
-    mode = "csv" if source == "csv" else "text"
+    if source == "csv":
+        mode = "csv"
+    elif source == "json":
+        mode = "json"
+    else:
+        mode = "text"
 
-    default_limit = 20 if mode == "csv" else 100
+    default_limit = 20 if mode in {"csv", "json"} else 100
     page_limit = limit or default_limit
     page_limit = max(1, min(page_limit, 1000))
 
@@ -279,6 +315,26 @@ def get_document_content(
         effective_offset = min(offset, total_rows)
         return DocumentContentOut(
             mode="csv",
+            total=total_rows,
+            offset=effective_offset,
+            limit=page_limit,
+            headers=headers,
+            rows=rows,
+        )
+
+    if mode == "json":
+        entities = parse_structured_entities_from_json(raw_content or "")
+        headers: List[str] = []
+        rows: List[List[str]] = []
+        total_rows = len(entities)
+        if entities:
+            headers, all_rows = _structured_entities_to_table(entities)
+            effective_offset = min(offset, total_rows)
+            rows = all_rows[effective_offset : effective_offset + page_limit]
+        else:
+            effective_offset = 0
+        return DocumentContentOut(
+            mode="json",
             total=total_rows,
             offset=effective_offset,
             limit=page_limit,
@@ -370,6 +426,25 @@ async def create_document(
                 raise HTTPException(status_code=400, detail="csv file has no valid rows")
             raw_content = csv_text
             doc_metadata.update({"type": "structured", "source": "csv"})
+        elif mode == "json":
+            if file is None:
+                raise HTTPException(status_code=400, detail="json file is required")
+            raw_bytes = await file.read()
+            if not raw_bytes:
+                raise HTTPException(status_code=400, detail="json file is empty")
+            try:
+                json_text = raw_bytes.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                json_text = raw_bytes.decode("utf-8", errors="ignore")
+            try:
+                json.loads(json_text)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(status_code=400, detail="json file is invalid") from exc
+            structured_entities = parse_structured_entities_from_json(json_text)
+            if not structured_entities:
+                raise HTTPException(status_code=400, detail="json file has no valid entities")
+            raw_content = json_text
+            doc_metadata.update({"type": "structured", "source": "json"})
         else:
             raw_content = content_form or ""
             if not raw_content.strip():

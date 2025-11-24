@@ -163,7 +163,8 @@ export const messages = {
       },
       tabs: {
         text: '纯文本',
-        csv: 'CSV 上传'
+        csv: 'CSV 上传',
+        json: 'JSON 上传'
       },
       form: {
         domainLabel: '域',
@@ -178,12 +179,19 @@ export const messages = {
         selectFile: '选择文件',
         selectedFile: '已选择：{name}'
       },
+      json: {
+        dropHint: '拖放 JSON 文件至此，或点击选择。',
+        selectFile: '选择文件',
+        selectedFile: '已选择：{name}'
+      },
       validation: {
         domainRequired: '请选择域。',
         titleRequired: '标题为必填项。',
         contentRequired: '内容不能为空。',
         csvRequired: '请选择要上传的 CSV 文件。',
-        csvType: '仅支持 CSV 文件。'
+        csvType: '仅支持 CSV 文件。',
+        jsonRequired: '请选择要上传的 JSON 文件。',
+        jsonType: '仅支持 JSON 文件。'
       },
       table: {
         columns: {
@@ -631,7 +639,8 @@ export const messages = {
       },
       tabs: {
         text: 'Plain Text',
-        csv: 'CSV Upload'
+        csv: 'CSV Upload',
+        json: 'JSON Upload'
       },
       form: {
         domainLabel: 'Domain',
@@ -646,12 +655,19 @@ export const messages = {
         selectFile: 'Select File',
         selectedFile: 'Selected: {name}'
       },
+      json: {
+        dropHint: 'Drag & drop your JSON here or click to browse.',
+        selectFile: 'Select File',
+        selectedFile: 'Selected: {name}'
+      },
       validation: {
         domainRequired: 'Select a domain.',
         titleRequired: 'Title is required.',
         contentRequired: 'Content cannot be empty.',
         csvRequired: 'Select a CSV file to upload.',
-        csvType: 'Only CSV files are allowed.'
+        csvType: 'Only CSV files are allowed.',
+        jsonRequired: 'Select a JSON file to upload.',
+        jsonType: 'Only JSON files are allowed.'
       },
       table: {
         columns: {

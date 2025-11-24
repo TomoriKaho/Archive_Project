@@ -124,7 +124,7 @@
               </p>
             </div>
           </div>
-          <div v-else class="tab-pane">
+          <div v-else-if="active === 'csv'" class="tab-pane">
             <div
               class="form-field"
               :class="{ 'form-field--error': csvErrors.domainId }"
@@ -178,6 +178,60 @@
               </p>
             </div>
           </div>
+          <div v-else class="tab-pane">
+            <div
+              class="form-field"
+              :class="{ 'form-field--error': jsonErrors.domainId }"
+            >
+              <label for="json-domain">{{ t('documents.form.domainLabel') }}</label>
+              <select id="json-domain" v-model="jsonForm.domainId">
+                <option value="">{{ t('documents.form.domainPlaceholder') }}</option>
+                <option
+                  v-for="domain in domainsStore.items"
+                  :key="domain.id"
+                  :value="String(domain.id)"
+                >
+                  {{ domain.name }}
+                </option>
+              </select>
+              <p v-if="jsonErrors.domainId" class="form-field__error">
+                {{ jsonErrors.domainId }}
+              </p>
+            </div>
+            <div
+              class="form-field"
+              :class="{ 'form-field--error': jsonErrors.title }"
+            >
+              <label for="json-title">{{ t('documents.form.titleLabel') }}</label>
+              <input
+                id="json-title"
+                v-model.trim="jsonForm.title"
+                type="text"
+                :placeholder="t('documents.form.titlePlaceholder')"
+              />
+              <p v-if="jsonErrors.title" class="form-field__error">
+                {{ jsonErrors.title }}
+              </p>
+            </div>
+            <div class="upload-zone" @dragover.prevent @drop.prevent="onJsonDrop">
+              <p>{{ t('documents.json.dropHint') }}</p>
+              <input
+                ref="jsonFileInput"
+                type="file"
+                accept=".json,application/json"
+                @change="onJsonFileChange"
+              />
+              <button class="button" type="button" @click="jsonFileInput?.click()">
+                {{ t('documents.json.selectFile') }}
+              </button>
+              <p v-if="jsonFile" class="upload-zone__file">
+                {{ t('documents.json.selectedFile', { name: jsonFile.name }) }}
+              </p>
+              <p v-if="jsonErrors.file" class="form-field__error">
+                {{ jsonErrors.file }}
+              </p>
+            </div>
+          </div>
         </template>
       </BaseTabs>
 
@@ -219,7 +273,8 @@ const isSearchApplied = computed(() => Boolean(documentsStore.filters.search));
 
 const tabs = computed(() => [
   { value: 'text', label: t('documents.tabs.text') },
-  { value: 'csv', label: t('documents.tabs.csv') }
+  { value: 'csv', label: t('documents.tabs.csv') },
+  { value: 'json', label: t('documents.tabs.json') }
 ]);
 
 const textForm = reactive({
@@ -247,6 +302,20 @@ const csvErrors = reactive({
 
 const csvFile = ref(null);
 const fileInput = ref(null);
+
+const jsonForm = reactive({
+  domainId: '',
+  title: ''
+});
+
+const jsonErrors = reactive({
+  domainId: '',
+  title: '',
+  file: ''
+});
+
+const jsonFile = ref(null);
+const jsonFileInput = ref(null);
 
 onMounted(() => {
   documentsStore.loadDocuments();
@@ -310,6 +379,15 @@ function resetForms() {
   if (fileInput.value) {
     fileInput.value.value = '';
   }
+  jsonForm.domainId = '';
+  jsonForm.title = '';
+  jsonErrors.domainId = '';
+  jsonErrors.title = '';
+  jsonErrors.file = '';
+  jsonFile.value = null;
+  if (jsonFileInput.value) {
+    jsonFileInput.value.value = '';
+  }
   activeTab.value = 'text';
 }
 
@@ -369,6 +447,50 @@ function validateCsvForm() {
   return !csvErrors.domainId && !csvErrors.title && fileValid;
 }
 
+function validateJsonFile(file) {
+  jsonErrors.file = '';
+  if (!file) {
+    jsonErrors.file = t('documents.validation.jsonRequired');
+    return false;
+  }
+  const isJson =
+    file.type === 'application/json' || file.name.toLowerCase().endsWith('.json');
+  if (!isJson) {
+    jsonErrors.file = t('documents.validation.jsonType');
+    return false;
+  }
+  return true;
+}
+
+function onJsonFileChange(event) {
+  const [file] = event.target.files;
+  if (validateJsonFile(file)) {
+    jsonFile.value = file;
+  } else {
+    jsonFile.value = null;
+  }
+}
+
+function onJsonDrop(event) {
+  const [file] = event.dataTransfer.files;
+  if (validateJsonFile(file)) {
+    jsonFile.value = file;
+  } else {
+    jsonFile.value = null;
+  }
+}
+
+function validateJsonForm() {
+  jsonErrors.domainId = jsonForm.domainId
+    ? ''
+    : t('documents.validation.domainRequired');
+  jsonErrors.title = jsonForm.title
+    ? ''
+    : t('documents.validation.titleRequired');
+  const fileValid = validateJsonFile(jsonFile.value);
+  return !jsonErrors.domainId && !jsonErrors.title && fileValid;
+}
+
 async function submit() {
   if (activeTab.value === 'text') {
     if (!validateText()) return;
@@ -383,13 +505,27 @@ async function submit() {
     } finally {
       isSubmitting.value = false;
     }
-  } else {
+  } else if (activeTab.value === 'csv') {
     if (!validateCsvForm()) return;
     isSubmitting.value = true;
     const uploadPromise = documentsStore.uploadCsv({
       domainId: Number(csvForm.domainId),
       title: csvForm.title,
       file: csvFile.value
+    });
+    closeModal();
+    try {
+      await uploadPromise;
+    } finally {
+      isSubmitting.value = false;
+    }
+  } else {
+    if (!validateJsonForm()) return;
+    isSubmitting.value = true;
+    const uploadPromise = documentsStore.uploadJson({
+      domainId: Number(jsonForm.domainId),
+      title: jsonForm.title,
+      file: jsonFile.value
     });
     closeModal();
     try {

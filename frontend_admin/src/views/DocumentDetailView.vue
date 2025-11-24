@@ -87,7 +87,7 @@
                 </li>
               </ol>
               <div
-                v-else-if="contentPage && contentPage.mode === 'csv' && normalizedRows.length"
+                v-else-if="contentPage && ['csv', 'json'].includes(contentPage.mode) && normalizedRows.length"
                 ref="tableWrapperRef"
                 class="document-content__table-wrapper"
               >
@@ -372,6 +372,7 @@ const editErrors = reactive({
 
 const document = computed(() => documentsStore.activeDocument);
 const documentSource = computed(() => document.value?.doc_metadata?.source || 'text');
+const isStructuredSource = computed(() => ['csv', 'json'].includes(documentSource.value));
 const chunkPage = computed(() => documentsStore.activeChunkPage);
 const isLoadingChunks = computed(() => documentsStore.isLoadingChunks);
 const chunkTotal = computed(() => {
@@ -399,7 +400,7 @@ const domainName = computed(() => {
 });
 
 function resolveContentLimit(page, fallbackLimit) {
-  const defaultFallback = documentSource.value === 'csv'
+  const defaultFallback = isStructuredSource.value
     ? DEFAULT_CSV_LIMIT
     : DEFAULT_TEXT_LIMIT;
   const fallback = typeof fallbackLimit === 'number' && fallbackLimit > 0
@@ -409,13 +410,13 @@ function resolveContentLimit(page, fallbackLimit) {
     return fallback;
   }
   const rawLimit = page.limit && page.limit > 0 ? page.limit : fallback;
-  if (page.mode === 'csv') {
+  if (page.mode === 'csv' || page.mode === 'json') {
     return Math.min(rawLimit, DEFAULT_CSV_LIMIT);
   }
   if (page.mode === 'text') {
     return rawLimit;
   }
-  if (documentSource.value === 'csv') {
+  if (isStructuredSource.value) {
     return Math.min(rawLimit, DEFAULT_CSV_LIMIT);
   }
   return rawLimit;
@@ -468,7 +469,7 @@ const contentHeaders = computed(() => {
 
 const normalizedRows = computed(() => {
   const page = contentPage.value;
-  if (!page || page.mode !== 'csv') return [];
+  if (!page || !['csv', 'json'].includes(page.mode)) return [];
   const headers = contentHeaders.value;
   const targetLength = headers.length || 0;
   const limit = resolveContentLimit(page);
@@ -492,7 +493,7 @@ const normalizedRows = computed(() => {
 const contentItems = computed(() => {
   const page = contentPage.value;
   if (!page) return [];
-  if (page.mode === 'csv') {
+  if (page.mode === 'csv' || page.mode === 'json') {
     return normalizedRows.value;
   }
   return Array.isArray(page.lines) ? page.lines : [];
@@ -509,7 +510,7 @@ const contentOffset = computed(() => contentPage.value?.offset ?? 0);
 const contentRangeLabel = computed(() => {
   const page = contentPage.value;
   if (!page || !page.total) return '';
-  const count = page.mode === 'csv'
+  const count = ['csv', 'json'].includes(page.mode)
     ? normalizedRows.value.length
     : (Array.isArray(page.lines) ? page.lines.length : 0);
   const start = Math.min(page.offset + 1, page.total);
@@ -598,7 +599,7 @@ watch(contentPage, (page) => {
   const derived = limit ? Math.floor((page.offset ?? 0) / limit) : 0;
   contentPageIndex.value = derived;
   contentError.value = '';
-  if (page.mode !== 'csv') {
+  if (!['csv', 'json'].includes(page.mode)) {
     isTableScrollable.value = false;
     disconnectTableObservers();
     return;
@@ -615,7 +616,7 @@ watch(contentPage, (page) => {
 function updateTableScrollState() {
   const page = contentPage.value;
   const wrapper = tableWrapperRef.value;
-  if (!page || page.mode !== 'csv' || !wrapper) {
+  if (!page || !['csv', 'json'].includes(page.mode) || !wrapper) {
     isTableScrollable.value = false;
     return;
   }
@@ -669,7 +670,7 @@ watch(
   ],
   () => {
     nextTick(() => {
-      if (contentPage.value?.mode !== 'csv') {
+      if (!['csv', 'json'].includes(contentPage.value?.mode)) {
         disconnectTableObservers();
         isTableScrollable.value = false;
         return;
@@ -727,7 +728,7 @@ watch(
 onMounted(async () => {
   window.addEventListener('resize', updateTableScrollState);
   nextTick(() => {
-    if (contentPage.value?.mode === 'csv') {
+    if (['csv', 'json'].includes(contentPage.value?.mode)) {
       const wrapper = tableWrapperRef.value;
       if (wrapper) {
         observeTableDimensions(wrapper);
@@ -795,7 +796,7 @@ function formatChunkLength(chunk) {
 }
 
 function getContentUnit(mode) {
-  return mode === 'csv'
+  return ['csv', 'json'].includes(mode)
     ? t('documentDetail.content.units.rows')
     : t('documentDetail.content.units.lines');
 }

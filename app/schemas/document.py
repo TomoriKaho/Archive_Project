@@ -71,7 +71,7 @@ class ChunkListResponse(ORMModel):
 class DocumentContentOut(ORMModel):
     """文档原始内容分页返回模型。"""
 
-    mode: Literal["text", "csv"]  # 内容类型：纯文本或CSV表格
+    mode: Literal["text", "csv", "json"]  # 内容类型：纯文本、CSV表格或JSON表格
     total: int  # 总行数或总记录数
     offset: int  # 当前页偏移
     limit: int  # 每页数量
