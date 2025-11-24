@@ -422,6 +422,7 @@ function onFileChange(event) {
   const [file] = event.target.files;
   if (validateCsvFile(file)) {
     csvFile.value = file;
+    setTitleFromFile(csvForm, file);
   } else {
     csvFile.value = null;
   }
@@ -431,6 +432,7 @@ function onDrop(event) {
   const [file] = event.dataTransfer.files;
   if (validateCsvFile(file)) {
     csvFile.value = file;
+    setTitleFromFile(csvForm, file);
   } else {
     csvFile.value = null;
   }
@@ -466,6 +468,7 @@ function onJsonFileChange(event) {
   const [file] = event.target.files;
   if (validateJsonFile(file)) {
     jsonFile.value = file;
+    setTitleFromFile(jsonForm, file);
   } else {
     jsonFile.value = null;
   }
@@ -475,8 +478,20 @@ function onJsonDrop(event) {
   const [file] = event.dataTransfer.files;
   if (validateJsonFile(file)) {
     jsonFile.value = file;
+    setTitleFromFile(jsonForm, file);
   } else {
     jsonFile.value = null;
+  }
+}
+
+function setTitleFromFile(form, file) {
+  if (!file?.name || form.title) {
+    return;
+  }
+  const lastDotIndex = file.name.lastIndexOf('.');
+  const baseName = lastDotIndex > 0 ? file.name.slice(0, lastDotIndex) : file.name;
+  if (baseName) {
+    form.title = baseName;
   }
 }
 
