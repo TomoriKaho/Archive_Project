@@ -83,7 +83,8 @@ def _split_value_with_window(
 
     value_str = "" if value is None else str(value)
     # 尽量保留实体名称，若前缀过长则逐级降级，保证至少保留键名
-    prefix = f"{entity_name}:{key}:"
+    base_prefix = f"{entity_name}:{key}:" if entity_name else f"{key}:"
+    prefix = base_prefix
     if len(prefix) >= max_len:
         prefix = f"{key}:"
         if len(prefix) >= max_len:
@@ -108,17 +109,17 @@ def chunk_structured_entities(
     """针对结构化实体列表生成紧凑描述字符串。"""
     chunks: List[str] = []  # 存放生成的文本段
     for entity in entities:
-        name = str(entity.get("entity", "Entity"))  # 获取实体名称缺省为Entity
+        name = str(entity.get("entity", "") or "").strip()  # 获取实体名称，允许为空
         data = _flatten_structured_data(entity.get("data") or {})  # 取出并打平属性字典
         if not isinstance(data, dict):
             data = {}  # 异常结构时回退为空字典
-        current = name  # 初始化当前段落以实体名开头
+        current = name  # 初始化当前段落以实体名开头（可为空）
         first = True  # 标记是否为第一对键值
         for key, value in data.items():
             key_str = str(key)
             value_str = "" if value is None else str(value)
             pair = f"{key_str}:{value_str}"  # 组装键值描述
-            pair_with_prefix = f"{name}:{pair}"
+            pair_with_prefix = f"{name}:{pair}" if name else pair
             if len(value_str) > max_len or len(pair_with_prefix) > max_len:
                 if current != name:
                     chunks.append(current)
@@ -133,16 +134,20 @@ def chunk_structured_entities(
                 current = name
                 first = True
                 continue
-            separator = ":" if first else ","  # 第一对使用冒号其余使用逗号
-            candidate = f"{current}{separator}{pair}"  # 预组装新段落
+            if name:
+                separator = ":" if first else ","  # 第一对使用冒号其余使用逗号
+                candidate = f"{current}{separator}{pair}"  # 预组装新段落
+            else:
+                separator = "" if first else ","  # 无实体名时首个键值无前缀
+                candidate = f"{current}{separator}{pair}"
             if len(candidate) > max_len:
                 if current != name:
                     chunks.append(current)
-                current = f"{name}:{pair}"  # 超长时新开一段从当前键值开始
+                current = f"{name}:{pair}" if name else pair  # 超长时新开一段从当前键值开始
             else:
                 current = candidate  # 未超长则继续累积
             first = False  # 之后的键值都走逗号
-        if current != name:
+        if current and current != name:
             chunks.append(current)  # 实体数据遍历完毕写入结果
     logger.info("chunk_structured_entities count=%s", len(chunks))  # 记录生成数量
     return chunks  # 返回所有结构化段落
@@ -244,7 +249,7 @@ def parse_structured_entities_from_json(json_text: str) -> List[Dict[str, Any]]:
     兼容多种结构：
     - {"entities": [...]} 或直接的数组
     - 单个对象（会按唯一条目处理）
-    - 缺少 entity 字段时会尝试 name/title/id 等常见字段，最终回退为序号，避免因命名缺失导致400。
+    - 缺少 entity 字段时会尝试 name/title/id 等常见字段。
     """
 
     if not json_text:
@@ -283,8 +288,6 @@ def parse_structured_entities_from_json(json_text: str) -> List[Dict[str, Any]]:
             if candidate_str:
                 entity_name = candidate_str
                 break
-        if not entity_name:
-            entity_name = f"Item{index + 1}"
 
         data = item.get("data")
         if not isinstance(data, dict):
@@ -292,7 +295,10 @@ def parse_structured_entities_from_json(json_text: str) -> List[Dict[str, Any]]:
         flattened = _flatten_structured_data(data)
         if not flattened:
             continue
-        entities.append({"entity": entity_name, "data": flattened})
+        entity_payload: Dict[str, Any] = {"data": flattened}
+        if entity_name:
+            entity_payload["entity"] = entity_name
+        entities.append(entity_payload)
 
     return entities
 
