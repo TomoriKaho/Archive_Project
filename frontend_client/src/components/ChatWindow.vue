@@ -49,7 +49,7 @@
               {{ formatTime(message.created_at) }}
             </time>
           </div>
-          <div class="chat-message__content">{{ message.content }}</div>
+          <div class="chat-message__content" v-html="renderContent(message)"></div>
         </article>
       </template>
       <div v-else class="chat-window__empty">
@@ -218,6 +218,45 @@ function renderRole(role) {
     return mapping[role];
   }
   return mapping.user || '我';
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function linkifyContent(text) {
+  if (!text) {
+    return '';
+  }
+
+  const pattern = /(https?:\/\/[^\s<>"']+)/gi;
+  let result = '';
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(pattern)) {
+    const [url] = match;
+    const start = match.index ?? 0;
+    result += escapeHtml(text.slice(lastIndex, start));
+    const safeUrl = escapeHtml(url);
+    result += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+    lastIndex = start + url.length;
+  }
+
+  result += escapeHtml(text.slice(lastIndex));
+  return result;
+}
+
+function renderContent(message) {
+  const content = message?.content ?? '';
+  if (message?.role === 'assistant') {
+    return linkifyContent(String(content));
+  }
+  return escapeHtml(String(content));
 }
 
 function formatTime(value) {
@@ -430,6 +469,12 @@ onMounted(scrollToBottom);
   justify-content: space-between;
   font-size: 0.75rem;
   opacity: 0.75;
+}
+
+.chat-message__content :deep(a) {
+  color: #1f8fe5;
+  text-decoration: underline;
+  word-break: break-all;
 }
 
 .chat-window__composer {

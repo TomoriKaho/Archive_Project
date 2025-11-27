@@ -6,6 +6,7 @@ import io  # 提供内存文本缓冲
 import json  # 解析结构化JSON内容
 import logging  # 记录切分过程方便调试
 import os  # 读取可配置的CSV字段长度限制
+import re  # 通过正则匹配识别 URL
 import sys  # 调整CSV字段长度限制
 from typing import Any, Dict, List  # 类型注解辅助
 
@@ -25,15 +26,46 @@ def chunk_text_sliding_window(text: str, size: int = 250, overlap: int = 50) -> 
     step = size - overlap  # 计算每次移动步长
     if step <= 0:
         raise ValueError("size must be greater than overlap")  # 避免无限循环
+    def _chunk_plain_text(value: str) -> List[str]:
+        """按滑动窗口切分非 URL 文本。"""
+
+        if not value:
+            return []
+
+        result: List[str] = []
+        start = 0
+        text_length = len(value)
+        while start < text_length:
+            end = min(start + size, text_length)
+            result.append(value[start:end])
+            if end == text_length:
+                break
+            start += step
+        return result
+
+    url_pattern = re.compile(r"https?://[^\s<>\u3000\"']+", re.IGNORECASE)
     chunks: List[str] = []  # 初始化结果容器
-    start = 0  # 当前窗口起始位置
+    cursor = 0
     text_length = len(text)  # 使用字符长度而非字节，适配多语言
-    while start < text_length:
-        end = min(start + size, text_length)  # 计算窗口结束位置
-        chunks.append(text[start:end])  # 切片并加入结果
-        if end == text_length:
-            break  # 到达末尾时终止循环
-        start += step  # 按步长前进
+
+    for match in url_pattern.finditer(text):
+        url_start, url_end = match.span()
+        line_start = text.rfind("\n", 0, url_start)
+        line_start = 0 if line_start == -1 else line_start + 1
+        prefix_start = url_start
+        prefix_slice = text[line_start:url_start]
+        # 若 URL 前存在“档案请求地址：”等提示信息，确保与链接一起放入同一 chunk
+        label_match = re.search(r"档案请求地址：\s*$", prefix_slice)
+        if label_match:
+            prefix_start = line_start + label_match.start()
+
+        chunks.extend(_chunk_plain_text(text[cursor:prefix_start]))
+        url_chunk = text[prefix_start:url_end]
+        if url_chunk:
+            chunks.append(url_chunk)
+        cursor = url_end
+
+    chunks.extend(_chunk_plain_text(text[cursor:]))
     logger.info(
         "chunk_sliding_window length=%s size=%s overlap=%s count=%s",
         text_length,
