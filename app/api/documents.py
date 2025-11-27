@@ -155,7 +155,7 @@ def _reconstruct_text_from_chunks(chunks: Sequence) -> str:
 def _structured_entities_to_table(entities: Sequence[dict]) -> tuple[List[str], List[List[str]]]:
     """将结构化实体转换为表格头与行。"""
 
-    headers: List[str] = ["entity"]
+    headers: List[str] = []
     rows: List[List[str]] = []
 
     for entity in entities:
@@ -166,11 +166,10 @@ def _structured_entities_to_table(entities: Sequence[dict]) -> tuple[List[str], 
                 if key_str and key_str not in headers:
                     headers.append(key_str)
 
-    data_headers = headers[1:]
+    data_headers = headers
     for entity in entities:
-        entity_name = str(entity.get("entity") or "") if isinstance(entity, dict) else ""
         data = entity.get("data") if isinstance(entity, dict) else None
-        row: List[str] = [entity_name]
+        row: List[str] = []
         if isinstance(data, dict):
             for key in data_headers:
                 value = data.get(key, "")
@@ -179,7 +178,7 @@ def _structured_entities_to_table(entities: Sequence[dict]) -> tuple[List[str], 
             row.extend([""] * len(data_headers))
         rows.append(row)
 
-    return headers if len(headers) > 1 else [], rows
+    return headers, rows
 
 
 @router.get("/documents", response_model=DocumentListResponse)

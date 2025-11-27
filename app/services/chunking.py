@@ -107,12 +107,25 @@ def chunk_structured_entities(
     overlap: int = 50,
 ) -> List[str]:
     """针对结构化实体列表生成紧凑描述字符串。"""
+    def _build_prefix(entity_data: Dict[str, Any]) -> str:
+        """返回以首个字段内容为值的前缀，不计入长度限制。"""
+
+        for value in entity_data.values():
+            if value is None:
+                continue
+            value_str = str(value).strip()
+            if value_str:
+                return f"{value_str}:"
+        return ""
+
     chunks: List[str] = []  # 存放生成的文本段
     for entity in entities:
         name = str(entity.get("entity", "") or "").strip()  # 获取实体名称，允许为空
         data = _flatten_structured_data(entity.get("data") or {})  # 取出并打平属性字典
         if not isinstance(data, dict):
             data = {}  # 异常结构时回退为空字典
+        prefix = _build_prefix(data)
+        entity_chunks: List[str] = []
         current = name  # 初始化当前段落以实体名开头（可为空）
         first = True  # 标记是否为第一对键值
         for key, value in data.items():
@@ -122,7 +135,7 @@ def chunk_structured_entities(
             pair_with_prefix = f"{name}:{pair}" if name else pair
             if len(value_str) > max_len or len(pair_with_prefix) > max_len:
                 if current != name:
-                    chunks.append(current)
+                    entity_chunks.append(current)
                 split_chunks = _split_value_with_window(
                     name,
                     key_str,
@@ -130,7 +143,7 @@ def chunk_structured_entities(
                     max_len,
                     overlap,
                 )
-                chunks.extend(split_chunks)
+                entity_chunks.extend(split_chunks)
                 current = name
                 first = True
                 continue
@@ -142,13 +155,17 @@ def chunk_structured_entities(
                 candidate = f"{current}{separator}{pair}"
             if len(candidate) > max_len:
                 if current != name:
-                    chunks.append(current)
+                    entity_chunks.append(current)
                 current = f"{name}:{pair}" if name else pair  # 超长时新开一段从当前键值开始
             else:
                 current = candidate  # 未超长则继续累积
             first = False  # 之后的键值都走逗号
         if current and current != name:
-            chunks.append(current)  # 实体数据遍历完毕写入结果
+            entity_chunks.append(current)  # 实体数据遍历完毕写入结果
+        if prefix:
+            chunks.extend([f"{prefix}{chunk}" for chunk in entity_chunks])
+        else:
+            chunks.extend(entity_chunks)
     logger.info("chunk_structured_entities count=%s", len(chunks))  # 记录生成数量
     return chunks  # 返回所有结构化段落
     # 设计说明：利用len()按字符计算长度，比字节更符合前端展示长度且兼容中文字符宽度。
