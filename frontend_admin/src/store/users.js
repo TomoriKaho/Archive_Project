@@ -97,24 +97,39 @@ export const useUsersStore = defineStore('users', {
       }
     },
     async removeUser(userId) {
+      const previousItems = [...this.items];
+      this.items = this.items.filter((item) => item.id !== userId);
+
       try {
         await deleteUser(userId);
-        useUiStore().showToast({
-          type: 'success',
-          message: i18n.global.t('users.toast.deleteSuccess')
-        });
+      } catch (error) {
+        if (error?.response?.status !== 404) {
+          this.items = previousItems;
+          useUiStore().showToast({
+            type: 'error',
+            message: i18n.global.t('users.toast.deleteError')
+          });
+          throw error;
+        }
+      }
+
+      try {
         await this.loadUsers({
           sort_by: this.filters.sort_by,
           order: this.filters.order,
           limit: this.filters.limit,
           offset: this.filters.offset
         });
-      } catch (error) {
+        useUiStore().showToast({
+          type: 'success',
+          message: i18n.global.t('users.toast.deleteSuccess')
+        });
+      } catch (loadError) {
         useUiStore().showToast({
           type: 'error',
           message: i18n.global.t('users.toast.deleteError')
         });
-        throw error;
+        throw loadError;
       }
     }
   }

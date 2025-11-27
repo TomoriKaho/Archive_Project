@@ -311,19 +311,34 @@ export const useDocumentsStore = defineStore('documents', {
       }
     },
     async removeDocument({ documentId, domainId }) {
+      const previousItems = [...this.items];
+      this.items = this.items.filter((item) => item.id !== documentId);
+
       try {
         await deleteDocument(domainId, documentId);
+      } catch (error) {
+        if (error?.response?.status !== 404) {
+          this.items = previousItems;
+          useUiStore().showToast({
+            type: 'error',
+            message: i18n.global.t('documents.toast.deleteError')
+          });
+          throw error;
+        }
+      }
+
+      try {
+        await this.loadDocuments();
         useUiStore().showToast({
           type: 'success',
           message: i18n.global.t('documents.toast.deleteSuccess')
         });
-        await this.loadDocuments();
-      } catch (error) {
+      } catch (loadError) {
         useUiStore().showToast({
           type: 'error',
           message: i18n.global.t('documents.toast.deleteError')
         });
-        throw error;
+        throw loadError;
       }
     },
     async pauseIndexing({ documentId, domainId }) {

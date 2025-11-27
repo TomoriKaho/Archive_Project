@@ -113,19 +113,34 @@ export const useDomainsStore = defineStore('domains', {
       }
     },
     async remove(domainId) {
+      const previousItems = [...this.items];
+      this.items = this.items.filter((item) => item.id !== domainId);
+
       try {
         await deleteDomain(domainId);
+      } catch (error) {
+        if (error?.response?.status !== 404) {
+          this.items = previousItems;
+          useUiStore().showToast({
+            type: 'error',
+            message: i18n.global.t('domains.toast.deleteError')
+          });
+          throw error;
+        }
+      }
+
+      try {
+        await this.loadDomains();
         useUiStore().showToast({
           type: 'success',
           message: i18n.global.t('domains.toast.deleteSuccess')
         });
-        await this.loadDomains();
-      } catch (error) {
+      } catch (loadError) {
         useUiStore().showToast({
           type: 'error',
           message: i18n.global.t('domains.toast.deleteError')
         });
-        throw error;
+        throw loadError;
       }
     }
   }
