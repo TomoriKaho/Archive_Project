@@ -1,7 +1,11 @@
 <template>
   <Teleport v-if="canTeleport" to="body">
     <transition name="modal">
-      <div v-if="modelValue" class="modal-overlay" @click.self="close">
+      <div
+        v-if="modelValue"
+        class="modal-overlay"
+        @click.self="onOverlayClick"
+      >
         <div class="modal">
           <header class="modal__header">
             <h3>{{ title }}</h3>
@@ -30,6 +34,10 @@ const props = defineProps({
   modelValue: {
     type: Boolean,
     required: true
+  },
+  closeOnOverlay: {
+    type: Boolean,
+    default: true
   }
 });
 
@@ -47,6 +55,12 @@ onBeforeUnmount(() => {
 
 function close() {
   emit('update:modelValue', false);
+}
+
+function onOverlayClick() {
+  if (props.closeOnOverlay) {
+    close();
+  }
 }
 </script>
 

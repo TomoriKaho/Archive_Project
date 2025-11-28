@@ -221,7 +221,11 @@
         </li>
       </ul>
     </article>
-    <BaseModal v-model="isPreviewOpen" :title="t('documentDetail.preview.title')">
+    <BaseModal
+      v-model="isPreviewOpen"
+      :title="t('documentDetail.preview.title')"
+      :close-on-overlay="false"
+    >
       <p class="document-content__preview-meta">
         {{
           t('documentDetail.preview.meta', {
