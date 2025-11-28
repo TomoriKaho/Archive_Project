@@ -76,11 +76,57 @@ def remove_vectors(chunk_ids: Sequence[int]) -> int:
     return len(unique_ids)
 
 
-def retrieve(question: str, top_k: int, domain_ids: list[int] | None, *, db: Session) -> list[Chunk]:
-    """Retrieve the most relevant chunks for the given question."""
+def retrieve(
+    question: str,
+    top_k: int,
+    domain_ids: list[int] | None,
+    *,
+    db: Session,
+    history: Sequence[dict[str, str]] | None = None,
+) -> list[Chunk]:
+    """Retrieve the most relevant chunks for the given question.
 
-    chunks, _ = retrieve_with_scores(question, top_k, domain_ids, db=db)
+    新增可选参数 history，用于在检索阶段利用会话上下文。
+    """
+    chunks, _ = retrieve_with_scores(question, top_k, domain_ids, db=db, history=history)
     return chunks
+
+
+def build_retrieval_query_text(
+    question: str,
+    history: Sequence[dict[str, str]] | None = None,
+) -> str:
+    """根据当前问题 + 近期会话历史，构造用于向量检索的查询文本。
+
+    这样可以缓解“它 / 这个档案”之类代词导致的语义丢失问题。
+    """
+
+    if not history:
+        # 没有历史，直接用当前问题
+        return question.strip()
+
+    # 只取最近几条会话，避免文本太长（这里取 4 条，可根据需要调）
+    tail = list(history)[-4:]
+
+    # 把 user / assistant 的发言简单串起来
+    history_lines: list[str] = []
+    for msg in tail:
+        role = msg.get("role")
+        content = (msg.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "user":
+            # 用前缀标记角色，帮助嵌入模型区分说话人
+            history_lines.append(f"用户：{content}")
+        elif role == "assistant":
+            history_lines.append(f"助手：{content}")
+
+    history_block = "\n".join(history_lines).strip()
+
+    # 最后明确告诉嵌入模型：下面是当前问题
+    if history_block:
+        return f"{history_block}\n\n当前问题：{question.strip()}"
+    return question.strip()
 
 
 def retrieve_with_scores(
@@ -89,14 +135,24 @@ def retrieve_with_scores(
     domain_ids: list[int] | None,
     *,
     db: Session,
+    history: Sequence[dict[str, str]] | None = None,
 ) -> tuple[list[Chunk], list[tuple[int, float]]]:
-    """Retrieve chunks along with their similarity scores."""
+    """Retrieve chunks along with their similarity scores.
 
+    新增参数 history，用于构造更完整的检索文本（包含上下文）。
+    """
     limit = top_k or DEFAULT_TOP_K
-    query_vec = embed(question)  # 将问题编码为向量
+
+    # 利用会话历史构造检索文本，而不是只用当前问题
+    query_text = build_retrieval_query_text(question, history)
+    query_vec = embed(query_text)  # 将“问题 + 上下文”编码为向量
+
     search_results = search_with_scores(
-        query_vec, limit, domain_ids=domain_ids
+        query_vec,
+        limit,
+        domain_ids=domain_ids,
     )  # 调用向量库获取候选
+    
     if not search_results:
         return [], []
     chunk_ids = [chunk_id for chunk_id, _ in search_results]
@@ -185,7 +241,13 @@ def answer(
     """Run the complete RAG flow and return assistant answer plus references and chunks."""
 
     limit = top_k or DEFAULT_TOP_K
-    chunks, references = retrieve_with_scores(question, limit, domain_ids, db=db)
+    chunks, references = retrieve_with_scores(
+        question,
+        limit,
+        domain_ids,
+        db=db,
+        history=history,
+    )
     if not references:
         return _NO_CONTEXT_MESSAGE, [], []
 
@@ -193,7 +255,9 @@ def answer(
     system_prompt = """你是一名严谨的档案解读助手，请依据给定资料回答问题。同时我们还会提供会话历史作为参考。
     规则：1.不得凭空捏造, 若缺证据请明确“不确定”；
     2.请替换问题中的代词以确保回答清晰；
-    3.你只需要回答最后一个问题，不要回答会话历史中的问题。"""
+    3.你只需要回答最后一个问题，不要回答会话历史中的问题。
+    4.回答时不需要引用档案片段的编号，只需基于内容进行回答。
+    """
     history_items = list(history or [])
     user_system_prompts: list[str] = []
     filtered_history: list[dict[str, str]] = []
@@ -227,31 +291,45 @@ def answer(
                 f"{joined_memory}"
             )
 
-    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        # ... 前面的 system_prompt / history 处理保持不变
+
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_prompt}
+    ]
+
+    # 先把相关档案片段作为一条 user 消息给出去
     if context:
         messages.append(
             {
-                "role": "system",
-                "content": f"以下是与当前问题相关的资料：\n\n{context}",
+                "role": "user",
+                "content": (
+                    "以下是与当前问题相关的档案片段，请严格基于这些内容进行回答：\n\n"
+                    f"{context}"
+                ),
             }
         )
 
+    # 会话历史：可以继续附加，但建议只保留最近若干条
+    trimmed_history: list[dict[str, str]] = []
     if filtered_history:
+        # 例如只取最近 6 条历史记录，避免太长
+        trimmed_history = filtered_history[-6:]
         messages.append(
             {
-                "role": "system",
-                "content": f"以下是会话历史：\n\n",
+                "role": "assistant",
+                "content": "下面是此前的对话记录（供你理解上下文，不需要逐条逐一回复）：",
             }
         )
-        messages.extend(filtered_history)
-    if not filtered_history or filtered_history[-1].get("role") != "user":
-        messages.append(
-            {
-                "role": "system",
-                "content": f"以下是你需要回答的问题：\n\n",
-            }
-        )
-        messages.append({"role": "user", "content": question})
+        messages.extend(trimmed_history)
+
+    # 最后一条，一定是当前用户的问题
+    messages.append(
+        {
+            "role": "user",
+            "content": f"请根据上面的档案片段和对话历史，回答这个问题：\n\n{question}",
+        }
+    )
+
 
     answer_text = chat(messages)
     final_text = answer_text.strip() if answer_text else ""
