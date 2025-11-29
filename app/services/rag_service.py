@@ -4,12 +4,15 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import defaultdict
 from typing import Sequence
+import re
 from urllib import error, request
 from dotenv import find_dotenv, load_dotenv
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
-from app.models.entities import Chunk
+from app.models.entities import Chunk, Document
 from app.repositories.chunk_repo import ChunkRepository
 from .embed_service import embed
 from .qdrant_service import (
@@ -30,6 +33,15 @@ OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3.1:8b")
 
 DEFAULT_TOP_K = int(os.getenv("RAG_TOP_K", "10"))
 """Default number of chunks retrieved when no explicit top_k is provided."""
+
+STRING_MATCH_MAX_PER_ID = int(os.getenv("RAG_STRING_MATCH_MAX_PER_ID", "20"))
+"""Upper bound of chunks fetched per ID candidate during string search."""
+
+NEIGHBOR_WINDOW_SIZE = int(os.getenv("RAG_NEIGHBOR_WINDOW_SIZE", "1"))
+"""Default window size when expanding chunks with their neighbors."""
+
+NEIGHBOR_MAX_TOTAL_CHUNKS = int(os.getenv("RAG_NEIGHBOR_MAX_TOTAL_CHUNKS", "100"))
+"""Safety limit to avoid overlong contexts after neighbor expansion."""
 
 RAG_OLLAMA_TIMEOUT = int(os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
 """HTTP timeout applied to Ollama chat requests."""
@@ -92,6 +104,153 @@ def retrieve(
     return chunks
 
 
+_DIGIT_RUN = re.compile(r"\d{4,}")
+_ALNUM_MIXED = re.compile(r"[A-Za-z][A-Za-z0-9\-_]*\d[A-Za-z0-9\-_]{2,}")
+_ERA_PREFIX = re.compile(r"(平|昭|令|民国)[^\d]{0,2}\d{1,}")
+
+
+def extract_id_candidates(query: str) -> list[str]:
+    """Extract ID / number-like candidates from a free-form query.
+
+    Embedding models are notoriously weak at retaining the semantics of raw
+    numbers or long identifiers. For archive-style questions such as
+    "平成12年12345号档案是什么", a pure vector search often misses the exact chunk
+    containing the ID. This helper pulls out likely identifiers so we can run a
+    lightweight string match in parallel.
+    """
+
+    candidates: list[str] = []
+    normalized = query.strip()
+    for pattern in (_DIGIT_RUN, _ALNUM_MIXED, _ERA_PREFIX):
+        for match in pattern.findall(normalized):
+            token = match.strip()
+            if len(token) < 4:  # ignore trivial short pieces like single years
+                continue
+            candidates.append(token)
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_candidates: list[str] = []
+    for cand in candidates:
+        if cand in seen:
+            continue
+        seen.add(cand)
+        unique_candidates.append(cand)
+    return unique_candidates
+
+
+def search_chunks_by_id_candidates(
+    db: Session,
+    id_candidates: list[str],
+    *,
+    domain_ids: list[int] | None = None,
+    limit_per_id: int = STRING_MATCH_MAX_PER_ID,
+) -> list[Chunk]:
+    """Perform fuzzy string search for chunks containing any of the IDs.
+
+    For ID-heavy questions, exact string containment is often more reliable
+    than embeddings. We still cap results per candidate to keep the context
+    manageable.
+    """
+
+    if not id_candidates:
+        return []
+
+    matched: list[Chunk] = []
+    seen_ids: set[int] = set()
+    for candidate in id_candidates:
+        stmt = select(Chunk).options(joinedload(Chunk.document)).where(
+            Chunk.content.ilike(f"%{candidate}%")
+        )
+        if domain_ids:
+            stmt = stmt.join(Chunk.document).where(Document.domain_id.in_(list(domain_ids)))
+        if limit_per_id:
+            stmt = stmt.limit(limit_per_id)
+        rows = db.execute(stmt).scalars().unique().all()
+        for chunk in rows:
+            if chunk.id in seen_ids:
+                continue
+            seen_ids.add(chunk.id)
+            matched.append(chunk)
+    logger.info(
+        "string_match candidates=%s matched_chunks=%s", len(id_candidates), len(matched)
+    )
+    return matched
+
+
+def merge_string_and_vector_results(
+    string_matches: list[Chunk],
+    vector_chunks: list[Chunk],
+) -> list[Chunk]:
+    """Merge string and vector retrieval results with ID hits prioritized.
+
+    Strategy: return all string matches first (ID recall is most important),
+    then append remaining vector hits while keeping unique chunk IDs.
+    """
+
+    merged: list[Chunk] = []
+    seen_ids: set[int] = set()
+    for chunk in string_matches:
+        if chunk.id in seen_ids:
+            continue
+        seen_ids.add(chunk.id)
+        merged.append(chunk)
+    for chunk in vector_chunks:
+        if chunk.id in seen_ids:
+            continue
+        seen_ids.add(chunk.id)
+        merged.append(chunk)
+    return merged
+
+
+def expand_with_neighbor_chunks(
+    db: Session,
+    chunks: list[Chunk],
+    window_size: int = NEIGHBOR_WINDOW_SIZE,
+    max_total_chunks: int = NEIGHBOR_MAX_TOTAL_CHUNKS,
+) -> list[Chunk]:
+    """Expand retrieved chunks by adding their neighbors within the same document.
+
+    多数字段分散在多个 chunk 中，单点命中往往不足以回答跨字段问题。相比
+    二次检索或多跳 RAG，直接附加同一文档的前后邻居可以立即让 LLM 看到同一
+    档案的关联字段，是一种简单且工程化的折中方案。
+    """
+
+    if not chunks:
+        return []
+
+    # Always include the seed chunks
+    seen_ids: set[int] = {chunk.id for chunk in chunks}
+    expanded: list[Chunk] = list(chunks)
+
+    if window_size <= 0:
+        return expanded
+
+    targets: defaultdict[int, set[int]] = defaultdict(set)
+    for chunk in chunks:
+        for offset in range(-window_size, window_size + 1):
+            targets[chunk.document_id].add(chunk.ordinal + offset)
+
+    for document_id, ordinals in targets.items():
+        stmt = (
+            select(Chunk)
+            .options(joinedload(Chunk.document))
+            .where(Chunk.document_id == document_id)
+            .where(Chunk.ordinal.in_(ordinals))
+            .order_by(Chunk.ordinal.asc())
+        )
+        for chunk in db.execute(stmt).scalars().unique().all():
+            if chunk.id in seen_ids:
+                continue
+            seen_ids.add(chunk.id)
+            expanded.append(chunk)
+
+    expanded.sort(key=lambda c: (c.document_id, c.ordinal))
+    if max_total_chunks and len(expanded) > max_total_chunks:
+        expanded = expanded[:max_total_chunks]
+    return expanded
+
+
 def build_retrieval_query_text(
     question: str,
     history: Sequence[dict[str, str]] | None = None,
@@ -143,6 +302,12 @@ def retrieve_with_scores(
     """
     limit = top_k or DEFAULT_TOP_K
 
+    # 先根据原始问题提取可能的编号片段，用于字符串匹配检索
+    id_candidates = extract_id_candidates(question)
+    string_matches = search_chunks_by_id_candidates(
+        db, id_candidates, domain_ids=domain_ids, limit_per_id=STRING_MATCH_MAX_PER_ID
+    )
+
     # 利用会话历史构造检索文本，而不是只用当前问题
     query_text = build_retrieval_query_text(question, history)
     query_vec = embed(query_text)  # 将“问题 + 上下文”编码为向量
@@ -152,18 +317,21 @@ def retrieve_with_scores(
         limit,
         domain_ids=domain_ids,
     )  # 调用向量库获取候选
-    
-    if not search_results:
-        return [], []
     chunk_ids = [chunk_id for chunk_id, _ in search_results]
     repo = ChunkRepository(db)
     fetched = repo.get_many(chunk_ids, domain_ids=domain_ids)
-    if not fetched:
-        return [], []
     chunk_map = {chunk.id: chunk for chunk in fetched}
     filtered_results = [(cid, score) for cid, score in search_results if cid in chunk_map]
     ordered_chunks = [chunk_map[cid] for cid, _ in filtered_results]
-    return ordered_chunks, filtered_results
+
+    merged_chunks = merge_string_and_vector_results(string_matches, ordered_chunks)
+    expanded_chunks = expand_with_neighbor_chunks(
+        db, merged_chunks, window_size=NEIGHBOR_WINDOW_SIZE, max_total_chunks=NEIGHBOR_MAX_TOTAL_CHUNKS
+    )
+
+    score_map = {cid: score for cid, score in filtered_results}
+    references = [(chunk.id, score_map.get(chunk.id, 0.0)) for chunk in expanded_chunks]
+    return expanded_chunks, references
 
 
 def build_context(chunks: list[Chunk]) -> str:
@@ -256,7 +424,7 @@ def answer(
     规则：1.不得凭空捏造, 若缺证据请明确“不确定”；
     2.请替换问题中的代词以确保回答清晰；
     3.你只需要回答最后一个问题，不要回答会话历史中的问题。
-    4.回答时不需要引用档案片段的编号，只需基于内容进行回答。
+    4.答案不要提及chunk片段。
     """
     history_items = list(history or [])
     user_system_prompts: list[str] = []
