@@ -211,7 +211,14 @@
         <li v-for="chunk in visibleChunks" :key="chunk.id" class="chunk-list__item">
           <details>
             <summary>
-              <span>{{ t('documentDetail.chunks.itemTitle', { index: chunk.ordinal + 1 }) }}</span>
+              <span>
+                {{
+                  t('documentDetail.chunks.itemTitle', {
+                    index: chunk.ordinal + 1,
+                    id: chunk.id
+                  })
+                }}
+              </span>
               <span class="chunk-list__meta">
                 {{ t('documentDetail.chunks.length', { count: formatChunkLength(chunk) }) }}
               </span>

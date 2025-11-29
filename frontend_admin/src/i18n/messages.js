@@ -278,7 +278,7 @@ export const messages = {
         rangeLabel: '范围',
         loading: '正在加载片段…',
         empty: '该文档尚未生成任何片段。',
-        itemTitle: '片段 {index}',
+        itemTitle: '片段 {index}（ID: {id}）',
         length: '长度 {count} 字符'
       },
       preview: {
@@ -754,7 +754,7 @@ export const messages = {
         rangeLabel: 'Range',
         loading: 'Loading chunks…',
         empty: 'No chunks have been generated for this document yet.',
-        itemTitle: 'Chunk {index}',
+        itemTitle: 'Chunk {index} (ID: {id})',
         length: '{count} characters'
       },
       preview: {
