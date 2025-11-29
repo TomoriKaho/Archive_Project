@@ -139,8 +139,11 @@ def chunk_structured_entities(
     overlap: int = 50,
 ) -> List[str]:
     """针对结构化实体列表生成紧凑描述字符串。"""
-    def _build_prefix(entity_data: Dict[str, Any]) -> str:
-        """返回以首个字段内容为值的前缀，不计入长度限制。"""
+    def _build_prefix(entity_name: str, entity_data: Dict[str, Any]) -> str:
+        """返回以实体名或首个字段内容为值的前缀，不计入长度限制。"""
+
+        if entity_name:
+            return ""  # 已有实体名开头，无需额外前缀
 
         for value in entity_data.values():
             if value is None:
@@ -156,7 +159,7 @@ def chunk_structured_entities(
         data = _flatten_structured_data(entity.get("data") or {})  # 取出并打平属性字典
         if not isinstance(data, dict):
             data = {}  # 异常结构时回退为空字典
-        prefix = _build_prefix(data)
+        prefix = _build_prefix(name, data)
         entity_chunks: List[str] = []
         current = name  # 初始化当前段落以实体名开头（可为空）
         first = True  # 标记是否为第一对键值
