@@ -242,8 +242,16 @@ function linkifyContent(text) {
     const [url] = match;
     const start = match.index ?? 0;
     result += escapeHtml(text.slice(lastIndex, start));
-    const safeUrl = escapeHtml(url);
+    let trailing = '';
+    const trailingMatch = url.match(/[.,!?;:，。！？；：)\]]+$/u);
+    if (trailingMatch) {
+      trailing = trailingMatch[0];
+    }
+
+    const coreUrl = trailing ? url.slice(0, -trailing.length) : url;
+    const safeUrl = escapeHtml(coreUrl);
     result += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+    result += escapeHtml(trailing);
     lastIndex = start + url.length;
   }
 
