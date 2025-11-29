@@ -243,15 +243,29 @@ function linkifyContent(text) {
     const start = match.index ?? 0;
     result += escapeHtml(text.slice(lastIndex, start));
     let trailing = '';
-    const trailingMatch = url.match(/[.,!?;:，。！？；：)\]]+$/u);
-    if (trailingMatch) {
-      trailing = trailingMatch[0];
+    let extra = '';
+    const punctuationIndex = url.search(/[，,。！？；：)\]]/u);
+    if (punctuationIndex !== -1) {
+      const after = url.slice(punctuationIndex);
+      const trailingMatch = after.match(/^[,，。！？；：)\]]+/u);
+      if (trailingMatch) {
+        trailing = trailingMatch[0];
+        extra = after.slice(trailing.length);
+      } else {
+        extra = after;
+      }
+    } else {
+      const trailingMatch = url.match(/[.,!?;:，。！？；：)\]]+$/u);
+      if (trailingMatch) {
+        trailing = trailingMatch[0];
+      }
     }
 
-    const coreUrl = trailing ? url.slice(0, -trailing.length) : url;
+    const coreUrl = trailing ? url.slice(0, url.length - trailing.length - extra.length) : url;
     const safeUrl = escapeHtml(coreUrl);
     result += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
     result += escapeHtml(trailing);
+    result += escapeHtml(extra);
     lastIndex = start + url.length;
   }
 
