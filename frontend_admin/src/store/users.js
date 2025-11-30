@@ -38,11 +38,15 @@ export const useUsersStore = defineStore('users', {
         this.filters.limit = data.limit ?? limit;
         this.filters.offset = data.offset ?? offset;
       } catch (error) {
-        useUiStore().showToast({
-          type: 'error',
-          message: i18n.global.t('users.toast.loadError')
-        });
-        throw error;
+        if (![401, 403, 419].includes(error?.response?.status)) {
+          useUiStore().showToast({
+            type: 'error',
+            message: i18n.global.t('users.toast.loadError')
+          });
+          throw error;
+        }
+        // Authentication errors are handled by the auth store; avoid throwing to
+        // prevent unhandled errors when the user is redirected to login.
       } finally {
         this.isLoading = false;
       }
