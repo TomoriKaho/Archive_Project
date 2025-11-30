@@ -126,7 +126,7 @@ alembic upgrade head
 
 ### 5) 启动后端（FastAPI）
 ```bash
-
+uvicorn app.main:app --reload
 # 默认监听 http://localhost:8000
 ```
 
