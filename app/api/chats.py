@@ -15,12 +15,14 @@ from app.schemas.message import (
     MessageReference,
     MessageUpdate,
 )
-from app.services.rag_constants import CHUNK_MEMORY_PREFIX
+from app.services.rag_constants import CHUNK_MEMORY_PREFIX, CHAT_SUMMARY_PREFIX
 from app.services.rag_service import (
     CHUNK_MEMORY_WINDOW_MULTIPLIER,
     DEFAULT_TOP_K,
     answer,
     chunk_to_memory_text,
+    compress_chunk_memory,
+    compress_dialog_history,
 )
 
 logger = logging.getLogger(__name__)
@@ -129,14 +131,15 @@ def create_message(
         assistant_message = repo.create(chat_id=chat_id, role="assistant", content=answer_text)
         if chunks:
             persisted_memory = list(memory_messages)
-            for chunk in chunks:
-                memory_text = chunk_to_memory_text(chunk)
-                stored = repo.create(
-                    chat_id=chat_id,
-                    role="system",
-                    content=f"{CHUNK_MEMORY_PREFIX}{memory_text}",
-                )
-                persisted_memory.append(stored)
+            compressed_memory = compress_chunk_memory(content, chunks)
+            if not compressed_memory:
+                compressed_memory = "\n\n".join(chunk_to_memory_text(chunk) for chunk in chunks)
+            stored = repo.create(
+                chat_id=chat_id,
+                role="system",
+                content=f"{CHUNK_MEMORY_PREFIX}{compressed_memory}",
+            )
+            persisted_memory.append(stored)
             window = (
                 CHUNK_MEMORY_WINDOW_MULTIPLIER * top_k
                 if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0
@@ -149,6 +152,17 @@ def create_message(
         reference_models = [
             MessageReference(chunk_id=chunk_id, score=score) for chunk_id, score in references
         ]
+
+        history_summary = compress_dialog_history(
+            history_payload
+            + [{"role": "user", "content": content}, {"role": "assistant", "content": answer_text}]
+        )
+        if history_summary:
+            repo.create(
+                chat_id=chat_id,
+                role="system",
+                content=f"{CHAT_SUMMARY_PREFIX}{history_summary}",
+            )
 
     return MessageCreateResponse(
         user=MessageOut.model_validate(user_message),

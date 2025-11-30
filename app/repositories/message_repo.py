@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models.entities import Message
-from app.services.rag_constants import CHUNK_MEMORY_PREFIX
+from app.services.rag_constants import CHUNK_MEMORY_PREFIX, CHAT_SUMMARY_PREFIX
 
 from .base import Repository
 
@@ -18,6 +18,7 @@ class MessageRepository(Repository[Message]):
             .where(
                 Message.chat_id == chat_id,
                 Message.content.not_like(f"{CHUNK_MEMORY_PREFIX}%"),
+                Message.content.not_like(f"{CHAT_SUMMARY_PREFIX}%"),
             )
             .order_by(Message.created_at.asc())
             .offset(offset)

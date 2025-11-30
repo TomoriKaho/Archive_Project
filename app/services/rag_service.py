@@ -107,6 +107,7 @@ def retrieve(
 _DIGIT_RUN = re.compile(r"\d{4,}")
 _ALNUM_MIXED = re.compile(r"[A-Za-z][A-Za-z0-9\-_]*\d[A-Za-z0-9\-_]{2,}")
 _ERA_PREFIX = re.compile(r"(平|昭|令)[^\d]{0,2}\d{1,}")
+_URL_PATTERN = re.compile(r"https?://[^\s<>\u3000\"']+", re.IGNORECASE)
 
 
 def extract_id_candidates(query: str) -> list[str]:
@@ -137,6 +138,35 @@ def extract_id_candidates(query: str) -> list[str]:
         seen.add(cand)
         unique_candidates.append(cand)
     return unique_candidates
+
+
+def extract_strict_match_targets(query: str) -> list[str]:
+    """Pull out digit runs and URLs that require exact string containment."""
+
+    if not query:
+        return []
+
+    normalized = query.strip()
+    candidates: list[str] = []
+
+    for match in _URL_PATTERN.findall(normalized):
+        token = match.strip()
+        if token:
+            candidates.append(token)
+
+    for match in _DIGIT_RUN.findall(normalized):
+        token = match.strip()
+        if token:
+            candidates.append(token)
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for token in candidates:
+        if token in seen:
+            continue
+        seen.add(token)
+        result.append(token)
+    return result
 
 
 def search_chunks_by_id_candidates(
@@ -181,11 +211,15 @@ def search_chunks_by_id_candidates(
 def merge_string_and_vector_results(
     string_matches: list[Chunk],
     vector_chunks: list[Chunk],
+    *,
+    limit: int | None = None,
 ) -> list[Chunk]:
     """Merge string and vector retrieval results with ID hits prioritized.
 
     Strategy: return all string matches first (ID recall is most important),
     then append remaining vector hits while keeping unique chunk IDs.
+    When limit is provided, truncate the merged list to avoid exceeding the
+    caller's budget.
     """
 
     merged: list[Chunk] = []
@@ -195,11 +229,15 @@ def merge_string_and_vector_results(
             continue
         seen_ids.add(chunk.id)
         merged.append(chunk)
+        if limit and len(merged) >= limit:
+            return merged
     for chunk in vector_chunks:
         if chunk.id in seen_ids:
             continue
         seen_ids.add(chunk.id)
         merged.append(chunk)
+        if limit and len(merged) >= limit:
+            return merged
     return merged
 
 
@@ -208,6 +246,8 @@ def expand_with_neighbor_chunks(
     chunks: list[Chunk],
     window_size: int = NEIGHBOR_WINDOW_SIZE,
     max_total_chunks: int = NEIGHBOR_MAX_TOTAL_CHUNKS,
+    *,
+    score_map: dict[int, float] | None = None,
 ) -> list[Chunk]:
     """Expand retrieved chunks by adding their neighbors within the same document.
 
@@ -227,9 +267,17 @@ def expand_with_neighbor_chunks(
         return expanded
 
     targets: defaultdict[int, set[int]] = defaultdict(set)
+    ordinal_scores: defaultdict[int, dict[int, float]] = defaultdict(dict)
     for chunk in chunks:
+        base_score = 0.0 if score_map is None else score_map.get(chunk.id, 0.0)
         for offset in range(-window_size, window_size + 1):
-            targets[chunk.document_id].add(chunk.ordinal + offset)
+            ordinal = chunk.ordinal + offset
+            targets[chunk.document_id].add(ordinal)
+            # Neighbor scores slightly decay by distance but stay tied to the anchor chunk.
+            decayed = base_score - abs(offset) * 1e-4
+            stored = ordinal_scores[chunk.document_id].get(ordinal, float("-inf"))
+            if decayed > stored:
+                ordinal_scores[chunk.document_id][ordinal] = decayed
 
     for document_id, ordinals in targets.items():
         stmt = (
@@ -244,8 +292,24 @@ def expand_with_neighbor_chunks(
                 continue
             seen_ids.add(chunk.id)
             expanded.append(chunk)
+            if score_map is not None:
+                candidate = ordinal_scores[document_id].get(chunk.ordinal, 0.0)
+                if candidate > score_map.get(chunk.id, float("-inf")):
+                    score_map[chunk.id] = candidate
 
-    expanded.sort(key=lambda c: (c.document_id, c.ordinal))
+    if score_map is not None:
+        expanded.sort(
+            key=lambda c: (
+                score_map.get(c.id, 0.0),
+                -(abs(c.ordinal)),
+                c.document_id,
+                c.id,
+            ),
+            reverse=True,
+        )
+    else:
+        expanded.sort(key=lambda c: (c.document_id, c.ordinal))
+
     if max_total_chunks and len(expanded) > max_total_chunks:
         expanded = expanded[:max_total_chunks]
     return expanded
@@ -304,8 +368,16 @@ def retrieve_with_scores(
 
     # 先根据原始问题提取可能的编号片段，用于字符串匹配检索
     id_candidates = extract_id_candidates(question)
+    strict_targets = extract_strict_match_targets(question)
+    combined_candidates: list[str] = []
+    seen_candidate: set[str] = set()
+    for candidate in strict_targets + id_candidates:
+        if candidate in seen_candidate:
+            continue
+        seen_candidate.add(candidate)
+        combined_candidates.append(candidate)
     string_matches = search_chunks_by_id_candidates(
-        db, id_candidates, domain_ids=domain_ids, limit_per_id=STRING_MATCH_MAX_PER_ID
+        db, combined_candidates, domain_ids=domain_ids, limit_per_id=STRING_MATCH_MAX_PER_ID
     )
 
     # 利用会话历史构造检索文本，而不是只用当前问题
@@ -324,12 +396,25 @@ def retrieve_with_scores(
     filtered_results = [(cid, score) for cid, score in search_results if cid in chunk_map]
     ordered_chunks = [chunk_map[cid] for cid, _ in filtered_results]
 
-    merged_chunks = merge_string_and_vector_results(string_matches, ordered_chunks)
-    expanded_chunks = expand_with_neighbor_chunks(
-        db, merged_chunks, window_size=NEIGHBOR_WINDOW_SIZE, max_total_chunks=NEIGHBOR_MAX_TOTAL_CHUNKS
+    merged_chunks = merge_string_and_vector_results(
+        string_matches, ordered_chunks, limit=limit
     )
 
-    score_map = {cid: score for cid, score in filtered_results}
+    score_map: dict[int, float] = {cid: score for cid, score in filtered_results}
+    if merged_chunks:
+        max_score = max(score_map.values(), default=0.0)
+        string_score = max_score + 1.0 if string_matches else max_score
+        for chunk in string_matches:
+            score_map[chunk.id] = max(score_map.get(chunk.id, 0.0), string_score)
+
+    expanded_chunks = expand_with_neighbor_chunks(
+        db,
+        merged_chunks,
+        window_size=NEIGHBOR_WINDOW_SIZE,
+        max_total_chunks=limit,
+        score_map=score_map,
+    )
+
     references = [(chunk.id, score_map.get(chunk.id, 0.0)) for chunk in expanded_chunks]
     return expanded_chunks, references
 
@@ -353,6 +438,31 @@ def chunk_to_memory_text(chunk: Chunk) -> str:
     domain_id = chunk.document.domain_id if chunk.document else None
     header = f"[chunk#{chunk.id} document#{chunk.document_id} domain#{domain_id}]"
     return f"{header}\n{chunk.content}"
+
+
+def compress_chunk_memory(question: str, chunks: Sequence[Chunk]) -> str:
+    """Use the chat model to compress retrieved chunks for long-term memory."""
+
+    context = build_context(list(chunks))
+    if not context:
+        return ""
+    prompt = (
+        "请把下面与问题相关的档案片段压缩成简洁摘要，保留数字、编号和URL等关键信息，"
+        "便于后续多轮对话快速回顾："
+    )
+    messages = [
+        {"role": "system", "content": prompt},
+        {
+            "role": "user",
+            "content": f"问题：{question}\n\n相关片段：\n{context}",
+        },
+    ]
+    try:
+        summary = chat(messages)
+    except RuntimeError:
+        logger.warning("failed to compress chunk memory, fallback to raw context")
+        return context[:2000]
+    return summary.strip()
 
 
 def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
@@ -395,6 +505,44 @@ def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
     message = data.get("message") if isinstance(data, dict) else {}
     content = message.get("content") if isinstance(message, dict) else ""
     return content.strip() if content else ""
+
+
+def compress_dialog_history(history: Sequence[dict[str, str]]) -> str:
+    """Compress multi-turn chat history so it can be stored compactly per chat."""
+
+    if not history:
+        return ""
+
+    normalized: list[str] = []
+    for item in history:
+        role = item.get("role")
+        content = (item.get("content") or "").strip()
+        if not content or role not in {"user", "assistant", "system"}:
+            continue
+        prefix = {
+            "user": "用户",
+            "assistant": "助手",
+            "system": "系统",
+        }.get(role, role)
+        normalized.append(f"{prefix}：{content}")
+
+    if not normalized:
+        return ""
+
+    system_prompt = (
+        "请将以下对话内容压缩成简洁摘要，突出关键信息、意图和约束，"
+        "保留数字/编号/URL等细节，便于后续多轮对话继续。"
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": "\n".join(normalized)},
+    ]
+    try:
+        summary = chat(messages)
+    except RuntimeError:
+        logger.warning("failed to compress dialog history")
+        return ""
+    return summary.strip()
 
 
 def answer(
