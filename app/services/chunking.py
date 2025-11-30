@@ -240,9 +240,11 @@ MAX_CSV_FIELD_SIZE = _resolve_max_csv_field_size()
 
 
 def parse_structured_entities_from_csv(csv_text: str) -> List[Dict[str, Any]]:
-    """将CSV文本解析为实体列表，每个实体包含键值对数据。"""
+    """将CSV文本转成JSON格式，再复用JSON解析逻辑。"""
+
     if not csv_text:
-        return []  # 空文本直接返回
+        return []
+
     stream = io.StringIO(csv_text)
     try:
         try:
@@ -251,51 +253,14 @@ def parse_structured_entities_from_csv(csv_text: str) -> List[Dict[str, Any]]:
             csv.field_size_limit(sys.maxsize)
         reader = csv.DictReader(stream)
     except csv.Error:
-        return []  # CSV格式错误直接返回空列表让上层决定
-    if not reader.fieldnames:
-        return []  # 无表头无法识别字段
-    normalized_headers = [
-        (header or "").strip() for header in reader.fieldnames
-    ]  # 去除首尾空白
-    entity_index = 0
-    for idx, header in enumerate(normalized_headers):
-        if header.lower() == "entity":
-            entity_index = idx
-            break
-    entity_header = reader.fieldnames[entity_index]
-    data_headers = [
-        reader.fieldnames[idx]
-        for idx in range(len(reader.fieldnames))
-        if idx != entity_index and reader.fieldnames[idx] is not None
-    ]
-    entities: List[Dict[str, Any]] = []
-    for row in reader:
-        entity_raw = row.get(entity_header)
-        entity = "" if entity_raw is None else str(entity_raw).strip()
+        return []
 
-        row_data: Dict[str, Any] = {}
-        for header in data_headers:
-            key_name = (header or "").strip()
-            if not key_name:
-                continue
-            value = row.get(header)
-            if value is None:
-                continue
-            value_str = str(value).strip()
-            if not value_str:
-                continue
-            row_data[key_name] = value_str
+    rows = list(reader)
+    if not rows:
+        return []
 
-        flattened = _flatten_structured_data(row_data)
-        if not flattened:
-            continue
-
-        payload: Dict[str, Any] = {"data": flattened}
-        if entity:
-            payload["entity"] = entity
-        entities.append(payload)
-
-    return entities
+    json_text = json.dumps(rows)
+    return parse_structured_entities_from_json(json_text)
 
 
 def parse_structured_entities_from_json(json_text: str) -> List[Dict[str, Any]]:

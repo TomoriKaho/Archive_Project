@@ -28,8 +28,16 @@ logger = logging.getLogger(__name__)
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 """Base URL of the Ollama service used for chat completion."""
 
-OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3.1:8b")
-"""Chat model identifier when querying Ollama."""
+CHAT_API_URL = os.getenv(
+    "CHAT_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+)
+"""Base URL of the cloud chat completion endpoint (OpenAI-compatible)."""
+
+CHAT_API_KEY = os.getenv("CHAT_API_KEY", "")
+"""API key used to authenticate against the cloud chat provider."""
+
+CHAT_MODEL = os.getenv("CHAT_MODEL", "qwen3-vl-plus")
+"""Chat model identifier when querying the cloud provider."""
 
 DEFAULT_TOP_K = int(os.getenv("RAG_TOP_K", "10"))
 """Default number of chunks retrieved when no explicit top_k is provided."""
@@ -43,8 +51,8 @@ NEIGHBOR_WINDOW_SIZE = int(os.getenv("RAG_NEIGHBOR_WINDOW_SIZE", "1"))
 NEIGHBOR_MAX_TOTAL_CHUNKS = int(os.getenv("RAG_NEIGHBOR_MAX_TOTAL_CHUNKS", "100"))
 """Safety limit to avoid overlong contexts after neighbor expansion."""
 
-RAG_OLLAMA_TIMEOUT = int(os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
-"""HTTP timeout applied to Ollama chat requests."""
+RAG_CHAT_TIMEOUT = int(os.getenv("RAG_CHAT_TIMEOUT", os.getenv("RAG_OLLAMA_TIMEOUT", "60")))
+"""HTTP timeout applied to chat requests."""
 
 CHUNK_MEMORY_WINDOW_MULTIPLIER = int(os.getenv("RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER", "3"))
 """Number of historical chunk batches kept in memory, expressed as a multiplier of top_k."""
@@ -420,24 +428,25 @@ def retrieve_with_scores(
 
 
 def build_context(chunks: list[Chunk]) -> str:
-    """Concatenate retrieved chunks into a single prompt context."""
+    """把检索到的 chunk 拼成给 LLM 的上下文，只保留正文内容。"""
 
     if not chunks:
         return ""
-    lines: list[str] = []
+
+    contents: list[str] = []
     for chunk in chunks:
-        domain_id = chunk.document.domain_id if chunk.document else None
-        header = f"[chunk#{chunk.id} document#{chunk.document_id} domain#{domain_id}]"
-        lines.append(f"{header}\n{chunk.content}")
-    return "\n\n".join(lines)
+        text = (chunk.content or "").strip()
+        if not text:
+            continue
+        contents.append(text)
+
+    return "\n\n".join(contents)
 
 
 def chunk_to_memory_text(chunk: Chunk) -> str:
-    """Render a single chunk as persisted memory text."""
+    """把单个 chunk 渲染成可持久化的“记忆”文本，只保留内容。"""
 
-    domain_id = chunk.document.domain_id if chunk.document else None
-    header = f"[chunk#{chunk.id} document#{chunk.document_id} domain#{domain_id}]"
-    return f"{header}\n{chunk.content}"
+    return (chunk.content or "").strip()
 
 
 def compress_chunk_memory(question: str, chunks: Sequence[Chunk]) -> str:
@@ -466,45 +475,45 @@ def compress_chunk_memory(question: str, chunks: Sequence[Chunk]) -> str:
 
 
 def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
-    """Call Ollama's chat API and return the assistant message content."""
+    """Call the cloud chat API (OpenAI-compatible) and return the assistant reply."""
+
+    if stream:
+        raise RuntimeError("streaming chat is not supported by the current cloud backend")
+    if not CHAT_API_KEY:
+        raise RuntimeError("CHAT_API_KEY is required to call the cloud chat API")
 
     payload = {
-        "model": OLLAMA_CHAT_MODEL,
+        "model": CHAT_MODEL,
         "messages": list(messages),
-        "stream": stream,
     }
     req = request.Request(
-        url=f"{OLLAMA_URL.rstrip('/')}/api/chat",
+        url=f"{CHAT_API_URL.rstrip('/')}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {CHAT_API_KEY}",
+        },
         method="POST",
     )
     try:
-        with request.urlopen(req, timeout=RAG_OLLAMA_TIMEOUT) as resp:
-            if stream:
-                pieces: list[str] = []
-                for raw_line in resp:
-                    line = raw_line.decode("utf-8").strip()
-                    if not line:
-                        continue
-                    data = json.loads(line)
-                    message = data.get("message") if isinstance(data, dict) else {}
-                    content = message.get("content") if isinstance(message, dict) else ""
-                    if content:
-                        pieces.append(content)
-                return "".join(pieces).strip()
+        with request.urlopen(req, timeout=RAG_CHAT_TIMEOUT) as resp:
             raw = resp.read().decode("utf-8")
     except error.HTTPError as exc:
         body = exc.read().decode("utf-8", "ignore")
-        logger.error("Ollama chat 请求失败: %s", body)
-        raise RuntimeError("failed to call Ollama chat API") from exc
+        logger.error("Cloud chat 请求失败: %s", body)
+        raise RuntimeError("failed to call cloud chat API") from exc
     except error.URLError as exc:
-        logger.error("无法连接到 Ollama 服务: %s", exc)
-        raise RuntimeError("failed to reach Ollama chat API") from exc
+        logger.error("无法连接到云端聊天服务: %s", exc)
+        raise RuntimeError("failed to reach cloud chat API") from exc
+
     data = json.loads(raw) if raw else {}
-    message = data.get("message") if isinstance(data, dict) else {}
-    content = message.get("content") if isinstance(message, dict) else ""
-    return content.strip() if content else ""
+    choices = data.get("choices") if isinstance(data, dict) else None
+    if isinstance(choices, list) and choices:
+        message = choices[0].get("message") if isinstance(choices[0], dict) else {}
+        content = message.get("content") if isinstance(message, dict) else ""
+        return content.strip() if content else ""
+    logger.error("Unexpected cloud chat response: %s", data)
+    return ""
 
 
 def compress_dialog_history(history: Sequence[dict[str, str]]) -> str:
@@ -568,11 +577,16 @@ def answer(
         return _NO_CONTEXT_MESSAGE, [], []
 
     context = build_context(chunks)
-    system_prompt = """你是一名严谨的档案解读助手，请依据给定资料回答问题。同时我们还会提供会话历史作为参考。
-    规则：1.不得凭空捏造, 若缺证据请明确“不确定”；
-    2.请替换问题中的代词以确保回答清晰；
-    3.你只需要回答最后一个问题，不要回答会话历史中的问题。
-    4.答案不要提及chunk片段。
+    system_prompt = """你是一名严谨的档案解读助手，请像一位档案馆工作人员一样，用自然的中文回答用户的问题。
+
+    规则：
+    1. 严格依据检索到的档案资料与对话内容作答，不得凭空捏造；若缺乏证据请明确说“从现有资料无法找到相关信息”；
+    2. 回答时不要说明资料是如何获得的，例如不要使用
+    “根据提供的档案片段”“根据以上资料”“根据上下文”“根据系统提供的信息”等表述，
+    只需直接陈述档案记载的事实即可；
+    3. 请替换问题中的代词（如“这个”“它”）以确保回答清晰；
+    4. 你只需要回答最后一个问题，不要重新回答会话历史中的旧问题；
+    5. 在必要的位置添加换行以提升可读性；
     """
     history_items = list(history or [])
     user_system_prompts: list[str] = []
@@ -603,7 +617,7 @@ def answer(
         if selected_memory:
             joined_memory = "\n\n".join(selected_memory)
             system_prompt = (
-                f"{system_prompt}\n\n以下是先前检索到的资料片段，请仅在与当前问题相关时引用：\n\n"
+                f"{system_prompt}\n\n下面是若干档案内容的节选，请在回答问题时仅以这些内容为依据：\n\n"
                 f"{joined_memory}"
             )
 
@@ -642,7 +656,10 @@ def answer(
     messages.append(
         {
             "role": "user",
-            "content": f"请根据上面的档案片段和对话历史，回答这个问题：\n\n{question}",
+            "content": (
+                "请阅读上面的档案资料和对话记录，直接用自然语言回答下面这个问题，\n\n"
+                f"{question}"
+            ),
         }
     )
 
