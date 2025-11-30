@@ -276,9 +276,13 @@ function linkifyContent(text) {
 function renderContent(message) {
   const content = message?.content ?? '';
   if (message?.role === 'assistant') {
-    return linkifyContent(String(content));
+    return applyLineBreaks(linkifyContent(String(content)));
   }
-  return escapeHtml(String(content));
+  return applyLineBreaks(escapeHtml(String(content)));
+}
+
+function applyLineBreaks(html) {
+  return String(html).replaceAll('\n', '<br />');
 }
 
 function formatTime(value) {
