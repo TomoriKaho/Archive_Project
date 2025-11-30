@@ -268,15 +268,12 @@ def parse_structured_entities_from_csv(csv_text: str) -> List[Dict[str, Any]]:
         for idx in range(len(reader.fieldnames))
         if idx != entity_index and reader.fieldnames[idx] is not None
     ]
-    aggregated: Dict[str, Dict[str, Any]] = {}
+    entities: List[Dict[str, Any]] = []
     for row in reader:
         entity_raw = row.get(entity_header)
-        if entity_raw is None:
-            continue
-        entity = str(entity_raw).strip()
-        if not entity:
-            continue  # 跳过缺少实体名的行
-        entity_data = aggregated.setdefault(entity, {})
+        entity = "" if entity_raw is None else str(entity_raw).strip()
+
+        row_data: Dict[str, Any] = {}
         for header in data_headers:
             key_name = (header or "").strip()
             if not key_name:
@@ -287,12 +284,18 @@ def parse_structured_entities_from_csv(csv_text: str) -> List[Dict[str, Any]]:
             value_str = str(value).strip()
             if not value_str:
                 continue
-            entity_data[key_name] = value_str
-    return [
-        {"entity": entity, "data": data}
-        for entity, data in aggregated.items()
-        if data
-    ]
+            row_data[key_name] = value_str
+
+        flattened = _flatten_structured_data(row_data)
+        if not flattened:
+            continue
+
+        payload: Dict[str, Any] = {"data": flattened}
+        if entity:
+            payload["entity"] = entity
+        entities.append(payload)
+
+    return entities
 
 
 def parse_structured_entities_from_json(json_text: str) -> List[Dict[str, Any]]:
