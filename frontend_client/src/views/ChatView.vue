@@ -118,7 +118,7 @@ const preferencesStore = usePreferencesStore();
 const conversations = computed(() => chatStore.conversations);
 const activeConversation = computed(() => chatStore.activeConversation);
 const messages = computed(() => chatStore.messages);
-const isSending = computed(() => chatStore.isSending);
+const isSending = computed(() => chatStore.isActiveConversationSending);
 const activeConversationId = computed(() => chatStore.activeConversationId);
 const domainOptions = computed(() => domainsStore.items);
 const activeDomains = computed(() => chatStore.getConversationDomains(chatStore.activeConversationId));

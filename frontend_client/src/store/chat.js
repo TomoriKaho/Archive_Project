@@ -27,11 +27,20 @@ export const useChatStore = defineStore('client-chat', {
     activeConversationId: null,
     messages: [],
     isLoading: false,
-    isSending: false
+    isSending: false,
+    sendingConversationId: null,
+    pendingMessages: {}
   }),
   getters: {
     activeConversation(state) {
       return state.conversations.find((item) => item.id === state.activeConversationId) || null;
+    },
+    isActiveConversationSending(state) {
+      return (
+        state.isSending &&
+        state.activeConversationId != null &&
+        state.activeConversationId === state.sendingConversationId
+      );
     },
     getConversationDomains: (state) => (conversationId) => {
       if (!conversationId) {
@@ -51,6 +60,7 @@ export const useChatStore = defineStore('client-chat', {
           this.conversationDomains = {};
           this.activeConversationId = null;
           this.messages = [];
+          this.pendingMessages = {};
           return;
         }
         const { data } = await fetchConversations(authStore.user.id);
@@ -90,9 +100,7 @@ export const useChatStore = defineStore('client-chat', {
         if (conversationId !== this.activeConversationId) {
           return;
         }
-        const pendingMessages = this.messages.filter((item) =>
-          typeof item?.id === 'string' && item.id.startsWith('temp-')
-        );
+        const pendingMessages = this.getPendingMessages(conversationId);
         if (pendingMessages.length) {
           const existingIds = new Set(data.map((item) => item.id));
           const merged = [...data];
@@ -151,10 +159,15 @@ export const useChatStore = defineStore('client-chat', {
         id: tempId,
         role: payload.role || 'user',
         content,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        conversation_id: conversationId
       };
-      this.messages.push(message);
+      this.addPendingMessage(conversationId, message);
+      if (this.activeConversationId === conversationId) {
+        this.messages.push(message);
+      }
       this.isSending = true;
+      this.sendingConversationId = conversationId;
       try {
         const body = {
           chat_id: conversationId,
@@ -176,29 +189,70 @@ export const useChatStore = defineStore('client-chat', {
           }
         }
         const { data } = await sendConversationMessage(conversationId, body);
-        const index = this.messages.findIndex((item) => item.id === tempId);
-        if (data?.user) {
-          if (index !== -1) {
-            this.messages.splice(index, 1, data.user);
-          } else {
-            this.messages.push(data.user);
+        this.removePendingMessage(conversationId, tempId);
+        if (this.activeConversationId === conversationId) {
+          const index = this.messages.findIndex((item) => item.id === tempId);
+          if (data?.user) {
+            if (index !== -1) {
+              this.messages.splice(index, 1, data.user);
+            } else {
+              this.messages.push(data.user);
+            }
+          } else if (index !== -1) {
+            this.messages.splice(index, 1, { ...message, id: tempId + '-confirmed' });
           }
-        } else if (index !== -1) {
-          this.messages.splice(index, 1, { ...message, id: tempId + '-confirmed' });
-        }
-        if (data?.assistant) {
-          this.messages.push(data.assistant);
+          if (data?.assistant) {
+            this.messages.push(data.assistant);
+          }
         }
         return data;
       } catch (error) {
-        const index = this.messages.findIndex((item) => item.id === tempId);
-        if (index !== -1) {
-          this.messages.splice(index, 1);
+        this.removePendingMessage(conversationId, tempId);
+        if (this.activeConversationId === conversationId) {
+          const index = this.messages.findIndex((item) => item.id === tempId);
+          if (index !== -1) {
+            this.messages.splice(index, 1);
+          }
         }
         throw error;
       } finally {
         this.isSending = false;
+        if (this.sendingConversationId === conversationId) {
+          this.sendingConversationId = null;
+        }
       }
+    },
+    addPendingMessage(conversationId, message) {
+      if (!conversationId || !message) {
+        return;
+      }
+      const pending = this.getPendingMessages(conversationId);
+      this.pendingMessages = {
+        ...this.pendingMessages,
+        [conversationId]: [...pending, message]
+      };
+    },
+    removePendingMessage(conversationId, messageId) {
+      if (!conversationId || !messageId) {
+        return;
+      }
+      const pending = this.getPendingMessages(conversationId).filter((item) => item.id !== messageId);
+      if (pending.length) {
+        this.pendingMessages = {
+          ...this.pendingMessages,
+          [conversationId]: pending
+        };
+      } else {
+        const { [conversationId]: _removed, ...rest } = this.pendingMessages;
+        this.pendingMessages = rest;
+      }
+    },
+    getPendingMessages(conversationId) {
+      if (!conversationId) {
+        return [];
+      }
+      const pending = this.pendingMessages[conversationId];
+      return Array.isArray(pending) ? [...pending] : [];
     },
     setConversationDomains(conversationId, domainIds) {
       if (!conversationId) {
@@ -234,6 +288,8 @@ export const useChatStore = defineStore('client-chat', {
       this.conversations = this.conversations.filter((item) => item.id !== conversationId);
       const { [conversationId]: _removed, ...rest } = this.conversationDomains;
       this.conversationDomains = rest;
+      const { [conversationId]: _pendingRemoved, ...pendingRest } = this.pendingMessages;
+      this.pendingMessages = pendingRest;
       if (wasActive) {
         if (this.conversations.length) {
           const nextId = this.conversations[0].id;
