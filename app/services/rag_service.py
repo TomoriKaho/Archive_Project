@@ -106,7 +106,7 @@ def retrieve(
 
 _DIGIT_RUN = re.compile(r"\d{4,}")
 _ALNUM_MIXED = re.compile(r"[A-Za-z][A-Za-z0-9\-_]*\d[A-Za-z0-9\-_]{2,}")
-_ERA_PREFIX = re.compile(r"(平|昭|令|民国)[^\d]{0,2}\d{1,}")
+_ERA_PREFIX = re.compile(r"(平|昭|令)[^\d]{0,2}\d{1,}")
 
 
 def extract_id_candidates(query: str) -> list[str]:

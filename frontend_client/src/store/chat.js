@@ -20,6 +20,50 @@ function normalizeDomainIds(rawValue) {
   return Array.from(new Set(cleaned)).sort((a, b) => a - b);
 }
 
+const rolePriority = {
+  user: 0,
+  assistant: 1,
+  system: 2
+};
+
+function normalizeMessages(messages = []) {
+  return [...messages].sort((a, b) => {
+    const timeA = new Date(a?.created_at ?? '').getTime();
+    const timeB = new Date(b?.created_at ?? '').getTime();
+    const hasValidTimeA = !Number.isNaN(timeA);
+    const hasValidTimeB = !Number.isNaN(timeB);
+
+    if (hasValidTimeA && hasValidTimeB) {
+      if (timeA !== timeB) {
+        return timeA - timeB;
+      }
+    } else if (hasValidTimeA) {
+      return -1;
+    } else if (hasValidTimeB) {
+      return 1;
+    }
+
+    const roleA = rolePriority[a?.role] ?? Number.MAX_SAFE_INTEGER;
+    const roleB = rolePriority[b?.role] ?? Number.MAX_SAFE_INTEGER;
+    if (roleA !== roleB) {
+      return roleA - roleB;
+    }
+
+    return String(a?.id ?? '').localeCompare(String(b?.id ?? ''));
+  });
+}
+
+function mergeMessages(base = [], additions = []) {
+  const existingIds = new Set(base.map((item) => item.id));
+  const merged = [...base];
+  additions.forEach((message) => {
+    if (!existingIds.has(message.id)) {
+      merged.push(message);
+    }
+  });
+  return merged;
+}
+
 export const useChatStore = defineStore('client-chat', {
   state: () => ({
     conversations: [],
@@ -101,18 +145,8 @@ export const useChatStore = defineStore('client-chat', {
           return;
         }
         const pendingMessages = this.getPendingMessages(conversationId);
-        if (pendingMessages.length) {
-          const existingIds = new Set(data.map((item) => item.id));
-          const merged = [...data];
-          pendingMessages.forEach((message) => {
-            if (!existingIds.has(message.id)) {
-              merged.push(message);
-            }
-          });
-          this.messages = merged;
-        } else {
-          this.messages = data;
-        }
+        const existingMessages = pendingMessages.length ? mergeMessages(data, pendingMessages) : data;
+        this.messages = normalizeMessages(existingMessages);
       } finally {
         this.isLoading = false;
       }
@@ -164,7 +198,7 @@ export const useChatStore = defineStore('client-chat', {
       };
       this.addPendingMessage(conversationId, message);
       if (this.activeConversationId === conversationId) {
-        this.messages.push(message);
+        this.messages = normalizeMessages([...this.messages, message]);
       }
       this.isSending = true;
       this.sendingConversationId = conversationId;
@@ -191,19 +225,21 @@ export const useChatStore = defineStore('client-chat', {
         const { data } = await sendConversationMessage(conversationId, body);
         this.removePendingMessage(conversationId, tempId);
         if (this.activeConversationId === conversationId) {
-          const index = this.messages.findIndex((item) => item.id === tempId);
+          const nextMessages = [...this.messages];
+          const index = nextMessages.findIndex((item) => item.id === tempId);
           if (data?.user) {
             if (index !== -1) {
-              this.messages.splice(index, 1, data.user);
+              nextMessages.splice(index, 1, data.user);
             } else {
-              this.messages.push(data.user);
+              nextMessages.push(data.user);
             }
           } else if (index !== -1) {
-            this.messages.splice(index, 1, { ...message, id: tempId + '-confirmed' });
+            nextMessages.splice(index, 1, { ...message, id: tempId + '-confirmed' });
           }
           if (data?.assistant) {
-            this.messages.push(data.assistant);
+            nextMessages.push(data.assistant);
           }
+          this.messages = normalizeMessages(nextMessages);
         }
         return data;
       } catch (error) {
@@ -211,7 +247,9 @@ export const useChatStore = defineStore('client-chat', {
         if (this.activeConversationId === conversationId) {
           const index = this.messages.findIndex((item) => item.id === tempId);
           if (index !== -1) {
-            this.messages.splice(index, 1);
+            const nextMessages = [...this.messages];
+            nextMessages.splice(index, 1);
+            this.messages = normalizeMessages(nextMessages);
           }
         }
         throw error;
