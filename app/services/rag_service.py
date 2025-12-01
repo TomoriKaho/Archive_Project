@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+from functools import lru_cache
 from typing import Sequence
 import re
 from urllib import error, request
@@ -329,35 +330,128 @@ def build_retrieval_query_text(
 ) -> str:
     """根据当前问题 + 近期会话历史，构造用于向量检索的查询文本。
 
-    这样可以缓解“它 / 这个档案”之类代词导致的语义丢失问题。
+    这样可以缓解“它 / 这个档案”之类代词导致的语义丢失问题，并优先利用
+    已经由 LLM 压缩过的摘要，避免长篇上下文喧宾夺主。
     """
 
+    @lru_cache(maxsize=32)
+    def _extract_keyword_tokens(text: str, *, limit: int = 12) -> list[str]:
+        """提取用于向量检索的关键词，改为通过聊天模型生成。"""
+
+        def _fallback_regex_tokens(content: str, *, count: int) -> list[str]:
+            normalized = content.strip()
+            tokens: list[str] = _DIGIT_RUN.findall(normalized)
+            tokens.extend(_ALNUM_MIXED.findall(normalized))
+            rough_parts = re.split(
+                r"[\s,.;:!?，。！？；、\-\(\)\[\]\{\}<>\"'\/]+", normalized
+            )
+            for part in rough_parts:
+                piece = part.strip()
+                if len(piece) < 2:
+                    continue
+                tokens.append(piece)
+
+            seen: set[str] = set()
+            unique: list[str] = []
+            for token in tokens:
+                if token in seen:
+                    continue
+                seen.add(token)
+                unique.append(token)
+                if len(unique) >= count:
+                    break
+            return unique
+
+        if not text:
+            return []
+
+        normalized = text.strip()
+        if not normalized:
+            return []
+
+        system_prompt = (
+            "你是一个关键词提取器。请从文本中抽取不超过{limit}个关键词或短语，"
+            "优先保留年份、数字、编号、实体名（如地名、人名、机构名）、重要名词。"
+            "仅输出用空格分隔的关键词列表，不要添加额外解释。"
+        ).format(limit=limit)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    "文本：" + normalized + "\n\n格式：关键词1 关键词2 ...，总数不超过 {limit} 个。"
+                ).format(limit=limit),
+            },
+        ]
+
+        try:
+            raw = chat(messages)
+        except RuntimeError:
+            logger.warning("LLM 关键词提取失败，回退正则方式")
+            return _fallback_regex_tokens(normalized, count=limit)
+
+        tokens = []
+        for token in re.split(r"[\s,，、]+", raw.strip()):
+            piece = token.strip()
+            if not piece:
+                continue
+            tokens.append(piece)
+            if len(tokens) >= limit:
+                break
+
+        if not tokens:
+            return _fallback_regex_tokens(normalized, count=limit)
+        return tokens
+
     if not history:
-        # 没有历史，直接用当前问题
-        return question.strip()
+        # 没有历史，直接用当前问题的关键词
+        keywords = _extract_keyword_tokens(question)
+        return " ".join(keywords) if keywords else question.strip()
 
-    # 只取最近几条会话，避免文本太长（这里取 4 条，可根据需要调）
-    tail = list(history)[-4:]
-
-    # 把 user / assistant 的发言简单串起来
-    history_lines: list[str] = []
-    for msg in tail:
-        role = msg.get("role")
+    # 优先取最近的“对话摘要”（system 角色消息），摘要已经经过 LLM 压缩，可
+    # 以提供稳定的历史语义，又不会像长篇回答那样主导嵌入。
+    summary: str | None = None
+    for msg in reversed(history):
+        if msg.get("role") != "system":
+            continue
         content = (msg.get("content") or "").strip()
         if not content:
             continue
-        if role == "user":
-            # 用前缀标记角色，帮助嵌入模型区分说话人
-            history_lines.append(f"用户：{content}")
-        elif role == "assistant":
-            history_lines.append(f"助手：{content}")
+        summary = content[:800]  # 摘要一般不长，但仍做安全截断
+        break
+
+    # 仅保留最近几条「用户提问」，避免上一轮长篇回答主导向量语义
+    tail = [
+        msg
+        for msg in list(history)[-6:]
+        if msg.get("role") == "user" and (msg.get("content") or "").strip()
+    ]
+
+    history_lines: list[str] = []
+    if summary:
+        summary_keywords = _extract_keyword_tokens(summary, limit=8)
+        summary_block = " ".join(summary_keywords) if summary_keywords else summary
+        history_lines.append(f"对话摘要关键词：{summary_block}")
+
+    # 把用户的发言简单串起来（限制单条长度，降低历史权重）
+    for msg in tail[-3:]:  # 最多取 3 条用户提问，聚焦近期主题
+        content = (msg.get("content") or "").strip()
+        # 仅保留关键词，避免长篇描述主导嵌入
+        keywords = _extract_keyword_tokens(content)
+        trimmed = " ".join(keywords) if keywords else content[:200]
+        history_lines.append(f"用户关键词：{trimmed}")
 
     history_block = "\n".join(history_lines).strip()
 
     # 最后明确告诉嵌入模型：下面是当前问题
+    question_keywords = _extract_keyword_tokens(question)
+    current_line = "当前问题关键词：" + (
+        " ".join(question_keywords) if question_keywords else question.strip()
+    )
+
     if history_block:
-        return f"{history_block}\n\n当前问题：{question.strip()}"
-    return question.strip()
+        return f"{history_block}\n\n{current_line}"
+    return current_line
 
 
 def retrieve_with_scores(
