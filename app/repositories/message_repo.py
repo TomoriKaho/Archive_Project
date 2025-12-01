@@ -26,9 +26,15 @@ class MessageRepository(Repository[Message]):
         )
         return self.db.execute(stmt).scalars().all()
 
-    def list_for_prompt(self, chat_id: int) -> list[Message]:
-        """Return all non-memory messages for the chat ordered chronologically."""
+    def list_for_prompt(self, chat_id: int, tail_limit: int = 20) -> list[Message]:
+        """
+        返回给 LLM 用的对话历史：
+        - 最新一条对话摘要（CHAT_SUMMARY_PREFIX 开头的 system 消息）
+        - 再加上最近 tail_limit 条非摘要的普通消息
+        - 自动排除 chunk memory 消息
+        """
 
+        # 先把除了 chunk memory 的所有消息都取出来
         stmt = (
             select(Message)
             .where(
@@ -37,8 +43,40 @@ class MessageRepository(Repository[Message]):
             )
             .order_by(Message.created_at.asc())
         )
-        return self.db.execute(stmt).scalars().all()
+        messages = self.db.execute(stmt).scalars().all()
 
+        latest_summary: Message | None = None
+        normal_messages: list[Message] = []
+
+        for m in messages:
+            content = m.content or ""
+            # 把所有摘要消息记下来，但只保留“最新那一条”
+            if content.startswith(CHAT_SUMMARY_PREFIX):
+                latest_summary = m
+                continue
+            # 其他的就是正常对话
+            normal_messages.append(m)
+
+        # 最近 tail_limit 条非摘要消息
+        tail = normal_messages[-tail_limit:]
+
+        result: list[Message] = []
+
+        if latest_summary is not None:
+            # 可以在这里选择是否去掉前缀再喂给 LLM
+            # 例如：
+            latest_summary = Message(
+                id=latest_summary.id,
+                chat_id=latest_summary.chat_id,
+                role=latest_summary.role,
+                content=latest_summary.content[len(CHAT_SUMMARY_PREFIX):],
+                created_at=latest_summary.created_at,
+            )
+            result.append(latest_summary)
+
+        result.extend(tail)
+        return result
+    
     def list_memory(self, chat_id: int) -> list[Message]:
         """Return persisted chunk memory messages for the chat."""
 
@@ -50,8 +88,8 @@ class MessageRepository(Repository[Message]):
             )
             .order_by(Message.created_at.asc())
         )
-        return self.db.execute(stmt).scalars().all()
-
+        return list(self.db.execute(stmt).scalars().all())
+    
     def delete_many(self, message_ids: Sequence[int]) -> None:
         """Bulk delete messages by id."""
 
@@ -61,3 +99,5 @@ class MessageRepository(Repository[Message]):
         for message in self.db.execute(stmt).scalars().all():
             self.db.delete(message)
         self.db.flush()
+
+
