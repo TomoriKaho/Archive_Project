@@ -73,7 +73,13 @@ export const useChatStore = defineStore('client-chat', {
     isLoading: false,
     isSending: false,
     sendingConversationId: null,
-    pendingMessages: {}
+    pendingMessages: {},
+    streamingMessageId: null,
+    streamingConversationId: null,
+    streamingTimer: null,
+    streamingTarget: '',
+    streamingDisplayed: '',
+    streamingPaused: false
   }),
   getters: {
     activeConversation(state) {
@@ -92,6 +98,21 @@ export const useChatStore = defineStore('client-chat', {
       }
       const selection = state.conversationDomains[conversationId];
       return Array.isArray(selection) ? [...selection] : [];
+    },
+    isActiveConversationStreaming(state) {
+      return (
+        state.streamingConversationId != null &&
+        state.streamingConversationId === state.activeConversationId &&
+        state.streamingTimer != null &&
+        !state.streamingPaused
+      );
+    },
+    isActiveConversationStreamPaused(state) {
+      return (
+        state.streamingConversationId != null &&
+        state.streamingConversationId === state.activeConversationId &&
+        state.streamingPaused
+      );
     }
   },
   actions: {
@@ -126,6 +147,7 @@ export const useChatStore = defineStore('client-chat', {
       }
     },
     async selectConversation(conversationId) {
+      this.stopAssistantStream({ complete: false });
       if (!conversationId) {
         this.activeConversationId = null;
         this.messages = [];
@@ -188,6 +210,7 @@ export const useChatStore = defineStore('client-chat', {
       if (!content) {
         return null;
       }
+      this.stopAssistantStream({ complete: false });
       const tempId = `temp-${Date.now()}`;
       const message = {
         id: tempId,
@@ -238,10 +261,10 @@ export const useChatStore = defineStore('client-chat', {
           } else if (index !== -1) {
             nextMessages.splice(index, 1, { ...message, id: tempId + '-confirmed' });
           }
-          if (data?.assistant) {
-            nextMessages.push(data.assistant);
-          }
           this.messages = normalizeMessages(nextMessages);
+          if (data?.assistant) {
+            this.startAssistantStream(conversationId, data.assistant);
+          }
         }
         return data;
       } catch (error) {
@@ -340,6 +363,112 @@ export const useChatStore = defineStore('client-chat', {
           this.messages = [];
         }
       }
+    },
+    startAssistantStream(conversationId, assistant) {
+      if (!assistant) {
+        return;
+      }
+      this.stopAssistantStream({ complete: false });
+      const messageId = assistant.id || `assistant-${Date.now()}`;
+      const baseMessage = {
+        ...assistant,
+        id: messageId,
+        content: ''
+      };
+      const withoutExisting = this.messages.filter((item) => item.id !== messageId);
+      this.messages = normalizeMessages([...withoutExisting, baseMessage]);
+
+      const targetText = assistant.content || '';
+      if (!targetText) {
+        return;
+      }
+
+      this.streamingMessageId = messageId;
+      this.streamingConversationId = conversationId;
+      this.streamingTarget = targetText;
+      this.streamingDisplayed = '';
+      this.streamingPaused = false;
+      this.clearStreamingTimer();
+
+      const totalLength = targetText.length;
+      const chunkSize = Math.max(3, Math.ceil(totalLength / 120));
+      this.streamingTimer = window.setInterval(() => {
+        const nextLength = Math.min(this.streamingDisplayed.length + chunkSize, totalLength);
+        const nextContent = targetText.slice(0, nextLength);
+        this.streamingDisplayed = nextContent;
+        this.replaceMessageContent(messageId, nextContent);
+
+        if (nextLength >= totalLength) {
+          this.stopAssistantStream({ complete: true });
+        }
+      }, 30);
+    },
+    stopAssistantStream({ complete = false, pause = false } = {}) {
+      if (!this.streamingMessageId) {
+        this.clearStreamingTimer();
+        if (pause) {
+          this.streamingPaused = true;
+        } else {
+          this.resetStreamingState();
+        }
+        return;
+      }
+      if (complete) {
+        this.replaceMessageContent(this.streamingMessageId, this.streamingTarget || this.streamingDisplayed);
+      }
+      this.clearStreamingTimer();
+      if (pause) {
+        this.streamingPaused = true;
+        return;
+      }
+      this.resetStreamingState();
+    },
+    resumeAssistantStream() {
+      if (
+        !this.streamingPaused ||
+        !this.streamingConversationId ||
+        this.streamingConversationId !== this.activeConversationId ||
+        !this.streamingMessageId ||
+        !this.streamingTarget ||
+        this.streamingTimer != null
+      ) {
+        return;
+      }
+      this.streamingPaused = false;
+      const totalLength = this.streamingTarget.length;
+      const chunkSize = Math.max(3, Math.ceil(totalLength / 120));
+      this.streamingTimer = window.setInterval(() => {
+        const nextLength = Math.min(this.streamingDisplayed.length + chunkSize, totalLength);
+        const nextContent = this.streamingTarget.slice(0, nextLength);
+        this.streamingDisplayed = nextContent;
+        this.replaceMessageContent(this.streamingMessageId, nextContent);
+
+        if (nextLength >= totalLength) {
+          this.stopAssistantStream({ complete: true });
+        }
+      }, 30);
+    },
+    clearStreamingTimer() {
+      if (this.streamingTimer != null) {
+        window.clearInterval(this.streamingTimer);
+        this.streamingTimer = null;
+      }
+    },
+    resetStreamingState() {
+      this.streamingMessageId = null;
+      this.streamingConversationId = null;
+      this.streamingTarget = '';
+      this.streamingDisplayed = '';
+      this.streamingPaused = false;
+    },
+    replaceMessageContent(messageId, nextContent) {
+      const index = this.messages.findIndex((item) => item.id === messageId);
+      if (index === -1) {
+        return;
+      }
+      const nextMessages = [...this.messages];
+      nextMessages.splice(index, 1, { ...nextMessages[index], content: nextContent });
+      this.messages = normalizeMessages(nextMessages);
     }
   }
 });

@@ -31,12 +31,16 @@
         v-if="activeConversation"
         :messages="messages"
         :is-sending="isSending"
+        :is-streaming="isStreaming"
+        :is-stream-paused="isStreamPaused"
         :domains="domainOptions"
         :selected-domains="activeDomains"
         :initial-domains-open="shouldOpenDomains"
         :texts="texts.chatWindow"
         @send="handleSendMessage"
         @update:domains="updateActiveDomains"
+        @stop-stream="handleStopStreaming"
+        @resume-stream="handleResumeStreaming"
       />
       <div v-else class="chat-view__placeholder">
         <div class="chat-view__welcome">
@@ -119,6 +123,8 @@ const conversations = computed(() => chatStore.conversations);
 const activeConversation = computed(() => chatStore.activeConversation);
 const messages = computed(() => chatStore.messages);
 const isSending = computed(() => chatStore.isActiveConversationSending);
+const isStreaming = computed(() => chatStore.isActiveConversationStreaming);
+const isStreamPaused = computed(() => chatStore.isActiveConversationStreamPaused);
 const activeConversationId = computed(() => chatStore.activeConversationId);
 const domainOptions = computed(() => domainsStore.items);
 const activeDomains = computed(() => chatStore.getConversationDomains(chatStore.activeConversationId));
@@ -171,6 +177,10 @@ const languagePack = {
       domainClear: '清除',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
       thinking: '助手正在思考…',
+      streaming: '助手正在回复…',
+      paused: '已暂停思考',
+      resume: '重新思考输出',
+      stop: '停止输出',
       placeholder: '输入问题，Shift+Enter 换行',
       send: '发送',
       sending: '发送中…',
@@ -228,6 +238,10 @@ const languagePack = {
       domainClear: 'Clear',
       empty: 'Start a new conversation and the assistant will answer based on the selected domains.',
       thinking: 'Assistant is thinking…',
+      streaming: 'Assistant is responding…',
+      paused: 'Generation paused',
+      resume: 'Resume response',
+      stop: 'Stop generation',
       placeholder: 'Type your question. Shift+Enter for a new line.',
       send: 'Send',
       sending: 'Sending…',
@@ -380,6 +394,14 @@ async function handleSendMessage(payload) {
   } catch (error) {
     console.error('发送消息失败', error);
   }
+}
+
+function handleStopStreaming() {
+  chatStore.stopAssistantStream({ complete: false, pause: true });
+}
+
+function handleResumeStreaming() {
+  chatStore.resumeAssistantStream();
 }
 
 function updateActiveDomains(domainIds) {

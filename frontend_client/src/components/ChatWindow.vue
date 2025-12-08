@@ -56,6 +56,18 @@
         <p>{{ texts.empty }}</p>
       </div>
       <div v-if="isSending" class="chat-window__thinking">{{ texts.thinking }}</div>
+      <div v-else-if="isStreaming" class="chat-window__streaming">
+        <span class="chat-window__streaming-label">{{ texts.streaming }}</span>
+        <button type="button" class="chat-window__stop" @click="emit('stop-stream')">
+          {{ texts.stop }}
+        </button>
+      </div>
+      <div v-else-if="isStreamPaused" class="chat-window__streaming chat-window__streaming--paused">
+        <span class="chat-window__streaming-label">{{ texts.paused }}</span>
+        <button type="button" class="chat-window__stop" @click="emit('resume-stream')">
+          {{ texts.resume }}
+        </button>
+      </div>
     </main>
 
     <form class="chat-window__composer" @submit.prevent="handleSubmit">
@@ -88,6 +100,14 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  isStreaming: {
+    type: Boolean,
+    default: false
+  },
+  isStreamPaused: {
+    type: Boolean,
+    default: false
+  },
   domains: {
     type: Array,
     default: () => []
@@ -112,6 +132,10 @@ const props = defineProps({
       domainClear: '清除',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
       thinking: '助手正在思考…',
+      streaming: '助手正在回复…',
+      paused: '已暂停思考',
+      resume: '重新思考输出',
+      stop: '停止输出',
       placeholder: '输入问题，Shift+Enter 换行',
       send: '发送',
       sending: '发送中…',
@@ -125,7 +149,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['send', 'update:domains']);
+const emit = defineEmits(['send', 'update:domains', 'stop-stream', 'resume-stream']);
 
 const draft = ref('');
 const domainsPanelOpen = ref(false);
@@ -151,6 +175,14 @@ watch(
 
 watch(
   () => props.messages.length,
+  async () => {
+    await nextTick();
+    scrollToBottom();
+  }
+);
+
+watch(
+  () => props.messages.map((message) => `${message.id}-${message.content?.length ?? 0}`).join('|'),
   async () => {
     await nextTick();
     scrollToBottom();
@@ -468,6 +500,42 @@ onMounted(scrollToBottom);
   color: #5a50b5;
   font-weight: 600;
   box-shadow: 0 12px 24px rgba(123, 91, 255, 0.15);
+}
+
+.chat-window__streaming {
+  align-self: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  background: rgba(31, 143, 229, 0.12);
+  color: #1f8fe5;
+  font-weight: 600;
+  padding: 0.65rem 1.1rem;
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(31, 143, 229, 0.12);
+}
+
+.chat-window__streaming--paused {
+  background: rgba(240, 168, 46, 0.14);
+  color: #c2800a;
+  box-shadow: 0 12px 24px rgba(240, 168, 46, 0.2);
+}
+
+.chat-window__stop {
+  border: none;
+  background: linear-gradient(135deg, #ff7b7b, #ff3c3c);
+  color: #fff;
+  font-weight: 700;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  box-shadow: 0 8px 18px rgba(255, 60, 60, 0.2);
+}
+
+.chat-window__stop:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(255, 60, 60, 0.3);
 }
 
 .chat-message {
