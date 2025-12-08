@@ -6,7 +6,7 @@ import logging
 import os
 from collections import defaultdict
 from functools import lru_cache
-from typing import Sequence
+from typing import Any, Sequence
 import re
 from urllib import error, request
 from dotenv import find_dotenv, load_dotenv
@@ -596,6 +596,45 @@ def build_context(chunks: list[Chunk]) -> str:
     return "\n\n".join(contents)
 
 
+def _extract_first_url(value: Any) -> str | None:
+    """在任意层级的元数据中寻找首个 URL。"""
+
+    if isinstance(value, str):
+        match = _URL_PATTERN.search(value)
+        return match.group(0) if match else None
+
+    if isinstance(value, dict):
+        for candidate in value.values():
+            url = _extract_first_url(candidate)
+            if url:
+                return url
+    elif isinstance(value, (list, tuple, set)):
+        for candidate in value:
+            url = _extract_first_url(candidate)
+            if url:
+                return url
+    return None
+
+
+def build_reference_entries(chunks: Sequence[Chunk]) -> list[tuple[str, str | None]]:
+    """从命中的 chunk 提取文档标题与可用的链接。"""
+
+    entries: list[tuple[str, str | None]] = []
+    seen_documents: set[int] = set()
+
+    for chunk in chunks:
+        if not chunk.document or chunk.document_id in seen_documents:
+            continue
+
+        seen_documents.add(chunk.document_id)
+        title = (chunk.document.title or "").strip() or f"Document {chunk.document_id}"
+        metadata = chunk.document.doc_metadata if isinstance(chunk.document.doc_metadata, dict) else {}
+        url = _extract_first_url(metadata)
+        entries.append((title, url))
+
+    return entries
+
+
 def chunk_to_memory_text(chunk: Chunk) -> str:
     """把单个 chunk 渲染成可持久化的“记忆”文本，只保留内容。"""
 
@@ -810,4 +849,15 @@ def answer(
     final_text = answer_text.strip() if answer_text else ""
     if not final_text:
         final_text = prompt_template["no_context"]
+
+    reference_entries = build_reference_entries(chunks)
+    if reference_entries:
+        lines: list[str] = []
+        for index, (title, url) in enumerate(reference_entries, start=1):
+            if url:
+                lines.append(f"{index}. {title}：{url}")
+            else:
+                lines.append(f"{index}. {title}")
+        final_text = f"{final_text}\n\n参考资料：\n" + "\n".join(lines)
+
     return final_text, references, chunks
