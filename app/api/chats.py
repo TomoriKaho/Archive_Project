@@ -23,6 +23,7 @@ from app.services.rag_service import (
     chunk_to_memory_text,
     compress_chunk_memory,
     compress_dialog_history,
+    normalize_language_code,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,7 @@ def create_message(
                 top_k=top_k,
                 history=history_payload,
                 memory_chunks=memory_chunks,
+                preferred_language=normalize_language_code(payload.language),
             )
         except RuntimeError as exc:
             logger.exception("rag answer failed: chat_id=%s", chat_id)

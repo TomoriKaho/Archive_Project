@@ -21,6 +21,10 @@ class MessageCreate(ORMModel):
     chat_id: int
     role: Role
     content: str = Field(..., min_length=1)
+    language: str | None = Field(
+        default=None,
+        description="期望助手回答所使用的语言编码，当前支持 zh 或 en",
+    )
     top_k: int | None = Field(
         default=None,
         ge=1,

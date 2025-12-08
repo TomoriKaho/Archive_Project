@@ -208,6 +208,8 @@ export const useChatStore = defineStore('client-chat', {
           role: payload.role || 'user',
           content
         };
+        const preferencesStore = usePreferencesStore();
+        body.language = preferencesStore.language === 'en' ? 'en' : 'zh';
         if (payload?.top_k) {
           body.top_k = payload.top_k;
         }

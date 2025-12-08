@@ -58,7 +58,66 @@ RAG_CHAT_TIMEOUT = int(os.getenv("RAG_CHAT_TIMEOUT", os.getenv("RAG_OLLAMA_TIMEO
 CHUNK_MEMORY_WINDOW_MULTIPLIER = int(os.getenv("RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER", "3"))
 """Number of historical chunk batches kept in memory, expressed as a multiplier of top_k."""
 
-_NO_CONTEXT_MESSAGE = "当前知识库中没有足够的信息回答该问题。"
+_FALLBACK_LANGUAGE = "zh"
+_PROMPT_TEMPLATES = {
+    "zh": {
+        "system": (
+            "你是一名严谨的档案解读助手，请像一位档案馆工作人员一样，用自然的中文回答用户的问题。\n\n"
+            "规则：\n"
+            "1. 严格依据检索到的档案资料与对话内容作答，不得凭空捏造；\n"
+            "2. 回答时不要说明资料是如何获得的，例如不要使用\n"
+            "“根据提供的档案片段”“根据以上资料”“档案中提到”等表述，\n"
+            "只需直接陈述档案记载的事实即可；\n"
+            "3. 你只需要回答最后一个问题，不要重新回答会话历史中的旧问题；\n"
+            "4. 在必要的位置添加换行以提升可读性；\n"
+            "5. 当前界面语言为中文，请始终使用中文回答问题。"
+        ),
+        "context_intro": "以下是与当前问题相关的档案片段，请严格基于这些内容进行回答：\n\n{context}",
+        "user_instruction_intro": "以下是用户在创建会话时提供的初始指示，请务必逐条严格遵守：\n{instructions}",
+        "memory_intro": "下面是若干档案内容的节选，请在回答问题时仅以这些内容为依据：\n\n{memory}",
+        "no_context": "当前知识库中没有足够的信息回答该问题。",
+    },
+    "en": {
+        "system": (
+            "You are a meticulous archive assistant. Answer like an archive staff member in natural English.\n\n"
+            "Rules:\n"
+            "1. Base your reply strictly on the retrieved archive snippets and dialog content; never fabricate information.\n"
+            "2. Do not mention how the information was obtained—avoid phrases like \"according to the provided snippets\" or \"the archive says\";\n"
+            "   simply state the facts.\n"
+            "3. Only answer the latest question; do not revisit earlier ones in the conversation.\n"
+            "4. Insert line breaks when helpful for readability.\n"
+            "5. The UI language is English; always reply in English."
+        ),
+        "context_intro": "Here are the archive snippets relevant to the question. Base your answer strictly on them:\n\n{context}",
+        "user_instruction_intro": "Initial user instructions for this chat—follow each item strictly:\n{instructions}",
+        "memory_intro": "Below are excerpts from archive content. Use only these passages when answering:\n\n{memory}",
+        "no_context": "There is not enough information in the knowledge base to answer this question.",
+    },
+}
+
+
+def resolve_prompt_template(language: str | None) -> tuple[str, dict[str, str]]:
+    """Return the normalized language and prompt template with fallback."""
+
+    normalized = normalize_language_code(language)
+    template = _PROMPT_TEMPLATES.get(normalized or _FALLBACK_LANGUAGE)
+    if not template:
+        normalized = _FALLBACK_LANGUAGE
+        template = _PROMPT_TEMPLATES[_FALLBACK_LANGUAGE]
+    return normalized or _FALLBACK_LANGUAGE, template
+
+
+def normalize_language_code(language: str | None) -> str | None:
+    """Normalize user-provided language code to supported values."""
+
+    if not language:
+        return None
+    lowered = language.strip().lower()
+    if lowered.startswith("en"):
+        return "en"
+    if lowered.startswith("zh") or lowered.startswith("cn"):
+        return "zh"
+    return None
 
 
 def index_chunks(chunks: Sequence[Chunk]) -> int:
@@ -656,9 +715,11 @@ def answer(
     top_k: int | None = None,
     history: Sequence[dict[str, str]] | None = None,
     memory_chunks: Sequence[str] | None = None,
+    preferred_language: str | None = None,
 ) -> tuple[str, list[tuple[int, float]], list[Chunk]]:
     """Run the complete RAG flow and return assistant answer plus references and chunks."""
 
+    _normalized_language, prompt_template = resolve_prompt_template(preferred_language)
     limit = top_k or DEFAULT_TOP_K
     chunks, references = retrieve_with_scores(
         question,
@@ -668,20 +729,10 @@ def answer(
         history=history,
     )
     if not references:
-        return _NO_CONTEXT_MESSAGE, [], []
+        return prompt_template["no_context"], [], []
 
     context = build_context(chunks)
-    system_prompt = """你是一名严谨的档案解读助手，请像一位档案馆工作人员一样，用自然的中文回答用户的问题。
-
-    规则：
-    1. 严格依据检索到的档案资料与对话内容作答，不得凭空捏造；
-    2. 回答时不要说明资料是如何获得的，例如不要使用
-    “根据提供的档案片段”“根据以上资料”“档案中提到”等表述，
-    只需直接陈述档案记载的事实即可；
-    3. 你只需要回答最后一个问题，不要重新回答会话历史中的旧问题；
-    4. 在必要的位置添加换行以提升可读性；
-    5. 请使用用户最后提出的问题的语言进行回答。默认用汉语回答，但如果用户使用英语，也请使用英语作答。
-    """
+    system_prompt = prompt_template["system"]
     history_items = list(history or [])
     user_system_prompts: list[str] = []
     filtered_history: list[dict[str, str]] = []
@@ -700,8 +751,8 @@ def answer(
     if user_system_prompts:
         joined_user_prompts = "\n".join(user_system_prompts)
         system_prompt = (
-            f"{system_prompt}\n\n以下是用户在创建会话时提供的初始指示，请务必逐条严格遵守：\n"
-            f"{joined_user_prompts}"
+            f"{system_prompt}\n\n"
+            f"{prompt_template['user_instruction_intro'].format(instructions=joined_user_prompts)}"
         )
     if memory_chunks:
         window = CHUNK_MEMORY_WINDOW_MULTIPLIER * limit if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0 else 0
@@ -711,8 +762,8 @@ def answer(
         if selected_memory:
             joined_memory = "\n\n".join(selected_memory)
             system_prompt = (
-                f"{system_prompt}\n\n下面是若干档案内容的节选，请在回答问题时仅以这些内容为依据：\n\n"
-                f"{joined_memory}"
+                f"{system_prompt}\n\n"
+                f"{prompt_template['memory_intro'].format(memory=joined_memory)}"
             )
 
         # ... 前面的 system_prompt / history 处理保持不变
@@ -726,10 +777,7 @@ def answer(
         messages.append(
             {
                 "role": "user",
-                "content": (
-                    "以下是与当前问题相关的档案片段，请严格基于这些内容进行回答：\n\n"
-                    f"{context}"
-                ),
+                "content": prompt_template["context_intro"].format(context=context),
             }
         )
 
@@ -761,5 +809,5 @@ def answer(
     answer_text = chat(messages)
     final_text = answer_text.strip() if answer_text else ""
     if not final_text:
-        final_text = _NO_CONTEXT_MESSAGE
+        final_text = prompt_template["no_context"]
     return final_text, references, chunks

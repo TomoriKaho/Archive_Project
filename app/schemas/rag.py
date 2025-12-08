@@ -14,6 +14,7 @@ class AskRequest(BaseModel):
     question: str = Field(..., min_length=1, description="用户提出的问题")
     top_k: int | None = Field(None, ge=1, le=100, description="召回的 chunk 数量")
     domain_ids: List[int] | None = Field(None, description="限制可用的 domain 列表")
+    language: str | None = Field(None, description="期望助手回答的语言编码，例如 zh 或 en")
 
 
 class Reference(BaseModel):

@@ -21,6 +21,7 @@ from app.services.rag_service import (
     answer,
     chunk_to_memory_text,
     index_chunks,
+    normalize_language_code,
     retrieve_with_scores,
 )
 
@@ -95,6 +96,7 @@ def ask_in_chat(
             top_k=top_k,
             history=history_payload,
             memory_chunks=memory_chunks,
+            preferred_language=normalize_language_code(payload.language),
         )
     except RuntimeError as exc:
         logger.exception("rag answer failed: chat_id=%s", chat_id)
