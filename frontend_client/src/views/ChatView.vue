@@ -41,6 +41,8 @@
         @update:domains="updateActiveDomains"
         @stop-stream="handleStopStreaming"
         @resume-stream="handleResumeStreaming"
+        @toggle-language="toggleLanguage"
+        @delete-conversation="handleDeleteActiveConversation"
       />
       <div v-else class="chat-view__placeholder">
         <div class="chat-view__welcome">
@@ -172,9 +174,14 @@ const languagePack = {
       noDomains: '未限定知识域，将在全部知识库中检索。',
       domainToggleOpen: '选择知识域',
       domainToggleClose: '收起知识域',
+      domainBadge: (count) => `已选${count}`,
       domainHint: '选择后仅检索勾选的知识域，                不勾选默认从全部知识域检索。',
       domainApply: '应用',
       domainClear: '清除',
+      languageToggle: '切换语言',
+      languageLabel: '中文',
+      languageFlag: '🇨🇳',
+      deleteConversation: '删除会话',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
       thinking: '助手正在思考…',
       streaming: '助手正在回复…',
@@ -232,10 +239,15 @@ const languagePack = {
       noDomains: 'No domain filter. Searching the entire knowledge base.',
       domainToggleOpen: 'Choose domains',
       domainToggleClose: 'Hide domains',
+      domainBadge: (count) => `${count} selected`,
       domainHint:
         'When selected, messages will only search the checked domains. Leave unchecked to search all domains.',
       domainApply: 'Apply',
       domainClear: 'Clear',
+      languageToggle: 'Switch language',
+      languageLabel: 'English',
+      languageFlag: '��🇸',
+      deleteConversation: 'Delete conversation',
       empty: 'Start a new conversation and the assistant will answer based on the selected domains.',
       thinking: 'Assistant is thinking…',
       streaming: 'Assistant is responding…',
@@ -385,6 +397,13 @@ function handleDeleteConversation(conversation) {
   showDeleteDialog.value = true;
 }
 
+function handleDeleteActiveConversation() {
+  if (!activeConversation.value) {
+    return;
+  }
+  handleDeleteConversation(activeConversation.value);
+}
+
 async function handleSendMessage(payload) {
   if (!chatStore.activeConversationId) {
     return;
@@ -413,6 +432,10 @@ function updateActiveDomains(domainIds) {
 
 function goHome() {
   router.push({ name: 'landing' });
+}
+
+function toggleLanguage() {
+  preferencesStore.toggleLanguage();
 }
 
 async function submitRenameDialog() {

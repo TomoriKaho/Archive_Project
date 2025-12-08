@@ -1,40 +1,17 @@
 <template>
   <div class="chat-window">
-    <header class="chat-window__header">
-      <div class="chat-window__info">
-        <p class="chat-window__subtitle" v-if="activeDomainNames.length">{{ selectedDomainsText }}</p>
-        <p class="chat-window__subtitle" v-else>{{ texts.noDomains }}</p>
-      </div>
-      <div v-if="domains.length" class="chat-window__domains">
-        <button type="button" class="chat-window__domains-toggle" @click="togglePanel">
-          {{ domainsPanelOpen ? texts.domainToggleClose : texts.domainToggleOpen }}
+
+    <div class="chat-window__topbar">
+      <div class="chat-window__top-actions">
+        <button type="button" class="chat-window__top-button" @click="emit('toggle-language')">
+          <span class="chat-window__top-flag" aria-hidden="true">{{ texts.languageFlag }}</span>
+          <span>{{ texts.languageLabel }}</span>
         </button>
-        <transition name="fade">
-          <div
-            v-if="domainsPanelOpen"
-            class="chat-window__domains-panel"
-            :class="{ 'chat-window__domains-panel--scrollable': shouldScrollDomains }"
-          >
-            <p class="chat-window__domains-hint">{{ texts.domainHint }}</p>
-            <div class="chat-window__domains-grid">
-              <label v-for="domain in domains" :key="domain.id" class="chat-window__domains-option">
-                <input
-                  type="checkbox"
-                  :value="domain.id"
-                  :checked="pendingSelection.has(domain.id)"
-                  @change="toggleDomain(domain.id)"
-                />
-                <span>{{ domain.name }}</span>
-              </label>
-            </div>
-            <div class="chat-window__domains-actions">
-              <button type="button" class="chat-window__domains-apply" @click="applyDomains">{{ texts.domainApply }}</button>
-              <button type="button" class="chat-window__domains-clear" @click="clearDomains">{{ texts.domainClear }}</button>
-            </div>
-          </div>
-        </transition>
+        <button type="button" class="chat-window__top-button chat-window__top-button--danger" @click="emit('delete-conversation')">
+          {{ texts.deleteConversation }}
+        </button>
       </div>
-    </header>
+    </div>
 
     <main class="chat-window__messages" ref="messageContainer">
       <template v-if="messages.length">
@@ -72,14 +49,48 @@
 
     <form class="chat-window__composer" @submit.prevent="handleSubmit">
       <textarea
+        ref="composerInput"
         v-model="draft"
         class="chat-window__input"
         :placeholder="texts.placeholder"
-        rows="3"
+        rows="1"
+        @input="autoResizeInput"
         @keydown.enter.exact.prevent="handleSubmit"
         @keydown.enter.shift.stop
       ></textarea>
       <div class="chat-window__composer-actions">
+        <div v-if="domains.length" class="chat-window__domains">
+          <button type="button" class="chat-window__domains-toggle" @click="togglePanel">
+            <span class="chat-window__domains-icon" aria-hidden="true">＋</span>
+            <span>{{ texts.domainToggleOpen }}</span>
+            <span v-if="selectedDomainsCount" class="chat-window__domains-badge">{{ domainBadge }}</span>
+            <span class="chat-window__domains-caret" aria-hidden="true">▴</span>
+          </button>
+          <transition name="fade">
+            <div
+              v-if="domainsPanelOpen"
+              class="chat-window__domains-panel"
+              :class="{ 'chat-window__domains-panel--scrollable': shouldScrollDomains }"
+            >
+              <p class="chat-window__domains-hint">{{ texts.domainHint }}</p>
+              <div class="chat-window__domains-grid">
+                <label v-for="domain in domains" :key="domain.id" class="chat-window__domains-option">
+                  <input
+                    type="checkbox"
+                    :value="domain.id"
+                    :checked="pendingSelection.has(domain.id)"
+                    @change="toggleDomain(domain.id)"
+                  />
+                  <span>{{ domain.name }}</span>
+                </label>
+              </div>
+              <div class="chat-window__domains-actions">
+                <button type="button" class="chat-window__domains-apply" @click="applyDomains">{{ texts.domainApply }}</button>
+                <button type="button" class="chat-window__domains-clear" @click="clearDomains">{{ texts.domainClear }}</button>
+              </div>
+            </div>
+          </transition>
+        </div>
         <button type="submit" class="chat-window__send" :disabled="isSending || !draft.trim()">
           {{ isSending ? texts.sending : texts.send }}
         </button>
@@ -127,9 +138,14 @@ const props = defineProps({
       noDomains: '未限定知识域，将在全部知识库中检索。',
       domainToggleOpen: '选择知识域',
       domainToggleClose: '收起知识域',
+      domainBadge: (count) => `已选${count}`,
       domainHint: '选择后仅检索勾选的知识域，                不勾选默认从全部知识域检索。',
       domainApply: '应用',
       domainClear: '清除',
+      languageToggle: '切换语言',
+      languageLabel: '中文',
+      languageFlag: '🇨🇳',
+      deleteConversation: '删除会话',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
       thinking: '助手正在思考…',
       streaming: '助手正在回复…',
@@ -149,12 +165,23 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['send', 'update:domains', 'stop-stream', 'resume-stream']);
+const emit = defineEmits([
+  'send',
+  'update:domains',
+  'stop-stream',
+  'resume-stream',
+  'toggle-language',
+  'delete-conversation'
+]);
 
 const draft = ref('');
+const composerInput = ref(null);
 const domainsPanelOpen = ref(false);
 const pendingSelection = ref(new Set(props.selectedDomains));
 const messageContainer = ref(null);
+
+const MIN_INPUT_HEIGHT = 48;
+const MAX_INPUT_HEIGHT = 240;
 
 watch(
   () => props.initialDomainsOpen,
@@ -189,23 +216,30 @@ watch(
   }
 );
 
-const activeDomainNames = computed(() => {
-  if (!props.domains.length || !props.selectedDomains.length) {
-    return [];
+watch(
+  draft,
+  () => {
+    nextTick(autoResizeInput);
   }
-  return props.domains
-    .filter((domain) => props.selectedDomains.includes(domain.id))
-    .map((domain) => domain.name);
-});
-
-const selectedDomainsText = computed(() => {
-  const label = props.texts.selectedDomainsLabel || '';
-  const joiner = props.texts.domainJoiner ?? '、';
-  const names = activeDomainNames.value.join(joiner);
-  return label ? `${label} ${names}` : names;
-});
+);
 
 const shouldScrollDomains = computed(() => props.domains.length > 2);
+const selectedDomainsCount = computed(() => pendingSelection.value.size);
+
+const domainBadge = computed(() => {
+  const count = selectedDomainsCount.value;
+  if (!count) {
+    return '';
+  }
+  const badge = props.texts?.domainBadge;
+  if (typeof badge === 'function') {
+    return badge(count);
+  }
+  if (typeof badge === 'string') {
+    return badge.replace('{count}', count);
+  }
+  return count.toString();
+});
 
 function togglePanel() {
   domainsPanelOpen.value = !domainsPanelOpen.value;
@@ -242,6 +276,7 @@ function handleSubmit() {
     domain_ids: Array.from(pendingSelection.value)
   });
   draft.value = '';
+  nextTick(autoResizeInput);
 }
 
 function renderRole(role) {
@@ -345,7 +380,22 @@ function scrollToBottom() {
   element.scrollTop = element.scrollHeight;
 }
 
-onMounted(scrollToBottom);
+onMounted(() => {
+  scrollToBottom();
+  autoResizeInput();
+});
+
+function autoResizeInput() {
+  const input = composerInput.value;
+  if (!input) {
+    return;
+  }
+  input.style.height = 'auto';
+  const nextHeight = Math.min(input.scrollHeight, MAX_INPUT_HEIGHT);
+  const clamped = Math.max(MIN_INPUT_HEIGHT, nextHeight);
+  input.style.height = `${clamped}px`;
+  input.style.overflowY = input.scrollHeight > MAX_INPUT_HEIGHT ? 'auto' : 'hidden';
+}
 </script>
 
 <style scoped lang="scss">
@@ -357,44 +407,102 @@ onMounted(scrollToBottom);
   padding: 2rem 2.5rem 2rem 4.5rem;
 }
 
-.chat-window__header {
+.chat-window__topbar {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1.5rem;
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid rgba(126, 139, 196, 0.25);
+  justify-content: flex-end;
+  border-bottom: 1px solid rgba(189, 201, 255, 0.6);
+  padding: 0.1rem 0 0.35rem;
 }
 
-.chat-window__info {
-  flex: 1;
+.chat-window__top-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: -0.15rem;
 }
 
-.chat-window__subtitle {
-  margin: 0;
-  color: #6071a3;
-  font-size: 0.9rem;
+.chat-window__top-button {
+  border: 1px solid #dfe4ff;
+  background: linear-gradient(135deg, #ffffff 0%, #f4f7ff 100%);
+  color: #1f2a56;
+  border-radius: 18px;
+  padding: 0.6rem 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+  box-shadow: 0 12px 28px rgba(26, 40, 90, 0.12);
+  font-size: 0.95rem;
+}
+
+.chat-window__top-button:hover {
+  background: #f6f8ff;
+  transform: translateY(-1px);
+}
+
+.chat-window__top-button--danger {
+  background: linear-gradient(135deg, #ff8484, #ff4b4b);
+  color: #fff;
+  border: none;
+}
+
+.chat-window__top-button--danger:hover {
+  background: linear-gradient(135deg, #ff6f6f, #ff3a3a);
+}
+
+.chat-window__top-flag {
+  font-size: 1.05rem;
+  line-height: 1;
+  display: inline-flex;
 }
 
 .chat-window__domains {
   position: relative;
+  display: inline-flex;
 }
 
 .chat-window__domains-toggle {
-  border: 1px solid #cdd5ff;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 999px;
-  padding: 0.5rem 1.25rem;
-  font-weight: 600;
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  background: rgba(218, 239, 255, 0.85);
   color: #1f8fe5;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 18px;
+  padding: 0.65rem 1.1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.chat-window__domains-toggle:hover {
+  background: rgba(193, 229, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.chat-window__domains-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.chat-window__domains-caret {
+  font-size: 0.85rem;
+  color: #1f8fe5;
+  transform: translateY(1px);
+}
+
+.chat-window__domains-badge {
+  background: #1f8fe5;
+  color: #fff;
+  border-radius: 12px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.75rem;
 }
 
 .chat-window__domains-panel {
   position: absolute;
-  right: 0;
-  top: 110%;
-  width: 256px;
+  left: 0;
+  bottom: calc(100% + 0.65rem);
+  width: 280px;
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 18px 40px rgba(26, 40, 90, 0.15);
@@ -598,13 +706,21 @@ onMounted(scrollToBottom);
   resize: none;
   font-size: 1rem;
   font-family: inherit;
-  line-height: 1.6;
+  line-height: 1.5;
   background: transparent;
+  min-height: 48px;
+  max-height: 240px;
+  overflow-y: hidden;
 }
 
 .chat-window__composer-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(189, 201, 255, 0.6);
+  flex-wrap: wrap;
 }
 
 .chat-window__send {
@@ -616,6 +732,7 @@ onMounted(scrollToBottom);
   color: #fff;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin-left: auto;
 }
 
 .chat-window__send:hover:not(:disabled) {
