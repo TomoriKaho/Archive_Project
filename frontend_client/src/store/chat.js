@@ -71,8 +71,7 @@ export const useChatStore = defineStore('client-chat', {
     activeConversationId: null,
     messages: [],
     isLoading: false,
-    isSending: false,
-    sendingConversationId: null,
+    sendingConversationIds: [],
     pendingMessages: {},
     streamingMessageId: null,
     streamingConversationId: null,
@@ -86,11 +85,7 @@ export const useChatStore = defineStore('client-chat', {
       return state.conversations.find((item) => item.id === state.activeConversationId) || null;
     },
     isActiveConversationSending(state) {
-      return (
-        state.isSending &&
-        state.activeConversationId != null &&
-        state.activeConversationId === state.sendingConversationId
-      );
+      return state.activeConversationId != null && state.sendingConversationIds.includes(state.activeConversationId);
     },
     getConversationDomains: (state) => (conversationId) => {
       if (!conversationId) {
@@ -223,8 +218,7 @@ export const useChatStore = defineStore('client-chat', {
       if (this.activeConversationId === conversationId) {
         this.messages = normalizeMessages([...this.messages, message]);
       }
-      this.isSending = true;
-      this.sendingConversationId = conversationId;
+      this.addSendingConversation(conversationId);
       try {
         const body = {
           chat_id: conversationId,
@@ -279,10 +273,7 @@ export const useChatStore = defineStore('client-chat', {
         }
         throw error;
       } finally {
-        this.isSending = false;
-        if (this.sendingConversationId === conversationId) {
-          this.sendingConversationId = null;
-        }
+        this.removeSendingConversation(conversationId);
       }
     },
     addPendingMessage(conversationId, message) {
@@ -350,7 +341,7 @@ export const useChatStore = defineStore('client-chat', {
       const wasActive = this.activeConversationId === conversationId;
       this.conversations = this.conversations.filter((item) => item.id !== conversationId);
       const { [conversationId]: _removed, ...rest } = this.conversationDomains;
-      this.conversationDomains = rest;
+        this.conversationDomains = rest;
       const { [conversationId]: _pendingRemoved, ...pendingRest } = this.pendingMessages;
       this.pendingMessages = pendingRest;
       if (wasActive) {
@@ -460,6 +451,24 @@ export const useChatStore = defineStore('client-chat', {
       this.streamingTarget = '';
       this.streamingDisplayed = '';
       this.streamingPaused = false;
+    },
+    addSendingConversation(conversationId) {
+      if (!conversationId) {
+        return;
+      }
+      if (this.sendingConversationIds.includes(conversationId)) {
+        return;
+      }
+      this.sendingConversationIds = [...this.sendingConversationIds, conversationId];
+    },
+    removeSendingConversation(conversationId) {
+      if (!conversationId) {
+        return;
+      }
+      if (!this.sendingConversationIds.includes(conversationId)) {
+        return;
+      }
+      this.sendingConversationIds = this.sendingConversationIds.filter((id) => id !== conversationId);
     },
     replaceMessageContent(messageId, nextContent) {
       const index = this.messages.findIndex((item) => item.id === messageId);
