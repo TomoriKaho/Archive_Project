@@ -463,9 +463,123 @@ const chunkRangeLabel = computed(() => {
   return `${start}-${end} / ${chunkTotal.value}`;
 });
 
+function extractRootKey(path) {
+  const value = String(path || '');
+  if (!value) return '';
+  const colonIndex = value.indexOf(':');
+  const bracketIndex = value.indexOf('[');
+  const cutoff = [colonIndex, bracketIndex]
+    .filter((index) => index >= 0)
+    .reduce((min, current) => Math.min(min, current), value.length);
+  return value.slice(0, cutoff);
+}
+
+function parsePathTokens(path) {
+  const value = String(path || '');
+  if (!value) return [];
+
+  const tokens = [];
+  const segments = value.split(':');
+  const segmentPattern = /([^\[\]]+)|(\[(\d+)\])/g;
+
+  for (const segment of segments) {
+    segmentPattern.lastIndex = 0;
+    let match = segmentPattern.exec(segment);
+    while (match) {
+      if (match[1]) {
+        tokens.push(match[1]);
+      } else if (match[3]) {
+        tokens.push(Number(match[3]));
+      }
+      match = segmentPattern.exec(segment);
+    }
+  }
+
+  return tokens;
+}
+
+function buildStructuredRow(rawHeaders, row) {
+  const result = {};
+  const cells = Array.isArray(row) ? row : [row];
+
+  rawHeaders.forEach((path, index) => {
+    if (index >= cells.length) return;
+    const tokens = parsePathTokens(path);
+    if (!tokens.length) return;
+
+    let current = result;
+    const value = cells[index];
+
+    tokens.forEach((token, tokenIndex) => {
+      const isLast = tokenIndex === tokens.length - 1;
+      const nextToken = tokens[tokenIndex + 1];
+      const shouldUseArray = typeof nextToken === 'number';
+
+      if (isLast) {
+        if (typeof token === 'number') {
+          if (Array.isArray(current)) {
+            current[token] = value;
+          }
+        } else if (current && typeof current === 'object') {
+          current[token] = value;
+        }
+        return;
+      }
+
+      if (typeof token === 'number') {
+        if (!Array.isArray(current)) {
+          return;
+        }
+        if (!current[token] || typeof current[token] !== 'object') {
+          current[token] = shouldUseArray ? [] : {};
+        }
+        current = current[token];
+      } else {
+        if (!current[token] || typeof current[token] !== 'object') {
+          current[token] = shouldUseArray ? [] : {};
+        }
+        current = current[token];
+      }
+    });
+  });
+
+  return result;
+}
+
+function formatStructuredCell(structuredRow, rootKey) {
+  if (!structuredRow || !rootKey) return '';
+  const value = structuredRow[rootKey];
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
 const contentHeaders = computed(() => {
   const page = contentPage.value;
   if (!page) return [];
+
+  if (page.mode === 'json') {
+    const rawHeaders = Array.isArray(page.headers) ? page.headers : [];
+    const rootHeaders = [];
+
+    for (const path of rawHeaders) {
+      const rootKey = extractRootKey(path);
+      if (rootKey && !rootHeaders.includes(rootKey)) {
+        rootHeaders.push(rootKey);
+      }
+    }
+
+    if (rootHeaders.length) {
+      return rootHeaders;
+    }
+  }
+
   const headers = Array.isArray(page.headers) ? page.headers : [];
   if (headers.length) {
     return headers;
@@ -486,6 +600,19 @@ const normalizedRows = computed(() => {
   const limit = resolveContentLimit(page);
   const rows = Array.isArray(page.rows) ? page.rows : [];
   const limitedRows = limit ? rows.slice(0, limit) : rows;
+
+  if (page.mode === 'json') {
+    const rawHeaders = Array.isArray(page.headers) ? page.headers : [];
+    if (!rawHeaders.length || !headers.length) {
+      return limitedRows;
+    }
+
+    return limitedRows.map((row) => {
+      const structuredRow = buildStructuredRow(rawHeaders, row);
+      return headers.map((headerKey) => formatStructuredCell(structuredRow, headerKey));
+    });
+  }
+
   if (!targetLength) {
     return limitedRows;
   }
