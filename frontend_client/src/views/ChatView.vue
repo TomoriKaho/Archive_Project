@@ -33,6 +33,7 @@
         :is-sending="isSending"
         :is-streaming="isStreaming"
         :is-stream-paused="isStreamPaused"
+        :can-restart="canRestart"
         :domains="domainOptions"
         :selected-domains="activeDomains"
         :initial-domains-open="shouldOpenDomains"
@@ -41,6 +42,8 @@
         @update:domains="updateActiveDomains"
         @stop-stream="handleStopStreaming"
         @resume-stream="handleResumeStreaming"
+        @stop-thinking="handleStopThinking"
+        @restart-thinking="handleRestartThinking"
         @toggle-language="toggleLanguage"
         @delete-conversation="handleDeleteActiveConversation"
       />
@@ -130,6 +133,21 @@ const isStreamPaused = computed(() => chatStore.isActiveConversationStreamPaused
 const activeConversationId = computed(() => chatStore.activeConversationId);
 const domainOptions = computed(() => domainsStore.items);
 const activeDomains = computed(() => chatStore.getConversationDomains(chatStore.activeConversationId));
+const canRestart = computed(() => {
+  const conversationId = chatStore.activeConversationId;
+  if (!conversationId) {
+    return false;
+  }
+  const stopped = chatStore.stoppedThinkingConversationId === conversationId;
+  const lastAttemptMatches = chatStore.lastSendAttempt?.conversationId === conversationId;
+  return (
+    stopped &&
+    lastAttemptMatches &&
+    !chatStore.isActiveConversationSending &&
+    !chatStore.isActiveConversationStreaming &&
+    !chatStore.isActiveConversationStreamPaused
+  );
+});
 
 const language = computed(() => preferencesStore.language);
 
@@ -184,6 +202,9 @@ const languagePack = {
       deleteConversation: '删除会话',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
       thinking: '助手正在思考…',
+      stopThinking: '停止思考',
+      stopped: '已停止思考',
+      restart: '重新思考',
       streaming: '助手正在回复…',
       paused: '已暂停思考',
       resume: '重新思考输出',
@@ -250,6 +271,9 @@ const languagePack = {
       deleteConversation: 'Delete conversation',
       empty: 'Start a new conversation and the assistant will answer based on the selected domains.',
       thinking: 'Assistant is thinking…',
+      stopThinking: 'Stop thinking',
+      stopped: 'Thinking stopped',
+      restart: 'Restart thinking',
       streaming: 'Assistant is responding…',
       paused: 'Generation paused',
       resume: 'Resume response',
@@ -423,6 +447,18 @@ function handleResumeStreaming() {
   chatStore.resumeAssistantStream();
 }
 
+function handleStopThinking() {
+  chatStore.stopActiveConversationThinking();
+}
+
+async function handleRestartThinking() {
+  try {
+    await chatStore.restartLastAttempt();
+  } catch (error) {
+    console.error('重新思考失败', error);
+  }
+}
+
 function updateActiveDomains(domainIds) {
   if (!chatStore.activeConversationId) {
     return;
@@ -468,6 +504,7 @@ async function confirmDeleteDialog() {
   isDeletingConversation.value = true;
   const targetId = deleteTarget.value.id;
   try {
+    chatStore.stopConversationThinking(targetId);
     await chatStore.removeConversation(targetId);
     if (!chatStore.activeConversationId && chatStore.conversations.length) {
       const nextId = chatStore.conversations[0].id;

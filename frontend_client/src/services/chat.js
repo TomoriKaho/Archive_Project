@@ -22,6 +22,6 @@ export function fetchConversationMessages(conversationId, params = {}) {
   return apiClient.get(`/chats/${conversationId}/messages`, { params });
 }
 
-export function sendConversationMessage(conversationId, payload) {
-  return apiClient.post(`/chats/${conversationId}/messages`, payload);
+export function sendConversationMessage(conversationId, payload, options = {}) {
+  return apiClient.post(`/chats/${conversationId}/messages`, payload, options);
 }

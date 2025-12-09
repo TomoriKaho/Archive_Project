@@ -78,7 +78,10 @@ export const useChatStore = defineStore('client-chat', {
     streamingTimer: null,
     streamingTarget: '',
     streamingDisplayed: '',
-    streamingPaused: false
+    streamingPaused: false,
+    sendAbortControllers: {},
+    lastSendAttempt: null,
+    stoppedThinkingConversationId: null
   }),
   getters: {
     activeConversation(state) {
@@ -143,6 +146,9 @@ export const useChatStore = defineStore('client-chat', {
     },
     async selectConversation(conversationId) {
       this.stopAssistantStream({ complete: false });
+      this.abortActiveSend();
+      this.lastSendAttempt = null;
+      this.stoppedThinkingConversationId = null;
       if (!conversationId) {
         this.activeConversationId = null;
         this.messages = [];
@@ -197,7 +203,7 @@ export const useChatStore = defineStore('client-chat', {
       }
       return data.id;
     },
-    async sendMessage(conversationId, payload) {
+    async sendMessage(conversationId, payload, { reuseMessageId = null } = {}) {
       if (!conversationId) {
         return null;
       }
@@ -206,19 +212,44 @@ export const useChatStore = defineStore('client-chat', {
         return null;
       }
       this.stopAssistantStream({ complete: false });
-      const tempId = `temp-${Date.now()}`;
-      const message = {
-        id: tempId,
-        role: payload.role || 'user',
-        content,
-        created_at: new Date().toISOString(),
-        conversation_id: conversationId
+      this.abortActiveSend();
+      this.stoppedThinkingConversationId = null;
+      const existingPending = reuseMessageId
+        ? this.getPendingMessages(conversationId).find((item) => item.id === reuseMessageId)
+        : null;
+      const existingMessage = reuseMessageId
+        ? this.messages.find((item) => item.id === reuseMessageId) || existingPending
+        : null;
+      const messageId = reuseMessageId || `temp-${Date.now()}`;
+      const baseMessage =
+        existingMessage ||
+        ({
+          id: messageId,
+          role: payload.role || 'user',
+          content,
+          created_at: new Date().toISOString(),
+          conversation_id: conversationId
+        });
+
+      this.lastSendAttempt = {
+        conversationId,
+        messageId,
+        payload: {
+          ...payload,
+          content
+        }
       };
-      this.addPendingMessage(conversationId, message);
-      if (this.activeConversationId === conversationId) {
-        this.messages = normalizeMessages([...this.messages, message]);
+
+      if (!existingPending) {
+        this.addPendingMessage(conversationId, baseMessage);
+      }
+      const hasMessageInState = this.messages.some((item) => item.id === baseMessage.id);
+      if (!hasMessageInState && this.activeConversationId === conversationId) {
+        this.messages = normalizeMessages([...this.messages, baseMessage]);
       }
       this.addSendingConversation(conversationId);
+      const controller = new AbortController();
+      this.setSendAbortController(conversationId, controller);
       try {
         const body = {
           chat_id: conversationId,
@@ -241,11 +272,11 @@ export const useChatStore = defineStore('client-chat', {
             body.domain_ids = stored;
           }
         }
-        const { data } = await sendConversationMessage(conversationId, body);
-        this.removePendingMessage(conversationId, tempId);
+        const { data } = await sendConversationMessage(conversationId, body, { signal: controller.signal });
+        this.removePendingMessage(conversationId, messageId);
         if (this.activeConversationId === conversationId) {
           const nextMessages = [...this.messages];
-          const index = nextMessages.findIndex((item) => item.id === tempId);
+          const index = nextMessages.findIndex((item) => item.id === messageId);
           if (data?.user) {
             if (index !== -1) {
               nextMessages.splice(index, 1, data.user);
@@ -253,7 +284,7 @@ export const useChatStore = defineStore('client-chat', {
               nextMessages.push(data.user);
             }
           } else if (index !== -1) {
-            nextMessages.splice(index, 1, { ...message, id: tempId + '-confirmed' });
+            nextMessages.splice(index, 1, { ...baseMessage, id: `${messageId}-confirmed` });
           }
           this.messages = normalizeMessages(nextMessages);
           if (data?.assistant) {
@@ -262,9 +293,13 @@ export const useChatStore = defineStore('client-chat', {
         }
         return data;
       } catch (error) {
-        this.removePendingMessage(conversationId, tempId);
+        const isCanceled = error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
+        if (isCanceled) {
+          return null;
+        }
+        this.removePendingMessage(conversationId, messageId);
         if (this.activeConversationId === conversationId) {
-          const index = this.messages.findIndex((item) => item.id === tempId);
+          const index = this.messages.findIndex((item) => item.id === messageId);
           if (index !== -1) {
             const nextMessages = [...this.messages];
             nextMessages.splice(index, 1);
@@ -274,6 +309,13 @@ export const useChatStore = defineStore('client-chat', {
         throw error;
       } finally {
         this.removeSendingConversation(conversationId);
+        this.clearSendAbortController(conversationId);
+        if (!this.sendingConversationIds.length) {
+          const wasStopped = this.stoppedThinkingConversationId === conversationId;
+          if (!wasStopped) {
+            this.lastSendAttempt = null;
+          }
+        }
       }
     },
     addPendingMessage(conversationId, message) {
@@ -308,6 +350,31 @@ export const useChatStore = defineStore('client-chat', {
       const pending = this.pendingMessages[conversationId];
       return Array.isArray(pending) ? [...pending] : [];
     },
+    setSendAbortController(conversationId, controller) {
+      if (!conversationId) {
+        return;
+      }
+      this.sendAbortControllers = {
+        ...this.sendAbortControllers,
+        [conversationId]: controller
+      };
+    },
+    clearSendAbortController(conversationId) {
+      if (!conversationId) {
+        return;
+      }
+      const { [conversationId]: _removed, ...rest } = this.sendAbortControllers;
+      this.sendAbortControllers = rest;
+    },
+    abortActiveSend() {
+      if (!this.activeConversationId) {
+        return;
+      }
+      const controller = this.sendAbortControllers[this.activeConversationId];
+      if (controller) {
+        controller.abort();
+      }
+    },
     setConversationDomains(conversationId, domainIds) {
       if (!conversationId) {
         return;
@@ -337,11 +404,19 @@ export const useChatStore = defineStore('client-chat', {
       if (!conversationId) {
         return;
       }
+      this.stopConversationThinking(conversationId);
+      this.clearSendAbortController(conversationId);
+      if (this.lastSendAttempt?.conversationId === conversationId) {
+        this.lastSendAttempt = null;
+      }
+      if (this.stoppedThinkingConversationId === conversationId) {
+        this.stoppedThinkingConversationId = null;
+      }
       await deleteConversation(conversationId);
       const wasActive = this.activeConversationId === conversationId;
       this.conversations = this.conversations.filter((item) => item.id !== conversationId);
       const { [conversationId]: _removed, ...rest } = this.conversationDomains;
-        this.conversationDomains = rest;
+      this.conversationDomains = rest;
       const { [conversationId]: _pendingRemoved, ...pendingRest } = this.pendingMessages;
       this.pendingMessages = pendingRest;
       if (wasActive) {
@@ -354,6 +429,41 @@ export const useChatStore = defineStore('client-chat', {
           this.messages = [];
         }
       }
+    },
+    stopConversationThinking(conversationId) {
+      if (!conversationId) {
+        this.stopAssistantStream({ complete: false });
+        return;
+      }
+      const controller = this.sendAbortControllers[conversationId];
+      const isSending = this.sendingConversationIds.includes(conversationId);
+      if (controller && isSending) {
+        if (conversationId === this.activeConversationId) {
+          this.stoppedThinkingConversationId = conversationId;
+        }
+        controller.abort();
+      }
+      if (this.streamingConversationId === conversationId) {
+        this.stopAssistantStream({ complete: false });
+      }
+    },
+    stopActiveConversationThinking() {
+      if (!this.activeConversationId) {
+        this.stopAssistantStream({ complete: false });
+        return;
+      }
+      this.stopConversationThinking(this.activeConversationId);
+    },
+    restartLastAttempt() {
+      const attempt = this.lastSendAttempt;
+      if (!attempt || attempt.conversationId !== this.activeConversationId) {
+        return;
+      }
+      this.lastSendAttempt = null;
+      this.stoppedThinkingConversationId = null;
+      return this.sendMessage(attempt.conversationId, attempt.payload, {
+        reuseMessageId: attempt.messageId
+      });
     },
     startAssistantStream(conversationId, assistant) {
       if (!assistant) {

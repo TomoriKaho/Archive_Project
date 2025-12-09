@@ -32,7 +32,18 @@
       <div v-else class="chat-window__empty">
         <p>{{ texts.empty }}</p>
       </div>
-      <div v-if="isSending" class="chat-window__thinking">{{ texts.thinking }}</div>
+      <div v-if="isSending" class="chat-window__streaming chat-window__streaming--thinking">
+        <span class="chat-window__streaming-label">{{ texts.thinking }}</span>
+        <button type="button" class="chat-window__stop" @click="emit('stop-thinking')">
+          {{ texts.stopThinking || texts.stop }}
+        </button>
+      </div>
+      <div v-else-if="canRestart" class="chat-window__streaming chat-window__streaming--stopped">
+        <span class="chat-window__streaming-label">{{ texts.stopped }}</span>
+        <button type="button" class="chat-window__stop chat-window__stop--restart" @click="emit('restart-thinking')">
+          {{ texts.restart }}
+        </button>
+      </div>
       <div v-else-if="isStreaming" class="chat-window__streaming">
         <span class="chat-window__streaming-label">{{ texts.streaming }}</span>
         <button type="button" class="chat-window__stop" @click="emit('stop-stream')">
@@ -119,6 +130,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  canRestart: {
+    type: Boolean,
+    default: false
+  },
   domains: {
     type: Array,
     default: () => []
@@ -148,6 +163,9 @@ const props = defineProps({
       deleteConversation: '删除会话',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
       thinking: '助手正在思考…',
+      stopThinking: '停止思考',
+      stopped: '已停止思考',
+      restart: '重新思考',
       streaming: '助手正在回复…',
       paused: '已暂停思考',
       resume: '重新思考输出',
@@ -170,6 +188,8 @@ const emit = defineEmits([
   'update:domains',
   'stop-stream',
   'resume-stream',
+  'stop-thinking',
+  'restart-thinking',
   'toggle-language',
   'delete-conversation'
 ]);
@@ -602,16 +622,6 @@ function autoResizeInput() {
   text-align: center;
 }
 
-.chat-window__thinking {
-  align-self: flex-start;
-  padding: 0.65rem 1.1rem;
-  border-radius: 12px;
-  background: rgba(123, 91, 255, 0.12);
-  color: #5a50b5;
-  font-weight: 600;
-  box-shadow: 0 12px 24px rgba(123, 91, 255, 0.15);
-}
-
 .chat-window__streaming {
   align-self: flex-start;
   display: flex;
@@ -623,6 +633,18 @@ function autoResizeInput() {
   padding: 0.65rem 1.1rem;
   border-radius: 12px;
   box-shadow: 0 12px 24px rgba(31, 143, 229, 0.12);
+}
+
+.chat-window__streaming--thinking {
+  background: rgba(123, 91, 255, 0.12);
+  color: #5a50b5;
+  box-shadow: 0 12px 24px rgba(123, 91, 255, 0.15);
+}
+
+.chat-window__streaming--stopped {
+  background: rgba(91, 191, 123, 0.14);
+  color: #2b9d63;
+  box-shadow: 0 12px 24px rgba(43, 157, 99, 0.18);
 }
 
 .chat-window__streaming--paused {
@@ -646,6 +668,11 @@ function autoResizeInput() {
 .chat-window__stop:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 20px rgba(255, 60, 60, 0.3);
+}
+
+.chat-window__stop--restart {
+  background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
+  box-shadow: 0 8px 18px rgba(31, 143, 229, 0.25);
 }
 
 .chat-message {
