@@ -95,6 +95,11 @@ _PROMPT_TEMPLATES = {
     },
 }
 
+_REFERENCE_LABELS = {
+    "zh": {"heading": "参考资料", "heading_separator": "：", "url_separator": "："},
+    "en": {"heading": "References", "heading_separator": ":", "url_separator": ": "},
+}
+
 
 def resolve_prompt_template(language: str | None) -> tuple[str, dict[str, str]]:
     """Return the normalized language and prompt template with fallback."""
@@ -635,6 +640,24 @@ def build_reference_entries(chunks: Sequence[Chunk]) -> list[tuple[str, str | No
     return entries
 
 
+def format_references(entries: Sequence[tuple[str, str | None]], language: str) -> str:
+    """Render references using the requested language, falling back to Chinese."""
+
+    labels = _REFERENCE_LABELS.get(language) or _REFERENCE_LABELS[_FALLBACK_LANGUAGE]
+    heading = labels.get("heading", "参考资料")
+    heading_separator = labels.get("heading_separator", "：")
+    url_separator = labels.get("url_separator", "：")
+
+    lines: list[str] = []
+    for index, (title, url) in enumerate(entries, start=1):
+        if url:
+            lines.append(f"{index}. {title}{url_separator}{url}")
+        else:
+            lines.append(f"{index}. {title}")
+
+    return f"{heading}{heading_separator}\n" + "\n".join(lines)
+
+
 def chunk_to_memory_text(chunk: Chunk) -> str:
     """把单个 chunk 渲染成可持久化的“记忆”文本，只保留内容。"""
 
@@ -852,12 +875,7 @@ def answer(
 
     reference_entries = build_reference_entries(chunks)
     if reference_entries:
-        lines: list[str] = []
-        for index, (title, url) in enumerate(reference_entries, start=1):
-            if url:
-                lines.append(f"{index}. {title}：{url}")
-            else:
-                lines.append(f"{index}. {title}")
-        final_text = f"{final_text}\n\n参考资料：\n" + "\n".join(lines)
+        reference_block = format_references(reference_entries, _normalized_language)
+        final_text = f"{final_text}\n\n{reference_block}"
 
     return final_text, references, chunks
