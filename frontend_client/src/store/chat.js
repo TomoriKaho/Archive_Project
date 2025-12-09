@@ -406,19 +406,24 @@ export const useChatStore = defineStore('client-chat', {
       }
       this.stopConversationThinking(conversationId);
       this.clearSendAbortController(conversationId);
+      this.removeSendingConversation(conversationId);
       if (this.lastSendAttempt?.conversationId === conversationId) {
         this.lastSendAttempt = null;
       }
       if (this.stoppedThinkingConversationId === conversationId) {
         this.stoppedThinkingConversationId = null;
       }
-      await deleteConversation(conversationId);
+      const deletePromise = deleteConversation(conversationId);
       const wasActive = this.activeConversationId === conversationId;
       this.conversations = this.conversations.filter((item) => item.id !== conversationId);
       const { [conversationId]: _removed, ...rest } = this.conversationDomains;
       this.conversationDomains = rest;
       const { [conversationId]: _pendingRemoved, ...pendingRest } = this.pendingMessages;
       this.pendingMessages = pendingRest;
+      deletePromise.catch((error) => {
+        console.error('删除会话失败', error);
+        this.loadConversations();
+      });
       if (wasActive) {
         if (this.conversations.length) {
           const nextId = this.conversations[0].id;
