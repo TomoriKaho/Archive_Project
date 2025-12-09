@@ -267,7 +267,7 @@ const languagePack = {
       domainClear: 'Clear',
       languageToggle: 'Switch language',
       languageLabel: 'English',
-      languageFlag: '��🇸',
+      languageFlag: '🇺🇸',
       deleteConversation: 'Delete conversation',
       empty: 'Start a new conversation and the assistant will answer based on the selected domains.',
       thinking: 'Assistant is thinking…',
