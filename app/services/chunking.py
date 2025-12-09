@@ -13,69 +13,104 @@ from typing import Any, Dict, List  # 类型注解辅助
 from app.models.entities import Document  # 引入Document模型以读取元数据
 
 logger = logging.getLogger(__name__)  # 初始化日志
+CHUNK_SIZE = 400;
 
-
-def chunk_text_sliding_window(text: str, size: int = 250, overlap: int = 50) -> List[str]:
-    """使用滑动窗口算法切分长文本。"""
+def chunk_text_sliding_window(text: str, size: int = 400, overlap: int = 50) -> List[str]:
+    """使用滑动窗口算法切分长文本。
+    额外保证：若英文类单词在窗口边界被截断，则下一个chunk会回退起点以完整包含该单词，
+    即允许实际重叠长度超过 overlap。
+    """
     if not text:
-        return []  # 空文本直接返回空列表
+        return []
     if size <= 0:
-        raise ValueError("size must be positive")  # 防御性编程避免非法参数
+        raise ValueError("size must be positive")
     if overlap < 0:
-        raise ValueError("overlap must be non-negative")  # 避免负数重叠
-    step = size - overlap  # 计算每次移动步长
-    if step <= 0:
-        raise ValueError("size must be greater than overlap")  # 避免无限循环
-    def _chunk_plain_text(value: str) -> List[str]:
-        """按滑动窗口切分非 URL 文本。"""
+        raise ValueError("overlap must be non-negative")
 
+    step = size - overlap
+    if step <= 0:
+        raise ValueError("size must be greater than overlap")
+
+    # 仅对“有空格分词习惯”的 ASCII 类单词做保护，避免对中日文造成奇怪回退
+    word_char_re = re.compile(r"[A-Za-z0-9_]")
+    def _is_word_char(ch: str) -> bool:
+        return bool(word_char_re.match(ch))
+
+    def _adjust_start_to_word_boundary(value: str, proposed_start: int, prev_start: int) -> int:
+        """若 proposed_start 落在单词内部，则回退到该单词起点。
+        允许实际 overlap 变大。
+        """
+        n = len(value)
+        if proposed_start <= 0 or proposed_start >= n:
+            return proposed_start
+
+        # 判断是否位于“单词中间”
+        if _is_word_char(value[proposed_start]) and _is_word_char(value[proposed_start - 1]):
+            i = proposed_start
+            while i > 0 and _is_word_char(value[i - 1]):
+                i -= 1
+
+            # 防止极端超长单词导致不前进
+            if i <= prev_start:
+                return proposed_start
+            return i
+
+        return proposed_start
+
+    def _chunk_plain_text(value: str) -> List[str]:
+        """按滑动窗口切分非 URL 文本，并做单词边界保护。"""
         if not value:
             return []
 
         result: List[str] = []
         start = 0
         text_length = len(value)
+
         while start < text_length:
             end = min(start + size, text_length)
             result.append(value[start:end])
             if end == text_length:
                 break
-            start += step
+
+            proposed_start = start + step
+            start = _adjust_start_to_word_boundary(value, proposed_start, start)
+
         return result
 
     url_pattern = re.compile(r"https?://[^\s<>\u3000\"']+", re.IGNORECASE)
-    chunks: List[str] = []  # 初始化结果容器
+    chunks: List[str] = []
     cursor = 0
-    text_length = len(text)  # 使用字符长度而非字节，适配多语言
+    text_length = len(text)
 
     for match in url_pattern.finditer(text):
         url_start, url_end = match.span()
         line_start = text.rfind("\n", 0, url_start)
         line_start = 0 if line_start == -1 else line_start + 1
+
         prefix_start = url_start
         prefix_slice = text[line_start:url_start]
-        # 若 URL 前存在“档案请求地址：”等提示信息，确保与链接一起放入同一 chunk
         label_match = re.search(r"档案请求地址：\s*$", prefix_slice)
         if label_match:
             prefix_start = line_start + label_match.start()
 
         chunks.extend(_chunk_plain_text(text[cursor:prefix_start]))
+
         url_chunk = text[prefix_start:url_end]
         if url_chunk:
             chunks.append(url_chunk)
+
         cursor = url_end
 
     chunks.extend(_chunk_plain_text(text[cursor:]))
+
     logger.info(
         "chunk_sliding_window length=%s size=%s overlap=%s count=%s",
         text_length,
         size,
         overlap,
         len(chunks),
-    )  # 记录切分统计
-    return chunks  # 返回所有窗口
-    # 设计说明：滑动窗口保证相邻chunk存在overlap字符重叠，利于上层召回上下文。
-
+    )
+    return chunks
 
 def _flatten_structured_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """将嵌套的结构化数据打平成以冒号分隔的键路径。"""
@@ -135,7 +170,7 @@ def _split_value_with_window(
 
 def chunk_structured_entities(
     entities: List[Dict[str, Any]],
-    max_len: int = 250,
+    max_len: int = CHUNK_SIZE,
     overlap: int = 50,
 ) -> List[str]:
     """针对结构化实体列表生成紧凑描述字符串。"""
@@ -326,7 +361,7 @@ def parse_structured_entities_from_json(json_text: str) -> List[Dict[str, Any]]:
 def make_chunks(
     document: Document,
     content: str,
-    size: int = 250,
+    size: int = CHUNK_SIZE,
     overlap: int = 50,
     structured_entities: List[Dict[str, Any]] | None = None,
 ) -> List[str]:
