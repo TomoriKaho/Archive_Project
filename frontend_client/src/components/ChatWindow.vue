@@ -180,7 +180,7 @@ const domainsPanelOpen = ref(false);
 const pendingSelection = ref(new Set(props.selectedDomains));
 const messageContainer = ref(null);
 
-const MIN_INPUT_HEIGHT = 48;
+const MIN_INPUT_HEIGHT = 44;
 const MAX_INPUT_HEIGHT = 240;
 
 watch(
@@ -410,14 +410,16 @@ function autoResizeInput() {
 .chat-window__topbar {
   display: flex;
   justify-content: flex-end;
+  align-items: flex-end;
   border-bottom: 1px solid rgba(189, 201, 255, 0.6);
-  padding: 0.1rem 0 0.35rem;
+  padding: 0.5rem 0 0.45rem;
+  margin-bottom: -1.3rem;
 }
 
 .chat-window__top-actions {
   display: flex;
   gap: 0.6rem;
-  margin-top: -0.15rem;
+  margin-top: -1.5rem;
 }
 
 .chat-window__top-button {
@@ -708,7 +710,7 @@ function autoResizeInput() {
   font-family: inherit;
   line-height: 1.5;
   background: transparent;
-  min-height: 48px;
+  min-height: 44px;
   max-height: 240px;
   overflow-y: hidden;
 }
