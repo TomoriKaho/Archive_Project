@@ -271,6 +271,9 @@ export const messages = {
       csv: {
         autoHeader: '列 {index}'
       },
+      archiveTree: {
+        expand: '展开'
+      },
       chunks: {
         title: '内容片段',
         summary: '共存储 {count} 个片段。',
@@ -746,6 +749,9 @@ export const messages = {
       },
       csv: {
         autoHeader: 'Column {index}'
+      },
+      archiveTree: {
+        expand: 'Expand'
       },
       chunks: {
         title: 'Chunks',

@@ -488,7 +488,7 @@ const ArchiveTreeCellRenderer = defineComponent({
         'details',
         { class: 'archive-tree__scope' },
         [
-          h('summary', { class: 'archive-tree__scope-summary' }, '展开'),
+          h('summary', { class: 'archive-tree__scope-summary' }, t('documentDetail.archiveTree.expand')),
           h('div', { class: 'archive-tree__scope-body' }, node.scopecontent)
         ]
       );
