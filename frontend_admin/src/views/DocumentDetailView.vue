@@ -242,7 +242,8 @@
           })
         }}
       </p>
-      <StructuredViewer
+      <component
+        :is="resolvePreviewRenderer(previewContent.header)"
         class="document-content__preview-value"
         :value="previewContent.value"
       />
@@ -349,6 +350,14 @@ const { t, locale } = useI18n();
 
 const INDENT_STEP = 14;
 
+const ARCHIVE_TREE_FIELD_KEYS = [
+  'structure',
+  'inventory',
+  'ead',
+  'catalog_tree',
+  'catalogtree'
+];
+
 const StructuredViewer = defineComponent({
   name: 'StructuredViewer',
   props: {
@@ -417,6 +426,115 @@ const StructuredViewer = defineComponent({
         'div',
         { class: 'structured-viewer structured-viewer--plain' },
         fallbackText.value
+      );
+    };
+  }
+});
+
+const ArchiveTreeCellRenderer = defineComponent({
+  name: 'ArchiveTreeCellRenderer',
+  props: {
+    value: {
+      type: [Object, Array, String],
+      default: null
+    }
+  },
+  setup(props) {
+    const nodes = computed(() => normalizeArchiveNodes(parseStructuredValue(props.value)));
+
+    function normalizeArchiveNodes(value) {
+      if (!value) return [];
+      const list = Array.isArray(value) ? value : [value];
+      return list
+        .map((item) => normalizeArchiveNode(item))
+        .filter(Boolean);
+    }
+
+    function normalizeArchiveNode(item) {
+      if (!item || typeof item !== 'object') return null;
+      const unitid = toCleanText(item.unitid);
+      const title = toCleanText(item.title);
+      const date = toCleanText(item.date);
+      const extent = toCleanText(item.extent);
+      const scopecontent = toCleanText(item.scopecontent);
+
+      const children = Array.isArray(item.children)
+        ? item.children.map((child) => normalizeArchiveNode(child)).filter(Boolean)
+        : [];
+
+      if (!unitid && !title && !date && !extent && !scopecontent && !children.length) {
+        return null;
+      }
+
+      return {
+        unitid,
+        title,
+        date,
+        extent,
+        scopecontent,
+        children
+      };
+    }
+
+    function toCleanText(value) {
+      if (value === null || value === undefined) return '';
+      const text = typeof value === 'string' ? value.trim() : String(value);
+      return text.trim();
+    }
+
+    function renderScopecontent(node) {
+      if (!node.scopecontent) return null;
+      return h(
+        'details',
+        { class: 'archive-tree__scope' },
+        [
+          h('summary', { class: 'archive-tree__scope-summary' }, '展开'),
+          h('div', { class: 'archive-tree__scope-body' }, node.scopecontent)
+        ]
+      );
+    }
+
+    function renderNode(node, depth, key) {
+      const titleText = [node.unitid, node.title].filter(Boolean).join(' ').trim();
+      const metaItems = [node.date, node.extent].filter(Boolean);
+      const childNodes = Array.isArray(node.children) ? node.children : [];
+
+      return h(
+        'div',
+        {
+          class: 'archive-tree__node',
+          key,
+          style: { marginLeft: `${depth * INDENT_STEP}px` }
+        },
+        [
+          h('div', { class: 'archive-tree__header' }, [
+            h('div', { class: 'archive-tree__title' }, titleText || '未命名节点'),
+            metaItems.length
+              ? h(
+                  'div',
+                  { class: 'archive-tree__meta' },
+                  metaItems.map((meta, metaIndex) =>
+                    h('span', { class: 'archive-tree__meta-item', key: `meta-${metaIndex}` }, meta)
+                  )
+                )
+              : null
+          ]),
+          renderScopecontent(node),
+          ...childNodes.map((child, childIndex) =>
+            renderNode(child, depth + 1, `${key}-${childIndex}`)
+          )
+        ].filter(Boolean)
+      );
+    }
+
+    return () => {
+      if (!nodes.value.length) {
+        return h('div', { class: 'archive-tree archive-tree--empty' }, '—');
+      }
+      return h(
+        'div',
+        { class: 'archive-tree' },
+        nodes.value.map((node, index) => renderNode(node, 0, `node-${index}`))
       );
     };
   }
@@ -1219,6 +1337,47 @@ function formatCellPreview(value) {
   return text;
 }
 
+function normalizeFieldKey(header) {
+  return String(header || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '');
+}
+
+function isArchiveTreeField(header) {
+  const key = normalizeFieldKey(header);
+  return ARCHIVE_TREE_FIELD_KEYS.includes(key);
+}
+
+function hasArchiveText(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  return String(value).trim() !== '';
+}
+
+function isArchiveTreeNodeLike(node) {
+  if (!node || typeof node !== 'object') return false;
+  const hasMetadata = ['unitid', 'title', 'date', 'extent', 'scopecontent'].some((key) =>
+    hasArchiveText(node[key])
+  );
+  const children = Array.isArray(node.children) ? node.children : [];
+  const hasChildNode = children.some((child) => isArchiveTreeNodeLike(child));
+  return hasMetadata || hasChildNode;
+}
+
+function isArchiveTreeValue(rawValue) {
+  const parsed = parseStructuredValue(rawValue);
+  if (!parsed) return false;
+  const values = Array.isArray(parsed) ? parsed : [parsed];
+  return values.some((value) => isArchiveTreeNodeLike(value));
+}
+
+function resolvePreviewRenderer(header) {
+  if (isArchiveTreeField(header) || isArchiveTreeValue(previewContent.value)) {
+    return ArchiveTreeCellRenderer;
+  }
+  return StructuredViewer;
+}
+
 function openCellPreview(columnIndex, value, rowNumber) {
   const headers = contentHeaders.value;
   previewContent.header = headers[columnIndex] || `Column ${columnIndex + 1}`;
@@ -1624,6 +1783,71 @@ async function remove() {
   border-radius: 12px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+:deep(.archive-tree) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+  color: #111827;
+}
+
+:deep(.archive-tree__node) {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.04);
+}
+
+:deep(.archive-tree__header) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+:deep(.archive-tree__title) {
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+:deep(.archive-tree__meta) {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+:deep(.archive-tree__meta-item) {
+  background: #eef2ff;
+  color: #4338ca;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+:deep(.archive-tree__scope) {
+  margin: 4px 0 0;
+}
+
+:deep(.archive-tree__scope-summary) {
+  cursor: pointer;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+:deep(.archive-tree__scope-body) {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+:deep(.archive-tree--empty) {
+  color: #6b7280;
 }
 
 /* ---- 关键：用 :deep 确保 StructuredViewer 的样式一定生效 ---- */
