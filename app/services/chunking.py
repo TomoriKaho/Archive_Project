@@ -145,11 +145,14 @@ def chunk_text_sliding_window(text: str, size: int = 400, overlap: int = 50) -> 
 
 
 def _flatten_structured_data(data: Dict[str, Any]) -> Dict[str, Any]:
-    """将嵌套的结构化数据打平成以冒号分隔的键路径。"""
+    """将嵌套的结构化数据打平成以冒号分隔的键路径。
+    额外支持 list 类型，使用 [index] 形式展开。
+    """
 
     flattened: Dict[str, Any] = {}
 
     def _walk(current_key: str, value: Any) -> None:
+        # 1) dict：原逻辑
         if isinstance(value, dict):
             for child_key, child_value in value.items():
                 key_str = str(child_key).strip()
@@ -158,6 +161,21 @@ def _flatten_structured_data(data: Dict[str, Any]) -> Dict[str, Any]:
                 next_key = f"{current_key}:{key_str}" if current_key else key_str
                 _walk(next_key, child_value)
             return
+
+        # 2) list：新增逻辑
+        if isinstance(value, list):
+            if not current_key:
+                # 没有键名的顶层 list 不太有意义，尽量展开成 [i] 前缀
+                for i, item in enumerate(value):
+                    _walk(f"[{i}]", item)
+                return
+
+            for i, item in enumerate(value):
+                next_key = f"{current_key}[{i}]"
+                _walk(next_key, item)
+            return
+
+        # 3) 其他原子值：落表
         if not current_key:
             return
         flattened[current_key] = value
@@ -169,6 +187,26 @@ def _flatten_structured_data(data: Dict[str, Any]) -> Dict[str, Any]:
         _walk(key_str, value)
 
     return flattened
+
+def _group_flattened_by_prefix(flattened: Dict[str, Any]) -> List[tuple[str, List[tuple[str, Any]]]]:
+    """将扁平化后的 key 按“最后一个冒号前”的路径前缀分组，并保留出现顺序。"""
+    groups: Dict[str, List[tuple[str, Any]]] = {}
+    order: List[str] = []
+
+    for full_key, value in flattened.items():
+        key_str = str(full_key)
+        if ":" in key_str:
+            prefix, leaf = key_str.rsplit(":", 1)
+        else:
+            prefix, leaf = "", key_str
+
+        if prefix not in groups:
+            groups[prefix] = []
+            order.append(prefix)
+
+        groups[prefix].append((leaf, value))
+
+    return [(p, groups[p]) for p in order]
 
 
 def _split_value_with_window(
@@ -202,16 +240,16 @@ def _split_value_with_window(
 
 def chunk_structured_entities(
     entities: List[Dict[str, Any]],
-    max_len: int = CHUNK_SIZE,
+    max_len: int = 400,
     overlap: int = 50,
 ) -> List[str]:
-    """针对结构化实体列表生成紧凑描述字符串。"""
+    """针对结构化实体列表生成紧凑描述字符串。
+    额外优化：对共享路径前缀的字段进行分组，避免在同一 chunk 内重复打印前缀。
+    """
+
     def _build_prefix(entity_name: str, entity_data: Dict[str, Any]) -> str:
-        """返回以实体名或首个字段内容为值的前缀，不计入长度限制。"""
-
         if entity_name:
-            return ""  # 已有实体名开头，无需额外前缀
-
+            return ""
         for value in entity_data.values():
             if value is None:
                 continue
@@ -220,57 +258,102 @@ def chunk_structured_entities(
                 return f"{value_str}:"
         return ""
 
-    chunks: List[str] = []  # 存放生成的文本段
+    def _head_text(name: str, group_prefix: str) -> str:
+        if name and group_prefix:
+            return f"{name}:{group_prefix}"
+        if name:
+            return name
+        if group_prefix:
+            return group_prefix
+        return ""
+
+    chunks: List[str] = []
+
     for entity in entities:
-        name = str(entity.get("entity", "") or "").strip()  # 获取实体名称，允许为空
-        data = _flatten_structured_data(entity.get("data") or {})  # 取出并打平属性字典
+        name = str(entity.get("entity", "") or "").strip()
+        data = _flatten_structured_data(entity.get("data") or {})
         if not isinstance(data, dict):
-            data = {}  # 异常结构时回退为空字典
+            data = {}
+
         prefix = _build_prefix(name, data)
+
+        grouped = _group_flattened_by_prefix(data)
+
         entity_chunks: List[str] = []
-        current = name  # 初始化当前段落以实体名开头（可为空）
-        first = True  # 标记是否为第一对键值
-        for key, value in data.items():
-            key_str = str(key)
-            value_str = "" if value is None else str(value)
-            pair = f"{key_str}:{value_str}"  # 组装键值描述
-            pair_with_prefix = f"{name}:{pair}" if name else pair
-            if len(value_str) > max_len or len(pair_with_prefix) > max_len:
-                if current != name:
-                    entity_chunks.append(current)
-                split_chunks = _split_value_with_window(
-                    name,
-                    key_str,
-                    value_str,
-                    max_len,
-                    overlap,
+
+        for group_prefix, items in grouped:
+            head = _head_text(name, group_prefix)
+            current = head
+            first = True
+
+            # 为超长 value 分片时的“实体名”构造：
+            # 让 _split_value_with_window 生成的前缀形如：
+            #   name:group_prefix:leaf:
+            entity_name_for_split = ""
+            if name and group_prefix:
+                entity_name_for_split = f"{name}:{group_prefix}"
+            elif name:
+                entity_name_for_split = name
+            elif group_prefix:
+                entity_name_for_split = group_prefix
+
+            for leaf_key, value in items:
+                leaf_str = str(leaf_key)
+                value_str = "" if value is None else str(value)
+                pair = f"{leaf_str}:{value_str}"
+
+                pair_with_prefix = (
+                    f"{entity_name_for_split}:{leaf_str}:{value_str}"
+                    if entity_name_for_split
+                    else pair
                 )
-                entity_chunks.extend(split_chunks)
-                current = name
-                first = True
-                continue
-            if name:
-                separator = ":" if first else ","  # 第一对使用冒号其余使用逗号
-                candidate = f"{current}{separator}{pair}"  # 预组装新段落
-            else:
-                separator = "" if first else ","  # 无实体名时首个键值无前缀
-                candidate = f"{current}{separator}{pair}"
-            if len(candidate) > max_len:
-                if current != name:
-                    entity_chunks.append(current)
-                current = f"{name}:{pair}" if name else pair  # 超长时新开一段从当前键值开始
-            else:
-                current = candidate  # 未超长则继续累积
-            first = False  # 之后的键值都走逗号
-        if current and current != name:
-            entity_chunks.append(current)  # 实体数据遍历完毕写入结果
+
+                # 单个值或单个键值对过长 -> 用滑窗拆 value
+                if len(value_str) > max_len or len(pair_with_prefix) > max_len:
+                    if current and current != head:
+                        entity_chunks.append(current)
+
+                    split_chunks = _split_value_with_window(
+                        entity_name_for_split,
+                        leaf_str,
+                        value_str,
+                        max_len,
+                        overlap,
+                    )
+                    entity_chunks.extend(split_chunks)
+
+                    current = head
+                    first = True
+                    continue
+
+                # 组装候选文本
+                if current:
+                    separator = ":" if first else ","
+                    candidate = f"{current}{separator}{pair}"
+                else:
+                    separator = "" if first else ","
+                    candidate = f"{current}{separator}{pair}" if current else pair
+
+                # 超长则落盘并开启新段
+                if len(candidate) > max_len:
+                    if current and current != head:
+                        entity_chunks.append(current)
+                    current = f"{head}:{pair}" if head else pair
+                else:
+                    current = candidate
+
+                first = False
+
+            if current and current != head:
+                entity_chunks.append(current)
+
         if prefix:
             chunks.extend([f"{prefix}{chunk}" for chunk in entity_chunks])
         else:
             chunks.extend(entity_chunks)
-    logger.info("chunk_structured_entities count=%s", len(chunks))  # 记录生成数量
-    return chunks  # 返回所有结构化段落
-    # 设计说明：利用len()按字符计算长度，比字节更符合前端展示长度且兼容中文字符宽度。
+
+    logger.info("chunk_structured_entities count=%s", len(chunks))
+    return chunks
 
 
 DEFAULT_MAX_CSV_FIELD_SIZE = 10 * 1024 * 1024  # 允许单字段最大10MB
