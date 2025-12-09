@@ -17,8 +17,9 @@ CHUNK_SIZE = 400;
 
 def chunk_text_sliding_window(text: str, size: int = 400, overlap: int = 50) -> List[str]:
     """使用滑动窗口算法切分长文本。
-    额外保证：若英文类单词在窗口边界被截断，则下一个chunk会回退起点以完整包含该单词，
-    即允许实际重叠长度超过 overlap。
+    额外保证：
+    1) 若英文类单词在窗口起点被截断，下一个chunk回退起点以完整包含该单词（允许实际重叠 > overlap）。
+    2) 若英文类单词在窗口终点被截断，则本chunk回退终点到该单词起点，让该单词完整出现在下一个chunk。
     """
     if not text:
         return []
@@ -31,49 +32,79 @@ def chunk_text_sliding_window(text: str, size: int = 400, overlap: int = 50) -> 
     if step <= 0:
         raise ValueError("size must be greater than overlap")
 
-    # 仅对“有空格分词习惯”的 ASCII 类单词做保护，避免对中日文造成奇怪回退
+    # 仅保护 ASCII 类“有空格分词习惯”的单词
     word_char_re = re.compile(r"[A-Za-z0-9_]")
     def _is_word_char(ch: str) -> bool:
         return bool(word_char_re.match(ch))
 
     def _adjust_start_to_word_boundary(value: str, proposed_start: int, prev_start: int) -> int:
-        """若 proposed_start 落在单词内部，则回退到该单词起点。
-        允许实际 overlap 变大。
-        """
+        """若 proposed_start 落在单词内部，则回退到该单词起点。"""
         n = len(value)
         if proposed_start <= 0 or proposed_start >= n:
             return proposed_start
 
-        # 判断是否位于“单词中间”
         if _is_word_char(value[proposed_start]) and _is_word_char(value[proposed_start - 1]):
             i = proposed_start
             while i > 0 and _is_word_char(value[i - 1]):
                 i -= 1
-
-            # 防止极端超长单词导致不前进
+            # 防止不前进
             if i <= prev_start:
                 return proposed_start
             return i
 
         return proposed_start
 
+    def _adjust_end_to_word_boundary(value: str, end: int, start: int) -> int:
+        """若 end 落在单词内部，则回退到该单词起点，避免本chunk末尾出现半个单词。"""
+        n = len(value)
+        if end <= 0 or end >= n:
+            return end
+
+        # end-1 与 end 都是单词字符 => 边界切在词中
+        if _is_word_char(value[end - 1]) and _is_word_char(value[end]):
+            i = end
+            while i > 0 and _is_word_char(value[i - 1]):
+                i -= 1
+            # 如果这个词太长导致回退到 start 甚至更前，则无法避免截断，保留原 end
+            if i <= start:
+                return end
+            return i
+
+        return end
+
     def _chunk_plain_text(value: str) -> List[str]:
-        """按滑动窗口切分非 URL 文本，并做单词边界保护。"""
         if not value:
             return []
 
         result: List[str] = []
         start = 0
-        text_length = len(value)
+        n = len(value)
 
-        while start < text_length:
-            end = min(start + size, text_length)
+        while start < n:
+            raw_end = min(start + size, n)
+            end = raw_end
+
+            if end < n:
+                end = _adjust_end_to_word_boundary(value, end, start)
+
+                # 极端防护：若 end 被回退得过头导致空片段，回到 raw_end
+                if end <= start:
+                    end = raw_end
+
             result.append(value[start:end])
-            if end == text_length:
+
+            if end == n:
                 break
 
-            proposed_start = start + step
-            start = _adjust_start_to_word_boundary(value, proposed_start, start)
+            # 关键变化：下一段起点基于 end 而不是固定 step
+            proposed_start = max(0, end - overlap)
+            next_start = _adjust_start_to_word_boundary(value, proposed_start, start)
+
+            # 防死循环：如果仍未前进，退回原逻辑的 step 推进
+            if next_start <= start:
+                next_start = min(start + step, n)
+
+            start = next_start
 
         return result
 
@@ -111,6 +142,7 @@ def chunk_text_sliding_window(text: str, size: int = 400, overlap: int = 50) -> 
         len(chunks),
     )
     return chunks
+
 
 def _flatten_structured_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """将嵌套的结构化数据打平成以冒号分隔的键路径。"""
