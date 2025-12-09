@@ -257,6 +257,31 @@
       <div class="tab-pane">
         <div
           class="form-field"
+          :class="{ 'form-field--error': editErrors.domain }"
+        >
+          <label for="edit-domain">{{ t('documents.form.domainLabel') }}</label>
+          <select
+            id="edit-domain"
+            v-model="editForm.domainId"
+            :disabled="domainsStore.isLoading || !domainOptions.length"
+          >
+            <option disabled value="">
+              {{ t('documents.form.domainPlaceholder') }}
+            </option>
+            <option
+              v-for="domain in domainOptions"
+              :key="domain.id"
+              :value="domain.id"
+            >
+              {{ domain.name }}
+            </option>
+          </select>
+          <p v-if="editErrors.domain" class="form-field__error">
+            {{ editErrors.domain }}
+          </p>
+        </div>
+        <div
+          class="form-field"
           :class="{ 'form-field--error': editErrors.title }"
         >
           <label for="edit-title">{{ t('documents.form.titleLabel') }}</label>
@@ -465,11 +490,13 @@ function scheduleTableScrollMeasurement() {
 }
 
 const editForm = reactive({
-  title: ''
+  title: '',
+  domainId: null
 });
 
 const editErrors = reactive({
-  title: ''
+  title: '',
+  domain: ''
 });
 
 const document = computed(() => documentsStore.activeDocument);
@@ -500,6 +527,8 @@ const domainName = computed(() => {
   if (!document.value) return '—';
   return domain?.name || t('documents.unknownDomain', { id: document.value.domain_id });
 });
+
+const domainOptions = computed(() => domainsStore.items || []);
 
 function resolveContentLimit(page, fallbackLimit) {
   const defaultFallback = isStructuredSource.value
@@ -1087,6 +1116,7 @@ watch(
   (value) => {
     if (!value) return;
     editForm.title = value.title;
+    editForm.domainId = value.domain_id;
   },
   { immediate: true }
 );
@@ -1202,8 +1232,13 @@ function closePreview() {
 }
 
 function validate() {
-  editErrors.title = editForm.title ? '' : 'Title is required.';
-  return !editErrors.title;
+  editErrors.title = editForm.title ? '' : t('documents.validation.titleRequired');
+  const targetDomainId = Number(editForm.domainId);
+  const hasDomain = Number.isInteger(targetDomainId) && targetDomainId > 0;
+  editErrors.domain = hasDomain
+    ? ''
+    : t('documents.validation.domainRequired');
+  return !editErrors.title && !editErrors.domain;
 }
 
 async function save() {
@@ -1214,7 +1249,8 @@ async function save() {
       documentId: document.value.id,
       domainId: document.value.domain_id,
       title: editForm.title,
-      metadata: document.value.doc_metadata
+      metadata: document.value.doc_metadata,
+      targetDomainId: Number(editForm.domainId)
     });
     try {
       await documentsStore.loadDocument(route.params.id);

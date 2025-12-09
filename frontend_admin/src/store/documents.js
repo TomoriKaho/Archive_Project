@@ -289,11 +289,14 @@ export const useDocumentsStore = defineStore('documents', {
     resetActiveContent() {
       this.activeContent = null;
     },
-    async saveDocument({ documentId, domainId, title, metadata }) {
+    async saveDocument({ documentId, domainId, title, metadata, targetDomainId }) {
       try {
         const body = { title };
         if (metadata !== undefined && metadata !== null) {
           body.doc_metadata = metadata;
+        }
+        if (targetDomainId !== undefined && targetDomainId !== null) {
+          body.domain_id = targetDomainId;
         }
         const { data } = await updateDocument(domainId, documentId, body);
         useUiStore().showToast({

@@ -662,13 +662,19 @@ def cancel_document_indexing_endpoint(
 def update_document(domain_id: int, doc_id: int, payload: DocumentUpdate, db: Session = Depends(get_db)):
     """更新文档元信息，不触发重新切分。"""
     domain_repo = DomainRepository(db)
-    if not domain_repo.get(domain_id):
+    current_domain = domain_repo.get(domain_id)
+    if not current_domain:
         raise HTTPException(status_code=404, detail="domain not found")
     repo = DocumentRepository(db)
     doc = repo.get(doc_id)
     if not doc or doc.domain_id != domain_id:
         raise HTTPException(status_code=404, detail="document not found")
     update_data = payload.model_dump(exclude_none=True)
+    new_domain_id = update_data.get("domain_id")
+    if new_domain_id is not None:
+        target_domain = domain_repo.get(new_domain_id)
+        if not target_domain:
+            raise HTTPException(status_code=404, detail="target domain not found")
     new_title = update_data.get("title")
     if new_title is not None:
         stripped_title = new_title.strip()

@@ -21,6 +21,7 @@ class DocumentUpdate(ORMModel):
     """更新文档时使用的模型，仅支持局部更新。"""
     title: str | None = Field(default=None, description="可选的新标题")  # 标题允许按需修改
     doc_metadata: Dict[str, Any] | None = Field(default=None, description="可选的新元数据")  # 允许覆盖元数据信息
+    domain_id: int | None = Field(default=None, description="可选的新domain ID，用于迁移文档")
     # 设计说明：更新模型保持可选字段以支撑PATCH语义，避免误清空。
 
 
