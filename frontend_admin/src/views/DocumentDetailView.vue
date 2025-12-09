@@ -228,6 +228,7 @@
         </li>
       </ul>
     </article>
+
     <BaseModal
       v-model="isPreviewOpen"
       :title="t('documentDetail.preview.title')"
@@ -241,7 +242,10 @@
           })
         }}
       </p>
-      <pre class="document-content__preview-value">{{ previewContent.value }}</pre>
+      <StructuredViewer
+        class="document-content__preview-value"
+        :value="previewContent.value"
+      />
       <template #footer>
         <button class="button" type="button" @click="closePreview">
           {{ t('common.close') }}
@@ -271,6 +275,7 @@
         </button>
       </template>
     </BaseModal>
+
     <BaseModal v-model="isDeleteOpen" :title="t('documentDetail.delete.title')">
       <p>{{ t('documentDetail.delete.message') }}</p>
       <template #footer>
@@ -297,7 +302,17 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  defineComponent,
+  h,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch
+} from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
@@ -305,11 +320,87 @@ import BaseModal from '@/components/BaseModal.vue';
 import { useDocumentsStore } from '@/store/documents';
 import { useDomainsStore } from '@/store/domains';
 
+const { t, locale } = useI18n();
+
+const INDENT_STEP = 14;
+
+const StructuredViewer = defineComponent({
+  name: 'StructuredViewer',
+  props: {
+    value: {
+      type: [String, Number, Boolean, Object, Array],
+      default: ''
+    }
+  },
+  setup(props) {
+    const parsedValue = computed(() => parseStructuredValue(props.value));
+
+    const blocks = computed(() => {
+      const value = parsedValue.value;
+      if (isObjectLike(value) || Array.isArray(value)) {
+        return buildBlocksFromValue(value);
+      }
+      return [];
+    });
+
+    const fallbackText = computed(() => formatPrimitive(parsedValue.value));
+
+    function renderBlock(block) {
+      const children = Array.isArray(block.children) ? block.children : [];
+      const valueText = block.valueText ?? '';
+      const displayLabel = block.label || '[value]';
+
+      const nodes = [
+        h('div', { class: 'structured-block__name' }, displayLabel)
+      ];
+
+      const showValueLine =
+        valueText !== '' || children.length === 0;
+
+      if (showValueLine) {
+        nodes.push(
+          h('div', { class: 'structured-block__value' }, valueText)
+        );
+      }
+
+      for (const child of children) {
+        nodes.push(renderBlock(child));
+      }
+
+      return h(
+        'div',
+        {
+          class: 'structured-block',
+          style: {
+            paddingLeft: `${block.depth * INDENT_STEP}px`,
+            marginBottom: '14px'
+          }
+        },
+        nodes
+      );
+    }
+
+    return () => {
+      if (blocks.value.length) {
+        return h(
+          'div',
+          { class: 'structured-viewer' },
+          blocks.value.map((block) => renderBlock(block))
+        );
+      }
+      return h(
+        'div',
+        { class: 'structured-viewer structured-viewer--plain' },
+        fallbackText.value
+      );
+    };
+  }
+});
+
 const route = useRoute();
 const router = useRouter();
 const documentsStore = useDocumentsStore();
 const domainsStore = useDomainsStore();
-const { t, locale } = useI18n();
 
 const isEditOpen = ref(false);
 const isDeleteOpen = ref(false);
@@ -462,6 +553,103 @@ const chunkRangeLabel = computed(() => {
   const end = Math.min(offset + visibleChunks.value.length, chunkTotal.value);
   return `${start}-${end} / ${chunkTotal.value}`;
 });
+
+/** ---------------------------
+ *  StructuredViewer helpers
+ *  --------------------------- */
+
+function isObjectLike(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isDisplayEmptyString(value) {
+  return typeof value === 'string' && value.trim() === '';
+}
+
+function formatPrimitive(value) {
+  if (value === undefined) return '';
+  if (value === null) return 'null';
+  return String(value);
+}
+
+function parseStructuredValue(value) {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      return value;
+    }
+  }
+  return value;
+}
+
+function buildBlocksFromValue(value, depth = 0) {
+  if (isObjectLike(value)) {
+    return Object.entries(value)
+      // 关键修改：移除 value 为 "" 或纯空白 的字段
+      .filter(([, entryValue]) => !isDisplayEmptyString(entryValue))
+      .map(([key, entryValue]) => {
+        const isChildStructured =
+          isObjectLike(entryValue) || Array.isArray(entryValue);
+
+        const childBlocks = isChildStructured
+          ? buildBlocksFromValue(entryValue, depth + 1)
+          : undefined;
+
+        const valueText = isChildStructured
+          ? undefined
+          : formatPrimitive(entryValue);
+
+        const hasChildren = Array.isArray(childBlocks) && childBlocks.length > 0;
+        const hasValue = valueText !== undefined && valueText !== '';
+
+        // 进一步保险：如果既没有可显示的值也没有子内容，就不展示这个字段
+        if (!hasChildren && !hasValue) {
+          return null;
+        }
+
+        return {
+          label: key,
+          valueText: hasValue ? valueText : undefined,
+          children: hasChildren ? childBlocks : undefined,
+          depth
+        };
+      })
+      .filter(Boolean);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item, index) => {
+      const isChildStructured = isObjectLike(item) || Array.isArray(item);
+      const childBlocks = isChildStructured
+        ? buildBlocksFromValue(item, depth + 1)
+        : undefined;
+
+      const valueText = isChildStructured ? undefined : formatPrimitive(item);
+
+      return {
+        label: `[${index}]`,
+        valueText,
+        children: isChildStructured ? childBlocks : undefined,
+        depth,
+        index
+      };
+    });
+  }
+
+  return [
+    {
+      label: '',
+      valueText: formatPrimitive(value),
+      children: undefined,
+      depth
+    }
+  ];
+}
+
+/** ---------------------------
+ *  JSON header → root columns helpers
+ *  --------------------------- */
 
 function extractRootKey(path) {
   const value = String(path || '');
@@ -1004,7 +1192,7 @@ function formatCellPreview(value) {
 function openCellPreview(columnIndex, value, rowNumber) {
   const headers = contentHeaders.value;
   previewContent.header = headers[columnIndex] || `Column ${columnIndex + 1}`;
-  previewContent.value = value === null || value === undefined ? '' : String(value);
+  previewContent.value = value === undefined ? '' : value;
   previewContent.rowNumber = rowNumber;
   isPreviewOpen.value = true;
 }
@@ -1400,6 +1588,43 @@ async function remove() {
   border-radius: 12px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* ---- 关键：用 :deep 确保 StructuredViewer 的样式一定生效 ---- */
+:deep(.structured-viewer) {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+:deep(.structured-viewer--plain) {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+}
+
+:deep(.structured-block) {
+  /* 字段之间“空行感” */
+  margin-bottom: 14px;
+}
+
+:deep(.structured-block:last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.structured-block__name) {
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+:deep(.structured-block__value) {
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 2px;
 }
 
 @media (max-width: 640px) {
