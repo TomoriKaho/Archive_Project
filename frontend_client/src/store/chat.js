@@ -79,6 +79,8 @@ export const useChatStore = defineStore('client-chat', {
     streamingTarget: '',
     streamingDisplayed: '',
     streamingPaused: false,
+    streamingPauseReason: null,
+    pausedStreams: {},
     sendAbortControllers: {},
     lastSendAttempt: null,
     stoppedThinkingConversationId: null
@@ -145,17 +147,37 @@ export const useChatStore = defineStore('client-chat', {
       }
     },
     async selectConversation(conversationId) {
-      this.stopAssistantStream({ complete: false });
-      this.abortActiveSend();
-      this.lastSendAttempt = null;
-      this.stoppedThinkingConversationId = null;
+      const switchingConversation =
+        conversationId && this.activeConversationId && this.activeConversationId !== conversationId;
       if (!conversationId) {
+        this.stopAssistantStream({ complete: false });
+        this.abortActiveSend();
+        this.lastSendAttempt = null;
+        this.stoppedThinkingConversationId = null;
         this.activeConversationId = null;
         this.messages = [];
         return;
       }
+
+      if (switchingConversation && this.streamingConversationId === this.activeConversationId) {
+        this.stopAssistantStream({
+          complete: false,
+          pause: true,
+          reason: this.streamingPauseReason || 'switch'
+        });
+      }
+
+      this.restorePausedStream(conversationId);
       this.activeConversationId = conversationId;
       await this.loadMessages(conversationId);
+
+      if (
+        this.streamingPaused &&
+        this.streamingConversationId === conversationId &&
+        this.streamingPauseReason === 'switch'
+      ) {
+        this.resumeAssistantStream();
+      }
     },
     async loadMessages(conversationId) {
       if (!conversationId) {
@@ -412,6 +434,7 @@ export const useChatStore = defineStore('client-chat', {
       if (this.stoppedThinkingConversationId === conversationId) {
         this.stoppedThinkingConversationId = null;
       }
+      this.clearPausedStream(conversationId);
       await deleteConversation(conversationId);
       const wasActive = this.activeConversationId === conversationId;
       this.conversations = this.conversations.filter((item) => item.id !== conversationId);
@@ -469,7 +492,12 @@ export const useChatStore = defineStore('client-chat', {
       if (!assistant) {
         return;
       }
-      this.stopAssistantStream({ complete: false });
+      this.clearPausedStream(conversationId);
+      if (this.streamingConversationId && this.streamingConversationId !== conversationId) {
+        this.stopAssistantStream({ complete: false, pause: true, reason: 'switch' });
+      } else {
+        this.stopAssistantStream({ complete: false });
+      }
       const messageId = assistant.id || `assistant-${Date.now()}`;
       const baseMessage = {
         ...assistant,
@@ -493,22 +521,30 @@ export const useChatStore = defineStore('client-chat', {
 
       const totalLength = targetText.length;
       const chunkSize = Math.max(3, Math.ceil(totalLength / 120));
-      this.streamingTimer = window.setInterval(() => {
-        const nextLength = Math.min(this.streamingDisplayed.length + chunkSize, totalLength);
-        const nextContent = targetText.slice(0, nextLength);
-        this.streamingDisplayed = nextContent;
-        this.replaceMessageContent(messageId, nextContent);
-
-        if (nextLength >= totalLength) {
-          this.stopAssistantStream({ complete: true });
-        }
-      }, 30);
+      this.startStreamingInterval(totalLength, chunkSize);
     },
-    stopAssistantStream({ complete = false, pause = false } = {}) {
+    stopAssistantStream({ complete = false, pause = false, reason = null } = {}) {
+      const pauseReason = pause ? reason || 'user' : this.streamingPauseReason;
+      const wasPaused = pause
+        ? pauseReason === 'switch'
+          ? false
+          : true
+        : this.streamingPaused;
+      const pausedState = this.streamingMessageId
+        ? {
+            conversationId: this.streamingConversationId,
+            messageId: this.streamingMessageId,
+            target: this.streamingTarget,
+            displayed: this.streamingDisplayed,
+            pauseReason,
+            wasPaused
+          }
+        : null;
       if (!this.streamingMessageId) {
         this.clearStreamingTimer();
         if (pause) {
           this.streamingPaused = true;
+          this.streamingPauseReason = reason || 'user';
         } else {
           this.resetStreamingState();
         }
@@ -520,7 +556,12 @@ export const useChatStore = defineStore('client-chat', {
       this.clearStreamingTimer();
       if (pause) {
         this.streamingPaused = true;
+        this.streamingPauseReason = reason || 'user';
+        this.setPausedStream(pausedState);
         return;
+      }
+      if (this.streamingPaused) {
+        this.setPausedStream(pausedState);
       }
       this.resetStreamingState();
     },
@@ -536,18 +577,8 @@ export const useChatStore = defineStore('client-chat', {
         return;
       }
       this.streamingPaused = false;
-      const totalLength = this.streamingTarget.length;
-      const chunkSize = Math.max(3, Math.ceil(totalLength / 120));
-      this.streamingTimer = window.setInterval(() => {
-        const nextLength = Math.min(this.streamingDisplayed.length + chunkSize, totalLength);
-        const nextContent = this.streamingTarget.slice(0, nextLength);
-        this.streamingDisplayed = nextContent;
-        this.replaceMessageContent(this.streamingMessageId, nextContent);
-
-        if (nextLength >= totalLength) {
-          this.stopAssistantStream({ complete: true });
-        }
-      }, 30);
+      this.streamingPauseReason = null;
+      this.startStreamingInterval();
     },
     clearStreamingTimer() {
       if (this.streamingTimer != null) {
@@ -561,6 +592,71 @@ export const useChatStore = defineStore('client-chat', {
       this.streamingTarget = '';
       this.streamingDisplayed = '';
       this.streamingPaused = false;
+      this.streamingPauseReason = null;
+    },
+    setPausedStream(pausedState) {
+      if (!pausedState?.conversationId || !pausedState.messageId) {
+        return;
+      }
+      this.pausedStreams = {
+        ...this.pausedStreams,
+        [pausedState.conversationId]: {
+          messageId: pausedState.messageId,
+          target: pausedState.target || '',
+          displayed: pausedState.displayed || '',
+          pauseReason: pausedState.pauseReason || 'user',
+          wasPaused: pausedState.wasPaused === false ? false : true
+        }
+      };
+    },
+    clearPausedStream(conversationId) {
+      if (!conversationId || !this.pausedStreams[conversationId]) {
+        return;
+      }
+      const { [conversationId]: _removed, ...rest } = this.pausedStreams;
+      this.pausedStreams = rest;
+    },
+    restorePausedStream(conversationId) {
+      if (!conversationId) {
+        return;
+      }
+      if (this.streamingConversationId === conversationId && this.streamingPaused) {
+        return;
+      }
+      const paused = this.pausedStreams[conversationId];
+      if (!paused) {
+        return;
+      }
+      this.streamingConversationId = conversationId;
+      this.streamingMessageId = paused.messageId;
+      this.streamingTarget = paused.target || '';
+      this.streamingDisplayed = paused.displayed || '';
+      const wasPaused = paused.wasPaused === false ? false : true;
+      this.streamingPaused = wasPaused;
+      this.streamingPauseReason = paused.pauseReason || (wasPaused ? 'user' : null);
+      this.clearStreamingTimer();
+      this.clearPausedStream(conversationId);
+      if (!wasPaused && this.streamingTarget) {
+        this.startStreamingInterval();
+      }
+    },
+    startStreamingInterval(existingTotalLength = null, existingChunkSize = null) {
+      if (!this.streamingTarget || !this.streamingMessageId) {
+        return;
+      }
+      this.clearStreamingTimer();
+      const totalLength = existingTotalLength || this.streamingTarget.length;
+      const chunkSize = existingChunkSize || Math.max(3, Math.ceil(totalLength / 120));
+      this.streamingTimer = window.setInterval(() => {
+        const nextLength = Math.min(this.streamingDisplayed.length + chunkSize, totalLength);
+        const nextContent = this.streamingTarget.slice(0, nextLength);
+        this.streamingDisplayed = nextContent;
+        this.replaceMessageContent(this.streamingMessageId, nextContent);
+
+        if (nextLength >= totalLength) {
+          this.stopAssistantStream({ complete: true });
+        }
+      }, 30);
     },
     addSendingConversation(conversationId) {
       if (!conversationId) {
