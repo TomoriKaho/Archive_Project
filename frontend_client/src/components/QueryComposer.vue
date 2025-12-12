@@ -61,11 +61,32 @@
             <button
               v-if="mode === 'traditional'"
               type="button"
-              class="query-composer__mode-toggle query-composer__mode-toggle--secondary"
+              class="query-composer__search-switch"
+              :aria-pressed="isFuzzySearch"
               @click="toggleSearchType"
-              :title="searchTypeHoverLabel"
             >
-              {{ searchTypeLabel }}
+              <span
+                class="query-composer__search-switch-track"
+                :class="{ 'query-composer__search-switch-track--active': isFuzzySearch }"
+              >
+                <span
+                  class="query-composer__search-switch-label"
+                  :class="{ 'query-composer__search-switch-label--active': !isFuzzySearch }"
+                >
+                  {{ texts.precise }}
+                </span>
+                <span
+                  class="query-composer__search-switch-label"
+                  :class="{ 'query-composer__search-switch-label--active': isFuzzySearch }"
+                >
+                  {{ texts.fuzzy }}
+                </span>
+                <span
+                  class="query-composer__search-switch-thumb"
+                  :class="{ 'query-composer__search-switch-thumb--right': isFuzzySearch }"
+                  aria-hidden="true"
+                ></span>
+              </span>
             </button>
           </div>
         </div>
@@ -159,13 +180,7 @@ const modeToggleLabel = computed(() =>
   props.mode === 'traditional' ? props.texts.switchToAssistant : props.texts.switchToTraditional
 );
 
-const searchTypeLabel = computed(() =>
-  props.searchType === 'precise' ? props.texts.precise : props.texts.fuzzy
-);
-
-const searchTypeHoverLabel = computed(() =>
-  props.searchType === 'precise' ? props.texts.switchToFuzzy : props.texts.switchToPrecise
-);
+const isFuzzySearch = computed(() => props.searchType === 'fuzzy');
 
 const submitLabel = computed(() =>
   props.mode === 'traditional' ? props.texts.traditionalSubmit : props.texts.submit
@@ -314,7 +329,7 @@ onBeforeUnmount(() => {
   max-height: 12rem;
   overflow-y: auto;
   font-family: inherit;
-  padding: 0;
+  padding-top: 0.5rem;
 }
 
 .query-composer__controls {
@@ -411,6 +426,73 @@ onBeforeUnmount(() => {
 .query-composer__mode-toggle--secondary {
   background: rgba(237, 242, 255, 0.95);
   color: #2563eb;
+}
+
+.query-composer__search-switch {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem;
+  border-radius: 36px;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  background: rgba(237, 242, 255, 0.95);
+  color: #0f172a;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.04);
+}
+
+.query-composer__search-switch:hover {
+  background: rgba(218, 231, 255, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.query-composer__search-switch-label {
+  flex: 1;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #0f172a;
+  position: relative;
+  z-index: 2;
+  transition: color 0.2s ease;
+}
+
+.query-composer__search-switch-label--active {
+  color: #0b54d3;
+}
+
+.query-composer__search-switch-track {
+  position: relative;
+  width: 176px;
+  height: 40px;
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 36px;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: background-color 0.2s ease;
+}
+
+.query-composer__search-switch-track--active {
+  background: rgba(37, 99, 235, 0.2);
+}
+
+.query-composer__search-switch-thumb {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: calc(50% - 4px);
+  height: 32px;
+  background: #fff;
+  border-radius: 36px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  z-index: 1;
+}
+
+.query-composer__search-switch-thumb--right {
+  transform: translateX(100%);
 }
 
 .query-composer__domains-panel {
