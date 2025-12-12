@@ -118,7 +118,7 @@ function updateSearchType(nextType) {
 }
 
 .landing-hero__content {
-  width: min(var(--landing-hero-max-width, 720px), 100%);
+  width: 100%;
   text-align: center;
   display: flex;
   flex-direction: column;

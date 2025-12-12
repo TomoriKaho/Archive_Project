@@ -1,30 +1,54 @@
 <template>
-  <div class="landing-view">
-    <LandingHero
-      v-model="query"
-      :texts="heroTexts"
-      :domains="domainOptions"
-      :selected-domains="selectedDomains"
-      :submitting="isCreatingConversation"
-      :mode="searchMode"
-      :search-type="searchType"
-      :lifted="isTraditionalMode"
-      @submit="handleSubmit"
-      @update:domains="updateDomains"
-      @update:mode="setSearchMode"
-      @update:searchType="setSearchType"
-    />
-    <div v-if="isTraditionalMode" class="landing-view__archives">
-      <ArchiveResultsTable
-        :archives="archives"
-        :page="searchPage"
-        :page-size="pageSize"
-        :total="totalArchives"
-        :state="searchState"
-        :error-message="searchError"
-        :texts="archiveTableTexts"
-        @update:page="loadPage"
-      />
+  <div
+    class="landing-view"
+    :class="{ 'landing-view--traditional': isTraditionalMode, 'landing-view--ready': isUiReady }"
+  >
+    <div class="landing-view__content">
+      <div class="landing-view__hero">
+        <!-- Search bar fades when switching modes (and on first render). -->
+        <Transition name="landing-hero" mode="out-in" appear>
+          <LandingHero
+            :key="heroAnimKey"
+            v-model="query"
+            :texts="heroTexts"
+            :domains="domainOptions"
+            :selected-domains="selectedDomains"
+            :submitting="isCreatingConversation"
+            :mode="searchMode"
+            :search-type="searchType"
+            :lifted="isTraditionalMode"
+            @submit="handleSubmit"
+            @update:domains="updateDomains"
+            @update:mode="setSearchMode"
+            @update:searchType="setSearchType"
+          />
+        </Transition>
+      </div>
+
+      <!-- Results area fades in when entering traditional search mode. -->
+      <Transition name="landing-archives" appear>
+        <div v-if="isTraditionalMode" class="landing-view__archives">
+          <div class="landing-view__archives-panel">
+            <!-- Centered placeholder for the idle state. -->
+            <div v-if="searchState === 'idle'" class="landing-view__archives-placeholder">
+              {{ archiveTableTexts.placeholder }}
+            </div>
+
+            <ArchiveResultsTable
+              v-else
+              class="landing-view__archives-table"
+              :archives="archives"
+              :page="searchPage"
+              :page-size="pageSize"
+              :total="totalArchives"
+              :state="searchState"
+              :error-message="searchError"
+              :texts="archiveTableTexts"
+              @update:page="loadPage"
+            />
+          </div>
+        </div>
+      </Transition>
     </div>
     <div class="landing-view__quick-actions">
       <button
@@ -59,7 +83,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import ArchiveResultsTable from '@/components/ArchiveResultsTable.vue';
 import LandingHero from '@/components/LandingHero.vue';
@@ -79,6 +103,10 @@ const query = ref('');
 const isCreatingConversation = ref(false);
 const searchMode = ref('assistant');
 const searchType = ref('precise');
+
+// UI animation helpers
+const isUiReady = ref(false);
+const heroAnimKey = ref(0);
 const searchState = ref('idle');
 const searchError = ref('');
 const archives = ref([]);
@@ -213,10 +241,44 @@ watch(
   { immediate: true }
 );
 
+// Re-run the hero fade animation whenever the mode changes.
+watch(searchMode, () => {
+  heroAnimKey.value += 1;
+});
+
+let previousHtmlOverflow = '';
+let previousBodyOverflow = '';
+let previousHtmlHeight = '';
+let previousBodyHeight = '';
+
 onMounted(() => {
+  // Keep the landing page locked to a single viewport (no page-level scrolling).
+  // Note: we restore the previous values when leaving this view.
+  previousHtmlOverflow = document.documentElement.style.overflow;
+  previousBodyOverflow = document.body.style.overflow;
+  previousHtmlHeight = document.documentElement.style.height;
+  previousBodyHeight = document.body.style.height;
+
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+  document.documentElement.style.height = '100%';
+  document.body.style.height = '100%';
+
+  // Allow CSS transitions to run after the first paint.
+  requestAnimationFrame(() => {
+    isUiReady.value = true;
+  });
+
   domainsStore.loadDomains({ force: false }).catch((error) => {
     console.error('加载领域失败', error);
   });
+});
+
+onUnmounted(() => {
+  document.documentElement.style.overflow = previousHtmlOverflow;
+  document.body.style.overflow = previousBodyOverflow;
+  document.documentElement.style.height = previousHtmlHeight;
+  document.body.style.height = previousBodyHeight;
 });
 
 function toggleLanguage() {
@@ -319,18 +381,60 @@ function handleLogout() {
 <style scoped lang="scss">
 .landing-view {
   position: relative;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 7rem 1.5rem;
+  padding: 6rem 1.5rem 1.75rem;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05)),
     url('@/assets/pacific-map2.png');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
   isolation: isolate;
-  --landing-hero-max-width: 820px;
+  /* Shared width for search + results (animated when mode changes). */
+  --landing-content-max-width: 800px;
+  overflow: hidden;
+}
+
+.landing-view--traditional {
+  --landing-content-max-width: 1200px;
+}
+
+/*
+  One shared width container for both the search box and the results panel.
+  Animating a single element is noticeably smoother than animating both panels
+  (especially when the results area is large).
+*/
+.landing-view__content {
+  width: 100%;
+  max-width: var(--landing-content-max-width);
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.landing-view__hero {
+  width: 100%;
+  margin: 0 0 1.1rem;
+  flex: 0 0 auto;
+  display: flex;
+}
+
+/*
+  IMPORTANT:
+  LandingHero may ship with its own fixed max-width. That prevents the wrapper
+  from visually expanding when switching to traditional search mode.
+  Force the component root to be width:100% and remove any internal max-width.
+*/
+.landing-view__hero > :deep(*) {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.landing-view--traditional .landing-view__hero {
+  margin-bottom: 0.65rem;
 }
 
 .landing-view__quick-actions {
@@ -387,26 +491,111 @@ function handleLogout() {
 }
 
 .landing-view__archives {
-  width: min(var(--landing-hero-max-width, 720px), 100%);
-  margin: 1rem auto 0;
-  height: clamp(520px, 72vh, calc(100vh - 160px));
-  overflow: auto;
-  padding: 0 0.5rem 0.75rem;
+  width: 100%;
+  margin: 0.15rem 0 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 0 0.75rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
-.landing-view__archives::-webkit-scrollbar {
+.landing-view--traditional .landing-view__archives {
+  margin-top: 0.05rem;
+}
+
+.landing-view__archives-panel {
+  flex: 1 1 auto;
+  min-height: 320px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 20px;
+  box-shadow: 0 20px 55px rgba(28, 39, 84, 0.14);
+  overflow: auto;
+  position: relative;
+}
+
+.landing-view__archives-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.25rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(28, 39, 84, 0.55);
+  pointer-events: none;
+}
+
+/* Smooth width change when toggling modes */
+.landing-view--ready .landing-view__content {
+  transition: max-width 400ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: max-width;
+}
+
+/* Search bar fade */
+.landing-hero-enter-active,
+.landing-hero-leave-active {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.landing-hero-enter-from,
+.landing-hero-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.landing-hero-enter-to,
+.landing-hero-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Results area fade */
+.landing-archives-enter-active,
+.landing-archives-leave-active {
+  transition: opacity 500ms ease;
+  will-change: opacity;
+  transform: translateZ(0);
+}
+
+.landing-archives-enter-from,
+.landing-archives-leave-to {
+  opacity: 0;
+}
+
+.landing-archives-enter-to,
+.landing-archives-leave-from {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-view--ready .landing-view__content,
+  .landing-hero-enter-active,
+  .landing-hero-leave-active,
+  .landing-archives-enter-active,
+  .landing-archives-leave-active {
+    transition: none !important;
+  }
+}
+
+:deep(.landing-view__archives-table) {
+  height: 100%;
+  min-height: 100%;
+}
+
+.landing-view__archives-panel::-webkit-scrollbar {
   width: 8px;
 }
 
-.landing-view__archives::-webkit-scrollbar-thumb {
+.landing-view__archives-panel::-webkit-scrollbar-thumb {
   background: rgba(15, 23, 42, 0.2);
   border-radius: 999px;
 }
 
-.landing-view__archives::-webkit-scrollbar-track {
+.landing-view__archives-panel::-webkit-scrollbar-track {
   background: transparent;
 }
 
