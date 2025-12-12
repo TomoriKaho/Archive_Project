@@ -67,25 +67,6 @@
         </table>
       </div>
 
-      <div v-if="totalPages > 1" class="archive-table__pagination">
-        <button
-          class="archive-table__pager"
-          type="button"
-          :disabled="page <= 1"
-          @click="$emit('update:page', page - 1)"
-        >
-          {{ uiTexts.previous }}
-        </button>
-        <span class="archive-table__page-indicator">{{ page }} / {{ totalPages }}</span>
-        <button
-          class="archive-table__pager"
-          type="button"
-          :disabled="page >= totalPages"
-          @click="$emit('update:page', page + 1)"
-        >
-          {{ uiTexts.next }}
-        </button>
-      </div>
     </div>
 
     <BaseModal v-model="isDetailOpen" :title="detailTitle" :close-on-overlay="false">
@@ -556,37 +537,6 @@ function resolveDomainName(archive) {
 
 .archive-tree--empty {
   color: #94a3b8;
-}
-
-.archive-table__pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px;
-  background: #f8fafc;
-}
-
-.archive-table__pager {
-  border: none;
-  background: #2563eb;
-  color: #fff;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.18);
-}
-
-.archive-table__pager:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.archive-table__page-indicator {
-  color: #475569;
-  font-weight: 600;
 }
 
 .archive-table__placeholder {

@@ -29,22 +29,46 @@
       <Transition name="landing-archives" appear>
         <div v-if="isTraditionalMode" class="landing-view__archives">
           <div v-if="searchState !== 'idle'" class="landing-view__toolbar">
-            <div class="landing-view__toolbar-total">{{ archiveCountLabel }}</div>
-            <div v-if="pageRangeOptions.length" class="landing-view__toolbar-range">
-              <span class="landing-view__toolbar-label">{{ archiveTableTexts.rangeLabel }}</span>
-              <div class="landing-view__toolbar-select">
-                <select
-                  id="archive-range-select"
-                  :value="searchPage"
-                  class="landing-view__range-input"
-                  :aria-label="archiveTableTexts.rangeLabel"
-                  @change="onRangeChange"
-                >
-                  <option v-for="option in pageRangeOptions" :key="option.index" :value="option.index">
-                    {{ option.label }}
-                  </option>
-                </select>
-                <span class="landing-view__toolbar-arrow" aria-hidden="true">▾</span>
+            <div class="landing-view__toolbar-leading">
+              <div class="landing-view__toolbar-total">{{ archiveCountLabel }}</div>
+            </div>
+            <div v-if="searchTotalPages > 1" class="landing-view__toolbar-pagination">
+              <button
+                class="landing-view__pager"
+                type="button"
+                :disabled="searchPage <= 1"
+                @click="loadPage(searchPage - 1)"
+              >
+                {{ archiveTableTexts.previous }}
+              </button>
+              <span class="landing-view__page-indicator">{{ searchPage }} / {{ searchTotalPages }}</span>
+              <button
+                class="landing-view__pager"
+                type="button"
+                :disabled="searchPage >= searchTotalPages"
+                @click="loadPage(searchPage + 1)"
+              >
+                {{ archiveTableTexts.next }}
+              </button>
+            </div>
+            <div v-if="pageRangeOptions.length" class="landing-view__toolbar-trailing">
+              <div class="landing-view__toolbar-range">
+                <span class="landing-view__toolbar-pages">{{ pageTotalLabel }}</span>
+                <span class="landing-view__toolbar-label">{{ archiveTableTexts.rangeLabel }}</span>
+                <div class="landing-view__toolbar-select">
+                  <select
+                    id="archive-range-select"
+                    :value="searchPage"
+                    class="landing-view__range-input"
+                    :aria-label="archiveTableTexts.rangeLabel"
+                    @change="onRangeChange"
+                  >
+                    <option v-for="option in pageRangeOptions" :key="option.index" :value="option.index">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                  <span class="landing-view__toolbar-arrow" aria-hidden="true">▾</span>
+                </div>
               </div>
             </div>
           </div>
@@ -153,6 +177,13 @@ const archiveCountLabel = computed(() => {
   const total = Number(totalArchives.value) || 0;
   const label = archiveTableTexts.value?.countLabel;
   return typeof label === 'function' ? label(total) : `${total}`;
+});
+const pageTotalLabel = computed(() => {
+  const pages = searchTotalPages.value || 1;
+  if (language.value === 'zh') {
+    return `共${pages}页`;
+  }
+  return `${pages} pages`;
 });
 
 const languagePack = {
@@ -654,17 +685,70 @@ function handleLogout() {
 .landing-view__toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.85rem;
   padding: 0.5rem 0.85rem;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 14px;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.landing-view__toolbar-leading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .landing-view__toolbar-total {
   font-weight: 700;
   color: #0f172a;
+}
+
+.landing-view__toolbar-total,
+.landing-view__toolbar-range {
+  flex-shrink: 0;
+}
+
+.landing-view__toolbar-pagination {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-width: 240px;
+}
+
+.landing-view__pager {
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.18);
+}
+
+.landing-view__pager:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.landing-view__page-indicator {
+  color: #475569;
+  font-weight: 700;
+}
+
+.landing-view__toolbar-trailing {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
 }
 
 .landing-view__toolbar-range {
@@ -673,6 +757,10 @@ function handleLogout() {
   gap: 0.6rem;
   color: #334155;
   font-weight: 600;
+}
+
+.landing-view__toolbar-pages {
+  color: #0f172a;
 }
 
 .landing-view__toolbar-label {
