@@ -48,14 +48,8 @@
               </div>
             </div>
           </div>
-          <div class="landing-view__archives-panel">
-            <!-- Centered placeholder for the idle state. -->
-            <div v-if="searchState === 'idle'" class="landing-view__archives-placeholder">
-              {{ archiveTableTexts.placeholder }}
-            </div>
-
+          <div v-if="searchState !== 'idle'" class="landing-view__archives-panel">
             <ArchiveResultsTable
-              v-else
               class="landing-view__archives-table"
               :archives="archives"
               :search-query="query"
@@ -495,7 +489,12 @@ function handleLogout() {
 }
 
 .landing-view--traditional .landing-view__hero {
-  margin-bottom: 0.65rem;
+  margin-top: 2rem;
+  margin-bottom: 0rem;
+}
+
+.landing-view--traditional :deep(.landing-hero) {
+  padding: 0;
 }
 
 .landing-view__quick-actions {

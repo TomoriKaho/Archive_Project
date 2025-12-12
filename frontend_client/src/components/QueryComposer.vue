@@ -1,5 +1,9 @@
 <template>
-  <form class="query-composer" @submit.prevent="handleSubmit">
+  <form
+    class="query-composer"
+    :class="{ 'query-composer--traditional': mode === 'traditional' }"
+    @submit.prevent="handleSubmit"
+  >
     <div class="query-composer__card">
       <div class="query-composer__input-wrap">
         <textarea
@@ -267,6 +271,20 @@ onBeforeUnmount(() => {
 .query-composer {
   margin: 0;
   width: 100%;
+}
+
+.query-composer--traditional .query-composer__card {
+  padding: 0.8rem 1rem 0.9rem 1.25rem;
+  gap: 0.75rem;
+}
+
+.query-composer--traditional .query-composer__input {
+  min-height: 2.25rem;
+  line-height: 1.45;
+}
+
+.query-composer--traditional .query-composer__controls {
+  padding-top: 0.5rem;
 }
 
 .query-composer__card {
