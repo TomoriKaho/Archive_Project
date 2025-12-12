@@ -59,6 +59,7 @@
               type="button"
               class="query-composer__mode-toggle query-composer__mode-toggle--secondary"
               @click="toggleSearchType"
+              :title="searchTypeHoverLabel"
             >
               {{ searchTypeLabel }}
             </button>
@@ -156,6 +157,10 @@ const modeToggleLabel = computed(() =>
 
 const searchTypeLabel = computed(() =>
   props.searchType === 'precise' ? props.texts.precise : props.texts.fuzzy
+);
+
+const searchTypeHoverLabel = computed(() =>
+  props.searchType === 'precise' ? props.texts.switchToFuzzy : props.texts.switchToPrecise
 );
 
 const submitLabel = computed(() =>

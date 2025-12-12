@@ -142,6 +142,8 @@ const languagePack = {
         domainClear: '清除',
         switchToTraditional: '切换至传统搜索',
         switchToAssistant: '切换至智能助手',
+        switchToFuzzy: '切换至模糊搜索',
+        switchToPrecise: '切换至精准搜索',
         precise: '精准搜索',
         fuzzy: '模糊搜索'
       }
@@ -171,6 +173,8 @@ const languagePack = {
         domainClear: 'Clear',
         switchToTraditional: 'Switch to Traditional Search',
         switchToAssistant: 'Switch to AI Assistant',
+        switchToFuzzy: 'Switch to fuzzy search',
+        switchToPrecise: 'Switch to precise search',
         precise: 'Precise Search',
         fuzzy: 'Fuzzy Search'
       }
