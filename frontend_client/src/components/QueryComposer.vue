@@ -13,44 +13,59 @@
         ></textarea>
       </div>
       <div class="query-composer__controls">
-        <div v-if="domains.length" class="query-composer__domains">
-          <button type="button" class="query-composer__domains-button" @click="toggleDomains">
-            <span class="query-composer__domains-icon" aria-hidden="true">＋</span>
-            <span class="query-composer__domains-label">{{ texts.domainButton }}</span>
-            <span v-if="selectedDomainsCount" class="query-composer__domains-badge">{{ domainBadge }}</span>
-            <span class="query-composer__domains-caret" aria-hidden="true">▾</span>
-          </button>
-          <transition name="query-composer-fade">
-            <div
-              v-if="domainsPanelOpen"
-              class="query-composer__domains-panel"
-              :class="{ 'query-composer__domains-panel--scrollable': hasScrollableDomains }"
+        <div class="query-composer__actions">
+          <div v-if="domains.length" class="query-composer__domains">
+            <button type="button" class="query-composer__domains-button" @click="toggleDomains">
+              <span class="query-composer__domains-icon" aria-hidden="true">＋</span>
+              <span class="query-composer__domains-label">{{ texts.domainButton }}</span>
+              <span v-if="selectedDomainsCount" class="query-composer__domains-badge">{{ domainBadge }}</span>
+              <span class="query-composer__domains-caret" aria-hidden="true">▾</span>
+            </button>
+            <transition name="query-composer-fade">
+              <div
+                v-if="domainsPanelOpen"
+                class="query-composer__domains-panel"
+                :class="{ 'query-composer__domains-panel--scrollable': hasScrollableDomains }"
+              >
+                <p class="query-composer__domains-hint">{{ texts.domainHint }}</p>
+                <div class="query-composer__domains-grid">
+                  <label v-for="domain in domains" :key="domain.id" class="query-composer__domains-option">
+                    <input
+                      type="checkbox"
+                      :value="domain.id"
+                      :checked="pendingSelection.has(domain.id)"
+                      @change="toggleDomain(domain.id)"
+                    />
+                    <span>{{ domain.name }}</span>
+                  </label>
+                </div>
+                <div class="query-composer__domains-actions">
+                  <button type="button" class="query-composer__domains-apply" @click="applyDomains">
+                    {{ texts.domainApply }}
+                  </button>
+                  <button type="button" class="query-composer__domains-clear" @click="clearDomains">
+                    {{ texts.domainClear }}
+                  </button>
+                </div>
+              </div>
+            </transition>
+          </div>
+          <div class="query-composer__modes">
+            <button type="button" class="query-composer__mode-toggle" @click="toggleMode">
+              {{ modeToggleLabel }}
+            </button>
+            <button
+              v-if="mode === 'traditional'"
+              type="button"
+              class="query-composer__mode-toggle query-composer__mode-toggle--secondary"
+              @click="toggleSearchType"
             >
-              <p class="query-composer__domains-hint">{{ texts.domainHint }}</p>
-              <div class="query-composer__domains-grid">
-                <label v-for="domain in domains" :key="domain.id" class="query-composer__domains-option">
-                  <input
-                    type="checkbox"
-                    :value="domain.id"
-                    :checked="pendingSelection.has(domain.id)"
-                    @change="toggleDomain(domain.id)"
-                  />
-                  <span>{{ domain.name }}</span>
-                </label>
-              </div>
-              <div class="query-composer__domains-actions">
-                <button type="button" class="query-composer__domains-apply" @click="applyDomains">
-                  {{ texts.domainApply }}
-                </button>
-                <button type="button" class="query-composer__domains-clear" @click="clearDomains">
-                  {{ texts.domainClear }}
-                </button>
-              </div>
-            </div>
-          </transition>
+              {{ searchTypeLabel }}
+            </button>
+          </div>
         </div>
         <button class="query-composer__submit" type="submit" :disabled="!canSubmit || submitting">
-          {{ submitting ? texts.submitting : texts.submit }}
+          {{ submitting ? texts.submitting : submitLabel }}
         </button>
       </div>
     </div>
@@ -80,10 +95,25 @@ const props = defineProps({
   submitting: {
     type: Boolean,
     default: false
+  },
+  mode: {
+    type: String,
+    default: 'assistant'
+  },
+  searchType: {
+    type: String,
+    default: 'precise'
   }
 });
 
-const emit = defineEmits(['update:modelValue', 'submit', 'update:domains', 'domains-panel-toggle']);
+const emit = defineEmits([
+  'update:modelValue',
+  'submit',
+  'update:domains',
+  'domains-panel-toggle',
+  'update:mode',
+  'update:searchType'
+]);
 
 const draft = ref(props.modelValue);
 const textareaRef = ref(null);
@@ -119,6 +149,18 @@ const canSubmit = computed(() => Boolean(draft.value?.trim()));
 const selectedDomainsCount = computed(() => pendingSelection.value.size);
 
 const hasScrollableDomains = computed(() => props.domains.length > 2);
+
+const modeToggleLabel = computed(() =>
+  props.mode === 'traditional' ? props.texts.switchToAssistant : props.texts.switchToTraditional
+);
+
+const searchTypeLabel = computed(() =>
+  props.searchType === 'precise' ? props.texts.precise : props.texts.fuzzy
+);
+
+const submitLabel = computed(() =>
+  props.mode === 'traditional' ? props.texts.traditionalSubmit : props.texts.submit
+);
 
 const domainBadge = computed(() => {
   const count = selectedDomainsCount.value;
@@ -159,6 +201,14 @@ function clearDomains() {
   pendingSelection.value = new Set();
   emit('update:domains', []);
   setDomainsPanelOpen(false);
+}
+
+function toggleMode() {
+  emit('update:mode', props.mode === 'traditional' ? 'assistant' : 'traditional');
+}
+
+function toggleSearchType() {
+  emit('update:searchType', props.searchType === 'precise' ? 'fuzzy' : 'precise');
 }
 
 function handleSubmit() {
@@ -253,9 +303,23 @@ onBeforeUnmount(() => {
   border-top: 1px solid rgba(189, 201, 255, 0.6);
 }
 
+.query-composer__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
 .query-composer__domains {
   position: relative;
   display: inline-flex;
+}
+
+.query-composer__modes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .query-composer__domains-button {
@@ -299,6 +363,31 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   padding: 0.1rem 0.5rem;
   font-size: 0.75rem;
+}
+
+.query-composer__mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: none;
+  background: rgba(218, 239, 255, 0.85);
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-radius: 18px;
+  padding: 0.65rem 1.1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.query-composer__mode-toggle:hover {
+  background: rgba(193, 229, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.query-composer__mode-toggle--secondary {
+  background: rgba(237, 242, 255, 0.95);
+  color: #2563eb;
 }
 
 .query-composer__domains-panel {
