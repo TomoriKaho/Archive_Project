@@ -121,11 +121,12 @@
           </header>
           <div v-if="hasMetadata(activeArchive)" class="archive-tree">
             <dl class="archive-tree__list">
-              <template v-for="(value, key) in activeArchive.metadata" :key="key">
+              <template v-for="(value, key) in detailMetadata" :key="key">
                 <div class="archive-tree__item">
                   <dt>{{ key }}</dt>
                   <dd>
-                    <ArchiveTreeNode :value="value" />
+                    <ArchiveTreePreview v-if="shouldRenderArchiveTree(value)" :value="parseStructuredValue(value)" />
+                    <ArchiveTreeNode v-else :value="parseStructuredValue(value)" />
                   </dd>
                 </div>
               </template>
@@ -145,7 +146,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, defineComponent, h, ref } from 'vue';
 
 import ArchiveTreeNode from './ArchiveTreeNode.vue';
 import BaseModal from './BaseModal.vue';
@@ -185,6 +186,109 @@ defineEmits(['update:page']);
 
 const activeArchive = ref(null);
 const isDetailOpen = ref(false);
+
+const ArchiveTreePreview = defineComponent({
+  name: 'ArchiveTreePreview',
+  props: {
+    value: {
+      type: [Object, Array, String],
+      default: null
+    }
+  },
+  setup(props) {
+    const nodes = computed(() => normalizeArchiveNodes(parseStructuredValue(props.value)));
+
+    function normalizeArchiveNodes(value) {
+      if (!value) return [];
+      const list = Array.isArray(value) ? value : [value];
+      return list
+        .map((item) => normalizeArchiveNode(item))
+        .filter(Boolean);
+    }
+
+    function normalizeArchiveNode(item) {
+      if (!item || typeof item !== 'object') return null;
+      const unitid = toCleanText(item.unitid);
+      const title = toCleanText(item.title);
+      const date = toCleanText(item.date);
+      const extent = toCleanText(item.extent);
+      const scopecontent = toCleanText(item.scopecontent);
+
+      const children = Array.isArray(item.children)
+        ? item.children.map((child) => normalizeArchiveNode(child)).filter(Boolean)
+        : [];
+
+      if (!unitid && !title && !date && !extent && !scopecontent && !children.length) {
+        return null;
+      }
+
+      return {
+        unitid,
+        title,
+        date,
+        extent,
+        scopecontent,
+        children
+      };
+    }
+
+    function toCleanText(value) {
+      if (value === null || value === undefined) return '';
+      const text = typeof value === 'string' ? value.trim() : String(value);
+      return text.trim();
+    }
+
+    function renderScopecontent(node) {
+      if (!node.scopecontent) return null;
+      return h('details', { class: 'archive-tree__scope' }, [
+        h('summary', { class: 'archive-tree__scope-summary' }, '展开'),
+        h('div', { class: 'archive-tree__scope-body' }, node.scopecontent)
+      ]);
+    }
+
+    function renderNode(node, depth, key) {
+      const titleText = [node.unitid, node.title].filter(Boolean).join(' ').trim();
+      const metaItems = [node.date, node.extent].filter(Boolean);
+      const childNodes = Array.isArray(node.children) ? node.children : [];
+
+      return h(
+        'div',
+        {
+          class: 'archive-tree__node',
+          key,
+          style: { marginLeft: `${depth * 14}px` }
+        },
+        [
+          h('div', { class: 'archive-tree__header' }, [
+            h('div', { class: 'archive-tree__title' }, titleText || '未命名节点'),
+            metaItems.length
+              ? h(
+                  'div',
+                  { class: 'archive-tree__meta' },
+                  metaItems.map((meta, metaIndex) =>
+                    h('span', { class: 'archive-tree__meta-item', key: `meta-${metaIndex}` }, meta)
+                  )
+                )
+              : null
+          ]),
+          renderScopecontent(node),
+          ...childNodes.map((child, childIndex) => renderNode(child, depth + 1, `${key}-${childIndex}`))
+        ].filter(Boolean)
+      );
+    }
+
+    return () => {
+      if (!nodes.value.length) {
+        return h('div', { class: 'archive-tree archive-tree--empty' }, '—');
+      }
+      return h(
+        'div',
+        { class: 'archive-tree' },
+        nodes.value.map((node, index) => renderNode(node, 0, `node-${index}`))
+      );
+    };
+  }
+});
 
 const defaultTexts = {
   placeholder: '搜索结果在这里显示',
@@ -227,13 +331,70 @@ const detailTitle = computed(() => {
   return `${uiTexts.value.columns.archive}：${resolveArchiveName(activeArchive.value)}`;
 });
 
+const detailMetadata = computed(() => {
+  const metadata = activeArchive.value?.metadata;
+  const parsed = parseStructuredValue(metadata);
+
+  if (isObjectLike(parsed)) return parsed;
+  if (Array.isArray(parsed)) return { 内容: parsed };
+
+  if (hasArchiveText(parsed)) {
+    return { 内容: parsed };
+  }
+
+  return null;
+});
+
 function openDetails(archive) {
   activeArchive.value = archive;
   isDetailOpen.value = true;
 }
 
 function hasMetadata(archive) {
-  return archive && archive.metadata && typeof archive.metadata === 'object';
+  return Boolean(archive) && Boolean(detailMetadata.value);
+}
+
+function isObjectLike(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasArchiveText(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  return String(value).trim() !== '';
+}
+
+function isArchiveTreeNodeLike(node) {
+  if (!isObjectLike(node)) return false;
+  const hasMetadata = ['unitid', 'title', 'date', 'extent', 'scopecontent'].some((key) =>
+    hasArchiveText(node[key])
+  );
+  const children = Array.isArray(node.children) ? node.children : [];
+  const hasChildNode = children.some((child) => isArchiveTreeNodeLike(child));
+  return hasMetadata || hasChildNode;
+}
+
+function parseStructuredValue(value) {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      return value;
+    }
+  }
+  return value;
+}
+
+function isArchiveTreeValue(rawValue) {
+  const parsed = parseStructuredValue(rawValue);
+  if (!parsed || typeof parsed !== 'object') return false;
+  const values = Array.isArray(parsed) ? parsed : [parsed];
+  return values.some((value) => isArchiveTreeNodeLike(value));
+}
+
+function shouldRenderArchiveTree(value) {
+  if (!value) return false;
+  return isArchiveTreeValue(value);
 }
 
 function formatFallback(archive) {
@@ -363,8 +524,8 @@ function truncateText(text, maxLength = 22) {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 14px;
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
 
 .archive-tree__item {
@@ -387,6 +548,69 @@ function truncateText(text, maxLength = 22) {
 
 .archive-tree__item dd {
   margin: 0;
+}
+
+.archive-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.archive-tree__node {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.archive-tree__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.archive-tree__title {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.archive-tree__meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #475569;
+  font-size: 0.92rem;
+}
+
+.archive-tree__meta-item {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.archive-tree__scope {
+  margin-top: 8px;
+}
+
+.archive-tree__scope-summary {
+  cursor: pointer;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.archive-tree__scope-body {
+  margin-top: 6px;
+  color: #1f2937;
+  white-space: pre-wrap;
+}
+
+.archive-tree--empty {
+  color: #94a3b8;
 }
 
 .archive-table__pagination {
@@ -438,8 +662,8 @@ function truncateText(text, maxLength = 22) {
 
 .archive-detail__meta {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 14px;
+  grid-template-columns: 1fr;
+  gap: 12px;
   margin: 0;
   padding: 0;
 }

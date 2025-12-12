@@ -76,7 +76,7 @@ function onOverlayClick() {
   background: #ffffff;
   border-radius: 16px;
   width: 100%;
-  max-width: 640px;
+  max-width: 1024px;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
