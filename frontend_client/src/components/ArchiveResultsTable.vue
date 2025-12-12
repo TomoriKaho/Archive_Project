@@ -16,15 +16,13 @@
       <div class="archive-table__scroll">
         <table class="archive-table__grid">
           <colgroup>
-            <col style="width: 90px" />
-            <col style="width: 220px" />
-            <col style="width: 240px" />
+            <col style="width: 280px" />
+            <col style="width: 320px" />
             <col style="width: 160px" />
-            <col style="width: 140px" />
+            <col style="width: 110px" />
           </colgroup>
           <thead>
             <tr>
-              <th>{{ uiTexts.columns.index }}</th>
               <th>{{ uiTexts.columns.archive }}</th>
               <th>{{ uiTexts.columns.document }}</th>
               <th>{{ uiTexts.columns.domain }}</th>
@@ -39,27 +37,22 @@
             >
               <td>
                 <button class="archive-cell" type="button" @click="openDetails(archive, index)">
-                  <span class="archive-cell__text">{{ resolveIndex(archive, index) }}</span>
-                </button>
-              </td>
-              <td>
-                <button class="archive-cell" type="button" @click="openDetails(archive, index)">
                   <span class="archive-cell__text" :title="resolveArchiveName(archive)">
-                    {{ truncateText(resolveArchiveName(archive)) }}
+                    {{ resolveArchiveName(archive) }}
                   </span>
                 </button>
               </td>
               <td>
                 <button class="archive-cell" type="button" @click="openDetails(archive, index)">
                   <span class="archive-cell__text" :title="resolveDocumentName(archive)">
-                    {{ truncateText(resolveDocumentName(archive)) }}
+                    {{ resolveDocumentName(archive) }}
                   </span>
                 </button>
               </td>
               <td>
                 <button class="archive-cell" type="button" @click="openDetails(archive, index)">
                   <span class="archive-cell__text" :title="resolveDomainName(archive)">
-                    {{ truncateText(resolveDomainName(archive)) }}
+                    {{ resolveDomainName(archive) }}
                   </span>
                 </button>
               </td>
@@ -301,7 +294,6 @@ const defaultTexts = {
   previous: '上一页',
   next: '下一页',
   columns: {
-    index: '页序号',
     archive: '档案名称',
     document: '文档名称',
     domain: '知识域',
@@ -370,11 +362,6 @@ function formatFallback(archive) {
   }
 }
 
-function resolveIndex(archive, index) {
-  if (archive && archive.page) return archive.page;
-  return index + 1;
-}
-
 function resolveArchiveName(archive) {
   return archive?.archiveName || archive?.archive_name || '—';
 }
@@ -385,12 +372,6 @@ function resolveDocumentName(archive) {
 
 function resolveDomainName(archive) {
   return archive?.domainName || archive?.domain_name || '—';
-}
-
-function truncateText(text, maxLength = 22) {
-  if (!text || typeof text !== 'string') return text;
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength)}…`;
 }
 </script>
 

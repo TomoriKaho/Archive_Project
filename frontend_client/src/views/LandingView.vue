@@ -255,7 +255,6 @@ const archiveTableTexts = computed(() =>
         rangeLabel: '结果序号范围',
         countLabel: (total) => `共${total}条档案`,
         columns: {
-          index: '页序号',
           archive: '档案名称',
           document: '文档名称',
           domain: '知识域名称',
@@ -278,7 +277,6 @@ const archiveTableTexts = computed(() =>
         rangeLabel: 'Result range',
         countLabel: (total) => `${total} archives`,
         columns: {
-          index: 'Page',
           archive: 'Archive Name',
           document: 'Document Name',
           domain: 'Domain',
