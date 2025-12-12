@@ -9,8 +9,9 @@ from functools import lru_cache
 from typing import Any, Sequence
 import re
 from urllib import error, request
+
 from dotenv import find_dotenv, load_dotenv
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.entities import Chunk, Document
@@ -22,6 +23,7 @@ from .qdrant_service import (
     search_with_scores,
     upsert_vectors,
 )
+
 load_dotenv(find_dotenv(), override=False)
 
 logger = logging.getLogger(__name__)
@@ -43,8 +45,13 @@ CHAT_MODEL = os.getenv("CHAT_MODEL", "qwen3-vl-plus")
 DEFAULT_TOP_K = int(os.getenv("RAG_TOP_K", "10"))
 """Default number of chunks retrieved when no explicit top_k is provided."""
 
-STRING_MATCH_MAX_PER_ID = int(os.getenv("RAG_STRING_MATCH_MAX_PER_ID", "20"))
+# 注意：你给的变量名里没带 RAG_ 前缀；这里仍以代码实际读取的 env 为准。
+STRING_MATCH_MAX_PER_ID = int(os.getenv("RAG_STRING_MATCH_MAX_PER_ID", "10"))
 """Upper bound of chunks fetched per ID candidate during string search."""
+
+# 合并 OR 查询后，会对 candidate 数量做硬上限，避免 OR 过大导致 DB 计划变差
+STRING_MATCH_MAX_CANDIDATES = int(os.getenv("RAG_STRING_MATCH_MAX_CANDIDATES", "6"))
+"""Max number of ID/URL candidates used in DB string match per request."""
 
 NEIGHBOR_WINDOW_SIZE = int(os.getenv("RAG_NEIGHBOR_WINDOW_SIZE", "1"))
 """Default window size when expanding chunks with their neighbors."""
@@ -57,6 +64,19 @@ RAG_CHAT_TIMEOUT = int(os.getenv("RAG_CHAT_TIMEOUT", os.getenv("RAG_OLLAMA_TIMEO
 
 CHUNK_MEMORY_WINDOW_MULTIPLIER = int(os.getenv("RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER", "3"))
 """Number of historical chunk batches kept in memory, expressed as a multiplier of top_k."""
+
+# === B：上下文体积控制（强烈建议开启） ===
+RAG_CHUNK_CHAR_LIMIT = int(os.getenv("RAG_CHUNK_CHAR_LIMIT", "1200"))
+"""Max chars kept per chunk when building final LLM context."""
+
+RAG_CONTEXT_MAX_CHARS = int(os.getenv("RAG_CONTEXT_MAX_CHARS", "12000"))
+"""Max total chars for all chunks combined in final LLM context."""
+
+RAG_CONTEXT_MAX_CHUNKS = int(os.getenv("RAG_CONTEXT_MAX_CHUNKS", "40"))
+"""Hard cap on number of chunks included in final LLM context (after expansion)."""
+
+RAG_HISTORY_MAX_USER_TURNS = int(os.getenv("RAG_HISTORY_MAX_USER_TURNS", "3"))
+"""Only keep last N user turns for final answer prompt (reduce token bloat)."""
 
 _FALLBACK_LANGUAGE = "zh"
 _PROMPT_TEMPLATES = {
@@ -103,7 +123,6 @@ _REFERENCE_LABELS = {
 
 def resolve_prompt_template(language: str | None) -> tuple[str, dict[str, str]]:
     """Return the normalized language and prompt template with fallback."""
-
     normalized = normalize_language_code(language)
     template = _PROMPT_TEMPLATES.get(normalized or _FALLBACK_LANGUAGE)
     if not template:
@@ -114,7 +133,6 @@ def resolve_prompt_template(language: str | None) -> tuple[str, dict[str, str]]:
 
 def normalize_language_code(language: str | None) -> str | None:
     """Normalize user-provided language code to supported values."""
-
     if not language:
         return None
     lowered = language.strip().lower()
@@ -127,7 +145,6 @@ def normalize_language_code(language: str | None) -> str | None:
 
 def index_chunks(chunks: Sequence[Chunk]) -> int:
     """Embed and persist chunk vectors into Qdrant, returning indexed count."""
-
     vectors: list[list[float]] = []
     ids: list[int] = []
     payloads: list[dict[str, int]] = []
@@ -144,16 +161,15 @@ def index_chunks(chunks: Sequence[Chunk]) -> int:
     if not ids:  # 文档可能尚未生成任何 chunk
         return 0
     dim = len(vectors[0])
-    if any(len(vec) != dim for vec in vectors):  # 基本防御式校验，避免写入尺寸不一致的数据
+    if any(len(vec) != dim for vec in vectors):
         raise RuntimeError("inconsistent embedding dimensions detected")
-    ensure_collection(dim)  # 首次写入时按首个向量推断维度
-    upsert_vectors(ids, vectors, payloads)  # 使用 chunk.id 作为向量库主键
+    ensure_collection(dim)
+    upsert_vectors(ids, vectors, payloads)
     return len(ids)
 
 
 def remove_vectors(chunk_ids: Sequence[int]) -> int:
     """Remove chunk vectors from Qdrant and return the number of deleted items."""
-
     if not chunk_ids:
         return 0
     unique_ids = [int(chunk_id) for chunk_id in dict.fromkeys(chunk_ids)]
@@ -169,10 +185,7 @@ def retrieve(
     db: Session,
     history: Sequence[dict[str, str]] | None = None,
 ) -> list[Chunk]:
-    """Retrieve the most relevant chunks for the given question.
-
-    新增可选参数 history，用于在检索阶段利用会话上下文。
-    """
+    """Retrieve the most relevant chunks for the given question."""
     chunks, _ = retrieve_with_scores(question, top_k, domain_ids, db=db, history=history)
     return chunks
 
@@ -182,27 +195,21 @@ _ALNUM_MIXED = re.compile(r"[A-Za-z][A-Za-z0-9\-_]*\d[A-Za-z0-9\-_]{2,}")
 _ERA_PREFIX = re.compile(r"(平|昭|令)[^\d]{0,2}\d{1,}")
 _URL_PATTERN = re.compile(r"https?://[^\s<>\u3000\"']+", re.IGNORECASE)
 
+# 更宽松的分词：保留中日韩字符片段、字母数字片段
+_WORDISH = re.compile(r"[A-Za-z0-9\-_]{2,}|[\u4e00-\u9fff]{2,}|[\u3040-\u30ff]{2,}|[\uac00-\ud7af]{2,}")
+
 
 def extract_id_candidates(query: str) -> list[str]:
-    """Extract ID / number-like candidates from a free-form query.
-
-    Embedding models are notoriously weak at retaining the semantics of raw
-    numbers or long identifiers. For archive-style questions such as
-    "平成12年12345号档案是什么", a pure vector search often misses the exact chunk
-    containing the ID. This helper pulls out likely identifiers so we can run a
-    lightweight string match in parallel.
-    """
-
+    """Extract ID / number-like candidates from a free-form query."""
     candidates: list[str] = []
     normalized = query.strip()
     for pattern in (_DIGIT_RUN, _ALNUM_MIXED, _ERA_PREFIX):
         for match in pattern.findall(normalized):
             token = match.strip()
-            if len(token) < 4:  # ignore trivial short pieces like single years
+            if len(token) < 4:
                 continue
             candidates.append(token)
 
-    # Deduplicate while preserving order
     seen: set[str] = set()
     unique_candidates: list[str] = []
     for cand in candidates:
@@ -215,7 +222,6 @@ def extract_id_candidates(query: str) -> list[str]:
 
 def extract_strict_match_targets(query: str) -> list[str]:
     """Pull out digit runs and URLs that require exact string containment."""
-
     if not query:
         return []
 
@@ -242,6 +248,94 @@ def extract_strict_match_targets(query: str) -> list[str]:
     return result
 
 
+def _dedupe_preserve_order(items: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for it in items:
+        x = (it or "").strip()
+        if not x or x in seen:
+            continue
+        seen.add(x)
+        out.append(x)
+    return out
+
+
+# === A：检索 query 构造改为纯本地（不再调用云端 chat）===
+@lru_cache(maxsize=256)
+def _extract_keyword_tokens_local(text: str, *, limit: int = 24) -> tuple[str, ...]:
+    """本地抽取关键词，用于向量检索 query（快、稳定、可缓存）。"""
+    if not text:
+        return tuple()
+
+    normalized = text.strip()
+    if not normalized:
+        return tuple()
+
+    tokens: list[str] = []
+    # 强信号：URL / 长数字 / 混合编号
+    tokens.extend(_URL_PATTERN.findall(normalized))
+    tokens.extend(_DIGIT_RUN.findall(normalized))
+    tokens.extend(_ALNUM_MIXED.findall(normalized))
+    tokens.extend(_ERA_PREFIX.findall(normalized))
+
+    # 其他“像词”的片段
+    tokens.extend(_WORDISH.findall(normalized))
+
+    # 清洗：去掉特别长的垃圾段，保留相对短、信息密度高的 token
+    cleaned: list[str] = []
+    for t in tokens:
+        s = (t or "").strip()
+        if not s:
+            continue
+        if len(s) > 48:
+            continue
+        cleaned.append(s)
+
+    unique = _dedupe_preserve_order(cleaned)
+    return tuple(unique[:limit])
+
+
+def build_retrieval_query_text(
+    question: str,
+    history: Sequence[dict[str, str]] | None = None,
+) -> str:
+    """根据当前问题 + 近期会话历史，构造用于向量检索的查询文本。
+
+    A：这里不再调用云端 chat 做关键词提取（避免检索阶段多次云端往返）。
+    """
+    q = (question or "").strip()
+    if not q:
+        return ""
+
+    # 仅取最近若干条用户问题（不拿 assistant 长回答，避免把向量 query 搞“发胖”）
+    user_tail: list[str] = []
+    if history:
+        for msg in reversed(history):
+            if msg.get("role") != "user":
+                continue
+            content = (msg.get("content") or "").strip()
+            if not content:
+                continue
+            user_tail.append(content)
+            if len(user_tail) >= max(1, RAG_HISTORY_MAX_USER_TURNS):
+                break
+        user_tail.reverse()
+
+    # 把历史和当前问题各自抽 token，然后拼成紧凑 query
+    parts: list[str] = []
+    for ut in user_tail[-RAG_HISTORY_MAX_USER_TURNS:]:
+        toks = _extract_keyword_tokens_local(ut, limit=12)
+        if toks:
+            parts.append(" ".join(toks))
+
+    q_toks = _extract_keyword_tokens_local(q, limit=24)
+    parts.append(" ".join(q_toks) if q_toks else q)
+
+    merged = "\n".join([p for p in parts if p.strip()]).strip()
+    return merged or q
+
+
+# === C：字符串匹配查询合并，减少 DB 往返 ===
 def search_chunks_by_id_candidates(
     db: Session,
     id_candidates: list[str],
@@ -251,34 +345,37 @@ def search_chunks_by_id_candidates(
 ) -> list[Chunk]:
     """Perform fuzzy string search for chunks containing any of the IDs.
 
-    For ID-heavy questions, exact string containment is often more reliable
-    than embeddings. We still cap results per candidate to keep the context
-    manageable.
+    C：把“每个 candidate 一次查询”改为“少量 candidate 合并 OR 一次查询”，
+       显著减少 DB 往返与扫描次数（仍建议 DB 侧加 pg_trgm 索引）。
     """
 
     if not id_candidates:
         return []
 
-    matched: list[Chunk] = []
-    seen_ids: set[int] = set()
-    for candidate in id_candidates:
-        stmt = select(Chunk).options(joinedload(Chunk.document)).where(
-            Chunk.content.ilike(f"%{candidate}%")
-        )
-        if domain_ids:
-            stmt = stmt.join(Chunk.document).where(Document.domain_id.in_(list(domain_ids)))
-        if limit_per_id:
-            stmt = stmt.limit(limit_per_id)
-        rows = db.execute(stmt).scalars().unique().all()
-        for chunk in rows:
-            if chunk.id in seen_ids:
-                continue
-            seen_ids.add(chunk.id)
-            matched.append(chunk)
-    logger.info(
-        "string_match candidates=%s matched_chunks=%s", len(id_candidates), len(matched)
-    )
-    return matched
+    # 强制去重 + 限制 candidate 数量（URL/长编号优先）
+    cands = _dedupe_preserve_order(id_candidates)
+    cands.sort(key=lambda s: (0 if s.startswith("http") else 1, -len(s)))
+    cands = cands[: max(1, STRING_MATCH_MAX_CANDIDATES)]
+
+    # ⚠️ 强烈建议：Postgres 启用 pg_trgm 并建立索引，否则 ILIKE '%...%' 依旧可能慢：
+    #   CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    #   CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chunks_content_trgm
+    #     ON chunks USING GIN (content gin_trgm_ops);
+
+    conditions = [Chunk.content.ilike(f"%{cand}%") for cand in cands]
+    stmt = select(Chunk).where(or_(*conditions))
+
+    # domain 过滤才 join Document，避免无谓 join
+    if domain_ids:
+        stmt = stmt.join(Chunk.document).where(Document.domain_id.in_(list(domain_ids)))
+
+    # 近似“每个 candidate 限额”：总量上限 = limit_per_id * candidate_count
+    total_limit = max(1, int(limit_per_id)) * len(cands) if limit_per_id else 50
+    stmt = stmt.limit(total_limit)
+
+    rows = db.execute(stmt).scalars().unique().all()
+    logger.info("string_match cands=%s matched_chunks=%s", len(cands), len(rows))
+    return rows
 
 
 def merge_string_and_vector_results(
@@ -287,14 +384,7 @@ def merge_string_and_vector_results(
     *,
     limit: int | None = None,
 ) -> list[Chunk]:
-    """Merge string and vector retrieval results with ID hits prioritized.
-
-    Strategy: return all string matches first (ID recall is most important),
-    then append remaining vector hits while keeping unique chunk IDs.
-    When limit is provided, truncate the merged list to avoid exceeding the
-    caller's budget.
-    """
-
+    """Merge string and vector retrieval results with ID hits prioritized."""
     merged: list[Chunk] = []
     seen_ids: set[int] = set()
     for chunk in string_matches:
@@ -322,17 +412,10 @@ def expand_with_neighbor_chunks(
     *,
     score_map: dict[int, float] | None = None,
 ) -> list[Chunk]:
-    """Expand retrieved chunks by adding their neighbors within the same document.
-
-    多数字段分散在多个 chunk 中，单点命中往往不足以回答跨字段问题。相比
-    二次检索或多跳 RAG，直接附加同一文档的前后邻居可以立即让 LLM 看到同一
-    档案的关联字段，是一种简单且工程化的折中方案。
-    """
-
+    """Expand retrieved chunks by adding their neighbors within the same document."""
     if not chunks:
         return []
 
-    # Always include the seed chunks
     seen_ids: set[int] = {chunk.id for chunk in chunks}
     expanded: list[Chunk] = list(chunks)
 
@@ -346,7 +429,6 @@ def expand_with_neighbor_chunks(
         for offset in range(-window_size, window_size + 1):
             ordinal = chunk.ordinal + offset
             targets[chunk.document_id].add(ordinal)
-            # Neighbor scores slightly decay by distance but stay tied to the anchor chunk.
             decayed = base_score - abs(offset) * 1e-4
             stored = ordinal_scores[chunk.document_id].get(ordinal, float("-inf"))
             if decayed > stored:
@@ -388,136 +470,6 @@ def expand_with_neighbor_chunks(
     return expanded
 
 
-def build_retrieval_query_text(
-    question: str,
-    history: Sequence[dict[str, str]] | None = None,
-) -> str:
-    """根据当前问题 + 近期会话历史，构造用于向量检索的查询文本。
-
-    这样可以缓解“它 / 这个档案”之类代词导致的语义丢失问题，并优先利用
-    已经由 LLM 压缩过的摘要，避免长篇上下文喧宾夺主。
-    """
-
-    @lru_cache(maxsize=32)
-    def _extract_keyword_tokens(text: str, *, limit: int = 12) -> list[str]:
-        """提取用于向量检索的关键词，改为通过聊天模型生成。"""
-
-        def _fallback_regex_tokens(content: str, *, count: int) -> list[str]:
-            normalized = content.strip()
-            tokens: list[str] = _DIGIT_RUN.findall(normalized)
-            tokens.extend(_ALNUM_MIXED.findall(normalized))
-            rough_parts = re.split(
-                r"[\s,.;:!?，。！？；、\-\(\)\[\]\{\}<>\"'\/]+", normalized
-            )
-            for part in rough_parts:
-                piece = part.strip()
-                if len(piece) < 2:
-                    continue
-                tokens.append(piece)
-
-            seen: set[str] = set()
-            unique: list[str] = []
-            for token in tokens:
-                if token in seen:
-                    continue
-                seen.add(token)
-                unique.append(token)
-                if len(unique) >= count:
-                    break
-            return unique
-
-        if not text:
-            return []
-
-        normalized = text.strip()
-        if not normalized:
-            return []
-
-        system_prompt = (
-            "你是一个关键词提取器。请从文本中抽取不超过{limit}个关键词或短语，"
-            "优先保留年份、数字、编号、实体名（如地名、人名、机构名）、重要名词。"
-            "仅输出用空格分隔的关键词列表，不要添加额外解释。"
-        ).format(limit=limit)
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": (
-                    "文本：" + normalized + "\n\n格式：关键词1 关键词2 ...，总数不超过 {limit} 个。"
-                ).format(limit=limit),
-            },
-        ]
-
-        try:
-            raw = chat(messages)
-        except RuntimeError:
-            logger.warning("LLM 关键词提取失败，回退正则方式")
-            return _fallback_regex_tokens(normalized, count=limit)
-
-        tokens = []
-        for token in re.split(r"[\s,，、]+", raw.strip()):
-            piece = token.strip()
-            if not piece:
-                continue
-            tokens.append(piece)
-            if len(tokens) >= limit:
-                break
-
-        if not tokens:
-            return _fallback_regex_tokens(normalized, count=limit)
-        return tokens
-
-    if not history:
-        # 没有历史，直接用当前问题的关键词
-        keywords = _extract_keyword_tokens(question)
-        return " ".join(keywords) if keywords else question.strip()
-
-    # 优先取最近的“对话摘要”（system 角色消息），摘要已经经过 LLM 压缩，可
-    # 以提供稳定的历史语义，又不会像长篇回答那样主导嵌入。
-    summary: str | None = None
-    for msg in reversed(history):
-        if msg.get("role") != "system":
-            continue
-        content = (msg.get("content") or "").strip()
-        if not content:
-            continue
-        summary = content[:800]  # 摘要一般不长，但仍做安全截断
-        break
-
-    # 仅保留最近几条「用户提问」，避免上一轮长篇回答主导向量语义
-    tail = [
-        msg
-        for msg in list(history)[-6:]
-        if msg.get("role") == "user" and (msg.get("content") or "").strip()
-    ]
-
-    history_lines: list[str] = []
-    if summary:
-        summary_keywords = _extract_keyword_tokens(summary, limit=8)
-        summary_block = " ".join(summary_keywords) if summary_keywords else summary
-        history_lines.append(f"对话摘要关键词：{summary_block}")
-
-    # 把用户的发言简单串起来（限制单条长度，降低历史权重）
-    for msg in tail[-3:]:  # 最多取 3 条用户提问，聚焦近期主题
-        content = (msg.get("content") or "").strip()
-        # 仅保留关键词，避免长篇描述主导嵌入
-        keywords = _extract_keyword_tokens(content)
-        trimmed = " ".join(keywords) if keywords else content[:200]
-        history_lines.append(f"用户关键词：{trimmed}")
-
-    history_block = "\n".join(history_lines).strip()
-
-    # 最后明确告诉嵌入模型：下面是当前问题
-    question_keywords = _extract_keyword_tokens(question)
-    current_line = "当前问题关键词：" + (
-        " ".join(question_keywords) if question_keywords else question.strip()
-    )
-
-    if history_block:
-        return f"{history_block}\n\n{current_line}"
-    return current_line
-
-
 def retrieve_with_scores(
     question: str,
     top_k: int,
@@ -526,15 +478,13 @@ def retrieve_with_scores(
     db: Session,
     history: Sequence[dict[str, str]] | None = None,
 ) -> tuple[list[Chunk], list[tuple[int, float]]]:
-    """Retrieve chunks along with their similarity scores.
-
-    新增参数 history，用于构造更完整的检索文本（包含上下文）。
-    """
+    """Retrieve chunks along with their similarity scores."""
     limit = top_k or DEFAULT_TOP_K
 
-    # 先根据原始问题提取可能的编号片段，用于字符串匹配检索
+    # 先从原始问题提取编号/URL，用于字符串匹配
     id_candidates = extract_id_candidates(question)
     strict_targets = extract_strict_match_targets(question)
+
     combined_candidates: list[str] = []
     seen_candidate: set[str] = set()
     for candidate in strict_targets + id_candidates:
@@ -542,20 +492,25 @@ def retrieve_with_scores(
             continue
         seen_candidate.add(candidate)
         combined_candidates.append(candidate)
+
     string_matches = search_chunks_by_id_candidates(
-        db, combined_candidates, domain_ids=domain_ids, limit_per_id=STRING_MATCH_MAX_PER_ID
+        db,
+        combined_candidates,
+        domain_ids=domain_ids,
+        limit_per_id=STRING_MATCH_MAX_PER_ID,
     )
 
-    # 利用会话历史构造检索文本，而不是只用当前问题
+    # A：用本地构造的 query text，而不是云端 LLM 关键词提取
     query_text = build_retrieval_query_text(question, history)
-    query_vec = embed(query_text)  # 将“问题 + 上下文”编码为向量
+    query_vec = embed(query_text)
 
     search_results = search_with_scores(
         query_vec,
         limit,
         domain_ids=domain_ids,
-    )  # 调用向量库获取候选
+    )
     chunk_ids = [chunk_id for chunk_id, _ in search_results]
+
     repo = ChunkRepository(db)
     fetched = repo.get_many(chunk_ids, domain_ids=domain_ids)
     chunk_map = {chunk.id: chunk for chunk in fetched}
@@ -573,11 +528,12 @@ def retrieve_with_scores(
         for chunk in string_matches:
             score_map[chunk.id] = max(score_map.get(chunk.id, 0.0), string_score)
 
+    # B：邻居扩展不再被 top_k 砍回去，使用 NEIGHBOR_MAX_TOTAL_CHUNKS 做上限
     expanded_chunks = expand_with_neighbor_chunks(
         db,
         merged_chunks,
         window_size=NEIGHBOR_WINDOW_SIZE,
-        max_total_chunks=limit,
+        max_total_chunks=NEIGHBOR_MAX_TOTAL_CHUNKS,
         score_map=score_map,
     )
 
@@ -585,25 +541,47 @@ def retrieve_with_scores(
     return expanded_chunks, references
 
 
-def build_context(chunks: list[Chunk]) -> str:
-    """把检索到的 chunk 拼成给 LLM 的上下文，只保留正文内容。"""
-
+# === B：构造最终上下文时，做 per-chunk 与 total 截断 ===
+def build_context(
+    chunks: list[Chunk],
+    *,
+    per_chunk_char_limit: int = RAG_CHUNK_CHAR_LIMIT,
+    max_total_chars: int = RAG_CONTEXT_MAX_CHARS,
+    max_chunks: int = RAG_CONTEXT_MAX_CHUNKS,
+) -> str:
+    """把检索到的 chunk 拼成给 LLM 的上下文，只保留正文内容，并控制体积。"""
     if not chunks:
         return ""
 
     contents: list[str] = []
+    total = 0
+    used = 0
+
     for chunk in chunks:
+        if max_chunks and used >= max_chunks:
+            break
+
         text = (chunk.content or "").strip()
         if not text:
             continue
+
+        if per_chunk_char_limit and len(text) > per_chunk_char_limit:
+            text = text[:per_chunk_char_limit].rstrip() + "…"
+
+        # +2 for separators/newlines safety
+        projected = total + len(text) + 2
+        if max_total_chars and projected > max_total_chars:
+            break
+
         contents.append(text)
+        total = projected
+        used += 1
 
     return "\n\n".join(contents)
 
 
 def _extract_first_url(value: Any) -> str | None:
     """在任意层级的元数据中寻找首个 URL。"""
-
     if isinstance(value, str):
         match = _URL_PATTERN.search(value)
         return match.group(0) if match else None
@@ -623,7 +601,6 @@ def _extract_first_url(value: Any) -> str | None:
 
 def build_reference_entries(chunks: Sequence[Chunk]) -> list[tuple[str, str | None]]:
     """从命中的 chunk 提取文档标题与可用的链接。"""
-
     entries: list[tuple[str, str | None]] = []
     seen_documents: set[int] = set()
 
@@ -642,7 +619,6 @@ def build_reference_entries(chunks: Sequence[Chunk]) -> list[tuple[str, str | No
 
 def format_references(entries: Sequence[tuple[str, str | None]], language: str) -> str:
     """Render references using the requested language, falling back to Chinese."""
-
     labels = _REFERENCE_LABELS.get(language) or _REFERENCE_LABELS[_FALLBACK_LANGUAGE]
     heading = labels.get("heading", "参考资料")
     heading_separator = labels.get("heading_separator", "：")
@@ -660,13 +636,11 @@ def format_references(entries: Sequence[tuple[str, str | None]], language: str) 
 
 def chunk_to_memory_text(chunk: Chunk) -> str:
     """把单个 chunk 渲染成可持久化的“记忆”文本，只保留内容。"""
-
     return (chunk.content or "").strip()
 
 
 def compress_chunk_memory(question: str, chunks: Sequence[Chunk]) -> str:
     """Use the chat model to compress retrieved chunks for long-term memory."""
-
     context = build_context(list(chunks))
     if not context:
         return ""
@@ -691,7 +665,6 @@ def compress_chunk_memory(question: str, chunks: Sequence[Chunk]) -> str:
 
 def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
     """Call the cloud chat API (OpenAI-compatible) and return the assistant reply."""
-
     if stream:
         raise RuntimeError("streaming chat is not supported by the current cloud backend")
     if not CHAT_API_KEY:
@@ -733,7 +706,6 @@ def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
 
 def compress_dialog_history(history: Sequence[dict[str, str]]) -> str:
     """Compress multi-turn chat history so it can be stored compactly per chat."""
-
     if not history:
         return ""
 
@@ -743,11 +715,7 @@ def compress_dialog_history(history: Sequence[dict[str, str]]) -> str:
         content = (item.get("content") or "").strip()
         if not content or role not in {"user", "assistant", "system"}:
             continue
-        prefix = {
-            "user": "用户",
-            "assistant": "助手",
-            "system": "系统",
-        }.get(role, role)
+        prefix = {"user": "用户", "assistant": "助手", "system": "系统"}.get(role, role)
         normalized.append(f"{prefix}：{content}")
 
     if not normalized:
@@ -783,6 +751,7 @@ def answer(
 
     _normalized_language, prompt_template = resolve_prompt_template(preferred_language)
     limit = top_k or DEFAULT_TOP_K
+
     chunks, references = retrieve_with_scores(
         question,
         limit,
@@ -793,11 +762,15 @@ def answer(
     if not references:
         return prompt_template["no_context"], [], []
 
-    context = build_context(chunks)
+    # B：上下文拼接做严格截断
+    context = build_context(list(chunks))
+
     system_prompt = prompt_template["system"]
+
     history_items = list(history or [])
     user_system_prompts: list[str] = []
     filtered_history: list[dict[str, str]] = []
+
     for item in history_items:
         role = item.get("role")
         content = (item.get("content") or "").strip()
@@ -816,6 +789,7 @@ def answer(
             f"{system_prompt}\n\n"
             f"{prompt_template['user_instruction_intro'].format(instructions=joined_user_prompts)}"
         )
+
     if memory_chunks:
         window = CHUNK_MEMORY_WINDOW_MULTIPLIER * limit if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0 else 0
         selected_memory = list(memory_chunks)
@@ -828,35 +802,23 @@ def answer(
                 f"{prompt_template['memory_intro'].format(memory=joined_memory)}"
             )
 
-        # ... 前面的 system_prompt / history 处理保持不变
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
-    messages: list[dict[str, str]] = [
-        {"role": "system", "content": system_prompt}
-    ]
-
-    # 先把相关档案片段作为一条 user 消息给出去
     if context:
         messages.append(
-            {
-                "role": "user",
-                "content": prompt_template["context_intro"].format(context=context),
-            }
+            {"role": "user", "content": prompt_template["context_intro"].format(context=context)}
         )
 
-    # 会话历史：可以继续附加，但建议只保留最近若干条
-    trimmed_history: list[dict[str, str]] = []
+    # B：最终回答阶段 history 只保留最近 N 条用户提问，避免把 assistant 长回答塞进去拖慢
     if filtered_history:
-        # 例如只取最近 6 条历史记录，避免太长
-        trimmed_history = filtered_history[-6:]
-        messages.append(
-            {
-                "role": "assistant",
-                "content": "下面是此前的对话记录（供你理解上下文，不需要逐条逐一回复）：",
-            }
-        )
-        messages.extend(trimmed_history)
+        user_only = [m for m in filtered_history if m.get("role") == "user"]
+        trimmed_user = user_only[-max(0, RAG_HISTORY_MAX_USER_TURNS):] if RAG_HISTORY_MAX_USER_TURNS else []
+        if trimmed_user:
+            messages.append(
+                {"role": "assistant", "content": "下面是此前用户的提问（仅用于理解上下文，不需要逐条回复）："}
+            )
+            messages.extend(trimmed_user)
 
-    # 最后一条，一定是当前用户的问题
     messages.append(
         {
             "role": "user",
@@ -866,7 +828,6 @@ def answer(
             ),
         }
     )
-
 
     answer_text = chat(messages)
     final_text = answer_text.strip() if answer_text else ""
