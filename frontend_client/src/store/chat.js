@@ -10,6 +10,37 @@ import {
 import { useAuthStore } from './auth';
 import { usePreferencesStore } from './preferences';
 
+const PENDING_DELETE_STORAGE_KEY = 'client-chat-pending-deletes';
+
+function readPendingDeletionIds() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  const stored = window.localStorage.getItem(PENDING_DELETE_STORAGE_KEY);
+  try {
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) {
+      return Array.from(
+        new Set(
+          parsed
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value))
+        )
+      ).sort((a, b) => a - b);
+    }
+  } catch (error) {
+    console.error('读取待删除会话列表失败', error);
+  }
+  return [];
+}
+
+function persistPendingDeletionIds(ids) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  window.localStorage.setItem(PENDING_DELETE_STORAGE_KEY, JSON.stringify(ids));
+}
+
 function normalizeDomainIds(rawValue) {
   if (!Array.isArray(rawValue)) {
     return [];
@@ -83,7 +114,9 @@ export const useChatStore = defineStore('client-chat', {
     pausedStreams: {},
     sendAbortControllers: {},
     lastSendAttempt: null,
-    stoppedThinkingConversationId: null
+    stoppedThinkingConversationId: null,
+    terminatedConversations: {},
+    pendingDeletionIds: readPendingDeletionIds()
   }),
   getters: {
     activeConversation(state) {
@@ -126,22 +159,27 @@ export const useChatStore = defineStore('client-chat', {
           this.activeConversationId = null;
           this.messages = [];
           this.pendingMessages = {};
+          this.pendingDeletionIds = [];
+          persistPendingDeletionIds(this.pendingDeletionIds);
           return;
         }
         const { data } = await fetchConversations(authStore.user.id);
         const nextDomains = {};
-        data.forEach((conversation) => {
+        const pendingDeletionSet = new Set(this.pendingDeletionIds);
+        const filteredConversations = data.filter((conversation) => !pendingDeletionSet.has(conversation.id));
+        filteredConversations.forEach((conversation) => {
           const existing = this.conversationDomains[conversation.id];
           nextDomains[conversation.id] = Array.isArray(existing)
             ? normalizeDomainIds(existing)
             : [];
         });
         this.conversationDomains = nextDomains;
-        this.conversations = data;
-        if (selectFirst && data.length && !this.activeConversationId) {
-          this.activeConversationId = data[0].id;
-          await this.loadMessages(data[0].id);
+        this.conversations = filteredConversations;
+        if (selectFirst && filteredConversations.length && !this.activeConversationId) {
+          this.activeConversationId = filteredConversations[0].id;
+          await this.loadMessages(filteredConversations[0].id);
         }
+        this.retryPendingDeletes();
       } finally {
         this.isLoading = false;
       }
@@ -229,6 +267,9 @@ export const useChatStore = defineStore('client-chat', {
       if (!conversationId) {
         return null;
       }
+      if (this.isConversationTerminated(conversationId)) {
+        return null;
+      }
       const content = payload?.content?.trim();
       if (!content) {
         return null;
@@ -296,6 +337,9 @@ export const useChatStore = defineStore('client-chat', {
         }
         const { data } = await sendConversationMessage(conversationId, body, { signal: controller.signal });
         this.removePendingMessage(conversationId, messageId);
+        if (this.isConversationTerminated(conversationId)) {
+          return null;
+        }
         if (this.activeConversationId === conversationId) {
           const nextMessages = [...this.messages];
           const index = nextMessages.findIndex((item) => item.id === messageId);
@@ -388,6 +432,28 @@ export const useChatStore = defineStore('client-chat', {
       const { [conversationId]: _removed, ...rest } = this.sendAbortControllers;
       this.sendAbortControllers = rest;
     },
+    markConversationTerminated(conversationId) {
+      if (!conversationId) {
+        return;
+      }
+      this.terminatedConversations = {
+        ...this.terminatedConversations,
+        [conversationId]: true
+      };
+    },
+    unmarkConversationTerminated(conversationId) {
+      if (!conversationId || !this.terminatedConversations[conversationId]) {
+        return;
+      }
+      const { [conversationId]: _removed, ...rest } = this.terminatedConversations;
+      this.terminatedConversations = rest;
+    },
+    isConversationTerminated(conversationId) {
+      if (!conversationId) {
+        return false;
+      }
+      return !!this.terminatedConversations[conversationId];
+    },
     abortActiveSend() {
       if (!this.activeConversationId) {
         return;
@@ -426,34 +492,144 @@ export const useChatStore = defineStore('client-chat', {
       if (!conversationId) {
         return;
       }
-      this.stopConversationThinking(conversationId);
-      this.clearSendAbortController(conversationId);
+      const prevConversationIndex = this.conversations.findIndex((item) => item.id === conversationId);
+      const prevConversation = prevConversationIndex !== -1 ? this.conversations[prevConversationIndex] : null;
+      const prevDomains = this.conversationDomains[conversationId];
+      const prevPending = this.pendingMessages[conversationId];
+      const prevActiveConversationId = this.activeConversationId;
+      const prevMessages = this.activeConversationId === conversationId ? [...this.messages] : null;
+
+      this.markConversationTerminated(conversationId);
+      this.addPendingDeletionId(conversationId);
+      this.stopConversationThinking(conversationId, { skipRestartMark: true, clearSendState: true });
+      this.clearPausedStream(conversationId);
       if (this.lastSendAttempt?.conversationId === conversationId) {
         this.lastSendAttempt = null;
       }
       if (this.stoppedThinkingConversationId === conversationId) {
         this.stoppedThinkingConversationId = null;
       }
-      this.clearPausedStream(conversationId);
-      await deleteConversation(conversationId);
-      const wasActive = this.activeConversationId === conversationId;
-      this.conversations = this.conversations.filter((item) => item.id !== conversationId);
-      const { [conversationId]: _removed, ...rest } = this.conversationDomains;
-      this.conversationDomains = rest;
+      if (this.streamingConversationId === conversationId) {
+        this.stopAssistantStream({ complete: false });
+      }
+
+      const remainingConversations = this.conversations.filter((item) => item.id !== conversationId);
+      const nextActiveId =
+        this.activeConversationId === conversationId
+          ? remainingConversations.length
+            ? remainingConversations[0].id
+            : null
+          : this.activeConversationId;
+
+      this.conversations = remainingConversations;
+      const { [conversationId]: _removed, ...restDomains } = this.conversationDomains;
+      this.conversationDomains = restDomains;
       const { [conversationId]: _pendingRemoved, ...pendingRest } = this.pendingMessages;
       this.pendingMessages = pendingRest;
-      if (wasActive) {
-        if (this.conversations.length) {
-          const nextId = this.conversations[0].id;
-          this.activeConversationId = nextId;
-          await this.loadMessages(nextId);
-        } else {
-          this.activeConversationId = null;
-          this.messages = [];
+      if (this.activeConversationId === conversationId) {
+        this.activeConversationId = nextActiveId;
+        this.messages = [];
+      }
+      if (nextActiveId) {
+        this.loadMessages(nextActiveId).catch((error) => {
+          console.error('加载删除后的默认会话消息失败', error);
+        });
+      }
+
+      (async () => {
+        try {
+          await deleteConversation(conversationId);
+          this.removePendingDeletionId(conversationId);
+        } catch (error) {
+          this.removePendingDeletionId(conversationId);
+          this.restoreConversationAfterFailedDelete({
+            conversationId,
+            conversation: prevConversation,
+            conversationIndex: prevConversationIndex,
+            domains: prevDomains,
+            pending: prevPending,
+            prevActiveConversationId,
+            prevMessages,
+            nextActiveId
+          });
+          console.error('删除会话失败', error);
+        } finally {
+          this.unmarkConversationTerminated(conversationId);
+        }
+      })();
+    },
+    restoreConversationAfterFailedDelete({
+      conversationId,
+      conversation,
+      conversationIndex,
+      domains,
+      pending,
+      prevActiveConversationId,
+      prevMessages,
+      nextActiveId
+    }) {
+      if (conversation) {
+        const hasConversation = this.conversations.some((item) => item.id === conversationId);
+        if (!hasConversation) {
+          const nextConversations = [...this.conversations];
+          const insertAt = Math.max(0, conversationIndex);
+          nextConversations.splice(insertAt, 0, conversation);
+          this.conversations = nextConversations;
+        }
+      }
+      if (domains !== undefined) {
+        this.conversationDomains = {
+          ...this.conversationDomains,
+          [conversationId]: normalizeDomainIds(domains)
+        };
+      }
+      if (pending !== undefined) {
+        this.pendingMessages = {
+          ...this.pendingMessages,
+          [conversationId]: [...pending]
+        };
+      }
+
+      const shouldRestoreActive = this.activeConversationId === nextActiveId || this.activeConversationId == null;
+      if (shouldRestoreActive && prevActiveConversationId === conversationId) {
+        this.activeConversationId = conversationId;
+        if (prevMessages && prevMessages.length) {
+          this.messages = [...prevMessages];
         }
       }
     },
-    stopConversationThinking(conversationId) {
+    addPendingDeletionId(conversationId) {
+      const nextIds = Array.from(new Set([...this.pendingDeletionIds, Number(conversationId)]));
+      this.pendingDeletionIds = nextIds;
+      persistPendingDeletionIds(this.pendingDeletionIds);
+    },
+    removePendingDeletionId(conversationId) {
+      const nextIds = this.pendingDeletionIds.filter((id) => id !== Number(conversationId));
+      if (nextIds.length !== this.pendingDeletionIds.length) {
+        this.pendingDeletionIds = nextIds;
+        persistPendingDeletionIds(this.pendingDeletionIds);
+      }
+    },
+    retryPendingDeletes() {
+      if (!this.pendingDeletionIds.length) {
+        return;
+      }
+      const pendingIds = [...this.pendingDeletionIds];
+      pendingIds.forEach((id) => {
+        deleteConversation(id)
+          .then(() => {
+            this.removePendingDeletionId(id);
+          })
+          .catch((error) => {
+            if (error?.response?.status === 404) {
+              this.removePendingDeletionId(id);
+              return;
+            }
+            console.error('重试删除会话失败', error);
+          });
+      });
+    },
+    stopConversationThinking(conversationId, { skipRestartMark = false, clearSendState = false } = {}) {
       if (!conversationId) {
         this.stopAssistantStream({ complete: false });
         return;
@@ -461,13 +637,26 @@ export const useChatStore = defineStore('client-chat', {
       const controller = this.sendAbortControllers[conversationId];
       const isSending = this.sendingConversationIds.includes(conversationId);
       if (controller && isSending) {
-        if (conversationId === this.activeConversationId) {
+        if (!skipRestartMark && conversationId === this.activeConversationId) {
           this.stoppedThinkingConversationId = conversationId;
         }
         controller.abort();
       }
+      if (clearSendState) {
+        this.removeSendingConversation(conversationId);
+        this.clearSendAbortController(conversationId);
+      }
       if (this.streamingConversationId === conversationId) {
         this.stopAssistantStream({ complete: false });
+      }
+      if (clearSendState) {
+        this.clearPausedStream(conversationId);
+        if (this.stoppedThinkingConversationId === conversationId) {
+          this.stoppedThinkingConversationId = null;
+        }
+        if (this.lastSendAttempt?.conversationId === conversationId) {
+          this.lastSendAttempt = null;
+        }
       }
     },
     stopActiveConversationThinking() {
