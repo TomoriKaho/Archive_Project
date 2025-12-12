@@ -95,40 +95,34 @@
       </div>
     </div>
 
-    <BaseModal v-model="isDetailOpen" :title="detailTitle" :close-on-overlay="true">
+    <BaseModal v-model="isDetailOpen" :title="detailTitle" :close-on-overlay="false">
       <div v-if="activeArchive" class="archive-detail">
-        <dl class="archive-detail__meta">
-          <div class="archive-detail__item">
-            <dt>{{ uiTexts.columns.archive }}</dt>
-            <dd>
-              <HighlightedText
-                class="archive-detail__text"
-                :text="resolveArchiveName(activeArchive)"
-                :tokens="highlightTokens"
-              />
-            </dd>
+        <section class="archive-detail__summary">
+          <div class="archive-detail__summary-item">
+            <span class="archive-detail__label">{{ uiTexts.columns.archive }}</span>
+            <HighlightedText
+              class="archive-detail__summary-text"
+              :text="resolveArchiveName(activeArchive)"
+              :tokens="highlightTokens"
+            />
           </div>
-          <div class="archive-detail__item">
-            <dt>{{ uiTexts.columns.document }}</dt>
-            <dd>
-              <HighlightedText
-                class="archive-detail__text"
-                :text="resolveDocumentName(activeArchive)"
-                :tokens="highlightTokens"
-              />
-            </dd>
+          <div class="archive-detail__summary-item">
+            <span class="archive-detail__label">{{ uiTexts.columns.document }}</span>
+            <HighlightedText
+              class="archive-detail__summary-text"
+              :text="resolveDocumentName(activeArchive)"
+              :tokens="highlightTokens"
+            />
           </div>
-          <div class="archive-detail__item">
-            <dt>{{ uiTexts.columns.domain }}</dt>
-            <dd>
-              <HighlightedText
-                class="archive-detail__text"
-                :text="resolveDomainName(activeArchive)"
-                :tokens="highlightTokens"
-              />
-            </dd>
+          <div class="archive-detail__summary-item">
+            <span class="archive-detail__label">{{ uiTexts.columns.domain }}</span>
+            <HighlightedText
+              class="archive-detail__summary-text"
+              :text="resolveDomainName(activeArchive)"
+              :tokens="highlightTokens"
+            />
           </div>
-        </dl>
+        </section>
 
         <section class="archive-detail__metadata">
           <header class="archive-detail__metadata-header">
@@ -782,30 +776,32 @@ function truncateText(text, maxLength = 22) {
   gap: 14px;
 }
 
-.archive-detail__meta {
+.archive-detail__summary {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 16px;
 }
 
-.archive-detail__item {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 10px 12px;
+.archive-detail__summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
 }
 
-.archive-detail__item dt {
-  margin: 0 0 4px;
+.archive-detail__label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.archive-detail__summary-text {
+  color: #0f172a;
   font-weight: 700;
-  color: #111827;
 }
 
-.archive-detail__item dd {
-  margin: 0;
-  color: #1f2937;
+.archive-detail__text {
+  white-space: pre-line;
 }
 
 .archive-detail__metadata {
@@ -823,7 +819,7 @@ function truncateText(text, maxLength = 22) {
 
 .archive-detail__metadata-header h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
 }
 
