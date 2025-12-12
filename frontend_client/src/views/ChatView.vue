@@ -33,6 +33,7 @@
         :is-sending="isSending"
         :is-streaming="isStreaming"
         :is-stream-paused="isStreamPaused"
+        :assistant-phase="assistantPhase"
         :can-restart="canRestart"
         :domains="domainOptions"
         :selected-domains="activeDomains"
@@ -130,6 +131,7 @@ const messages = computed(() => chatStore.messages);
 const isSending = computed(() => chatStore.isActiveConversationSending);
 const isStreaming = computed(() => chatStore.isActiveConversationStreaming);
 const isStreamPaused = computed(() => chatStore.isActiveConversationStreamPaused);
+const assistantPhase = computed(() => chatStore.getConversationPhase(chatStore.activeConversationId));
 const activeConversationId = computed(() => chatStore.activeConversationId);
 const domainOptions = computed(() => domainsStore.items);
 const activeDomains = computed(() => chatStore.getConversationDomains(chatStore.activeConversationId));
@@ -201,6 +203,7 @@ const languagePack = {
       languageFlag: '🇨🇳',
       deleteConversation: '删除会话',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
+      retrieving: '助手正在检索…',
       thinking: '助手正在思考…',
       stopThinking: '停止思考',
       stopped: '已停止思考',
@@ -270,6 +273,7 @@ const languagePack = {
       languageFlag: '🇺🇸',
       deleteConversation: 'Delete conversation',
       empty: 'Start a new conversation and the assistant will answer based on the selected domains.',
+      retrieving: 'Assistant is searching…',
       thinking: 'Assistant is thinking…',
       stopThinking: 'Stop thinking',
       stopped: 'Thinking stopped',

@@ -32,30 +32,38 @@
       <div v-else class="chat-window__empty">
         <p>{{ texts.empty }}</p>
       </div>
-      <div v-if="isSending" class="chat-window__streaming chat-window__streaming--thinking">
-        <span class="chat-window__streaming-label">{{ texts.thinking }}</span>
-        <button type="button" class="chat-window__stop" @click="emit('stop-thinking')">
-          {{ texts.stopThinking || texts.stop }}
-        </button>
-      </div>
-      <div v-else-if="canRestart" class="chat-window__streaming chat-window__streaming--stopped">
-        <span class="chat-window__streaming-label">{{ texts.stopped }}</span>
-        <button type="button" class="chat-window__stop chat-window__stop--restart" @click="emit('restart-thinking')">
-          {{ texts.restart }}
-        </button>
-      </div>
-      <div v-else-if="isStreaming" class="chat-window__streaming">
-        <span class="chat-window__streaming-label">{{ texts.streaming }}</span>
-        <button type="button" class="chat-window__stop" @click="emit('stop-stream')">
-          {{ texts.stop }}
-        </button>
-      </div>
-      <div v-else-if="isStreamPaused" class="chat-window__streaming chat-window__streaming--paused">
-        <span class="chat-window__streaming-label">{{ texts.paused }}</span>
-        <button type="button" class="chat-window__stop" @click="emit('resume-stream')">
-          {{ texts.resume }}
-        </button>
-      </div>
+      <transition name="chat-status" mode="out-in">
+        <div v-if="isRetrieving" key="retrieving" class="chat-window__streaming chat-window__streaming--thinking">
+          <span class="chat-window__streaming-label chat-window__streaming-label--pulse">{{ texts.retrieving }}</span>
+          <button type="button" class="chat-window__stop" @click="emit('stop-thinking')">
+            {{ texts.stopThinking || texts.stop }}
+          </button>
+        </div>
+        <div v-else-if="isThinking" key="thinking" class="chat-window__streaming chat-window__streaming--thinking">
+          <span class="chat-window__streaming-label chat-window__streaming-label--pulse">{{ texts.thinking }}</span>
+          <button type="button" class="chat-window__stop" @click="emit('stop-thinking')">
+            {{ texts.stopThinking || texts.stop }}
+          </button>
+        </div>
+        <div v-else-if="canRestart" key="stopped" class="chat-window__streaming chat-window__streaming--stopped">
+          <span class="chat-window__streaming-label">{{ texts.stopped }}</span>
+          <button type="button" class="chat-window__stop chat-window__stop--restart" @click="emit('restart-thinking')">
+            {{ texts.restart }}
+          </button>
+        </div>
+        <div v-else-if="isStreaming" key="streaming" class="chat-window__streaming">
+          <span class="chat-window__streaming-label">{{ texts.streaming }}</span>
+          <button type="button" class="chat-window__stop" @click="emit('stop-stream')">
+            {{ texts.stop }}
+          </button>
+        </div>
+        <div v-else-if="isStreamPaused" key="paused" class="chat-window__streaming chat-window__streaming--paused">
+          <span class="chat-window__streaming-label">{{ texts.paused }}</span>
+          <button type="button" class="chat-window__stop" @click="emit('resume-stream')">
+            {{ texts.resume }}
+          </button>
+        </div>
+      </transition>
     </main>
 
     <form class="chat-window__composer" @submit.prevent="handleSubmit">
@@ -122,6 +130,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  assistantPhase: {
+    type: String,
+    default: null
+  },
   isStreaming: {
     type: Boolean,
     default: false
@@ -162,6 +174,7 @@ const props = defineProps({
       languageFlag: '🇨🇳',
       deleteConversation: '删除会话',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
+      retrieving: '助手正在检索…',
       thinking: '助手正在思考…',
       stopThinking: '停止思考',
       stopped: '已停止思考',
@@ -199,6 +212,9 @@ const composerInput = ref(null);
 const domainsPanelOpen = ref(false);
 const pendingSelection = ref(new Set(props.selectedDomains));
 const messageContainer = ref(null);
+const currentPhase = computed(() => props.assistantPhase || (props.isSending ? 'thinking' : null));
+const isRetrieving = computed(() => currentPhase.value === 'retrieving');
+const isThinking = computed(() => currentPhase.value === 'thinking');
 
 const MIN_INPUT_HEIGHT = 44;
 const MAX_INPUT_HEIGHT = 240;
@@ -622,6 +638,17 @@ function autoResizeInput() {
   text-align: center;
 }
 
+.chat-status-enter-active,
+.chat-status-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.chat-status-enter-from,
+.chat-status-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
 .chat-window__streaming {
   align-self: flex-start;
   display: flex;
@@ -639,6 +666,16 @@ function autoResizeInput() {
   background: rgba(123, 91, 255, 0.12);
   color: #5a50b5;
   box-shadow: 0 12px 24px rgba(123, 91, 255, 0.15);
+}
+
+.chat-window__streaming-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chat-window__streaming-label--pulse {
+  animation: statusPulse 1.4s ease-in-out infinite;
 }
 
 .chat-window__streaming--stopped {
@@ -673,6 +710,21 @@ function autoResizeInput() {
 .chat-window__stop--restart {
   background: linear-gradient(135deg, #3cc3ff, #1f8fe5);
   box-shadow: 0 8px 18px rgba(31, 143, 229, 0.25);
+}
+
+@keyframes statusPulse {
+  0% {
+    opacity: 0.65;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+  100% {
+    opacity: 0.65;
+    transform: translateY(0);
+  }
 }
 
 .chat-message {

@@ -103,6 +103,7 @@ export const useChatStore = defineStore('client-chat', {
     messages: [],
     isLoading: false,
     sendingConversationIds: [],
+    conversationPhases: {},
     pendingMessages: {},
     streamingMessageId: null,
     streamingConversationId: null,
@@ -124,6 +125,12 @@ export const useChatStore = defineStore('client-chat', {
     },
     isActiveConversationSending(state) {
       return state.activeConversationId != null && state.sendingConversationIds.includes(state.activeConversationId);
+    },
+    getConversationPhase: (state) => (conversationId) => {
+      if (!conversationId) {
+        return null;
+      }
+      return state.conversationPhases[conversationId] || null;
     },
     getConversationDomains: (state) => (conversationId) => {
       if (!conversationId) {
@@ -158,6 +165,7 @@ export const useChatStore = defineStore('client-chat', {
           this.conversationDomains = {};
           this.activeConversationId = null;
           this.messages = [];
+          this.conversationPhases = {};
           this.pendingMessages = {};
           this.pendingDeletionIds = [];
           persistPendingDeletionIds(this.pendingDeletionIds);
@@ -277,6 +285,7 @@ export const useChatStore = defineStore('client-chat', {
       this.stopAssistantStream({ complete: false });
       this.abortActiveSend();
       this.stoppedThinkingConversationId = null;
+      this.setConversationPhase(conversationId, 'retrieving');
       const existingPending = reuseMessageId
         ? this.getPendingMessages(conversationId).find((item) => item.id === reuseMessageId)
         : null;
@@ -336,6 +345,7 @@ export const useChatStore = defineStore('client-chat', {
           }
         }
         const { data } = await sendConversationMessage(conversationId, body, { signal: controller.signal });
+        this.setConversationPhase(conversationId, 'thinking');
         this.removePendingMessage(conversationId, messageId);
         if (this.isConversationTerminated(conversationId)) {
           return null;
@@ -376,6 +386,9 @@ export const useChatStore = defineStore('client-chat', {
       } finally {
         this.removeSendingConversation(conversationId);
         this.clearSendAbortController(conversationId);
+        if (!this.isActiveConversationStreaming) {
+          this.clearConversationPhase(conversationId);
+        }
         if (!this.sendingConversationIds.length) {
           const wasStopped = this.stoppedThinkingConversationId === conversationId;
           if (!wasStopped) {
@@ -503,6 +516,7 @@ export const useChatStore = defineStore('client-chat', {
       this.addPendingDeletionId(conversationId);
       this.stopConversationThinking(conversationId, { skipRestartMark: true, clearSendState: true });
       this.clearPausedStream(conversationId);
+      this.clearConversationPhase(conversationId);
       if (this.lastSendAttempt?.conversationId === conversationId) {
         this.lastSendAttempt = null;
       }
@@ -646,6 +660,7 @@ export const useChatStore = defineStore('client-chat', {
         this.removeSendingConversation(conversationId);
         this.clearSendAbortController(conversationId);
       }
+      this.clearConversationPhase(conversationId);
       if (this.streamingConversationId === conversationId) {
         this.stopAssistantStream({ complete: false });
       }
@@ -681,6 +696,7 @@ export const useChatStore = defineStore('client-chat', {
       if (!assistant) {
         return;
       }
+      this.setConversationPhase(conversationId, 'thinking');
       this.clearPausedStream(conversationId);
       if (this.streamingConversationId && this.streamingConversationId !== conversationId) {
         this.stopAssistantStream({ complete: false, pause: true, reason: 'switch' });
@@ -836,6 +852,7 @@ export const useChatStore = defineStore('client-chat', {
       this.clearStreamingTimer();
       const totalLength = existingTotalLength || this.streamingTarget.length;
       const chunkSize = existingChunkSize || Math.max(3, Math.ceil(totalLength / 120));
+      const activeConversationId = this.streamingConversationId;
       this.streamingTimer = window.setInterval(() => {
         const nextLength = Math.min(this.streamingDisplayed.length + chunkSize, totalLength);
         const nextContent = this.streamingTarget.slice(0, nextLength);
@@ -846,6 +863,9 @@ export const useChatStore = defineStore('client-chat', {
           this.stopAssistantStream({ complete: true });
         }
       }, 30);
+      if (activeConversationId) {
+        window.requestAnimationFrame(() => this.clearConversationPhase(activeConversationId));
+      }
     },
     addSendingConversation(conversationId) {
       if (!conversationId) {
@@ -873,6 +893,27 @@ export const useChatStore = defineStore('client-chat', {
       const nextMessages = [...this.messages];
       nextMessages.splice(index, 1, { ...nextMessages[index], content: nextContent });
       this.messages = normalizeMessages(nextMessages);
+    },
+    setConversationPhase(conversationId, phase) {
+      if (!conversationId) {
+        return;
+      }
+      const allowed = ['retrieving', 'thinking'];
+      if (!allowed.includes(phase)) {
+        this.clearConversationPhase(conversationId);
+        return;
+      }
+      this.conversationPhases = {
+        ...this.conversationPhases,
+        [conversationId]: phase
+      };
+    },
+    clearConversationPhase(conversationId) {
+      if (!conversationId || !this.conversationPhases[conversationId]) {
+        return;
+      }
+      const { [conversationId]: _removed, ...rest } = this.conversationPhases;
+      this.conversationPhases = rest;
     }
   }
 });
