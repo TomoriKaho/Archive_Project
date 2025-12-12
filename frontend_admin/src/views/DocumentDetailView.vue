@@ -328,27 +328,20 @@
 </template>
 
 <script setup>
-import {
-  computed,
-  defineComponent,
-  h,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-  watch
-} from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 
 import BaseModal from '@/components/BaseModal.vue';
 import { useDocumentsStore } from '@/store/documents';
 import { useDomainsStore } from '@/store/domains';
+import {
+  ArchiveTreeCellRenderer,
+  StructuredViewer,
+  isArchiveTreeValue
+} from '../../../frontend_shared/components/structured';
 
 const { t, locale } = useI18n();
-
-const INDENT_STEP = 14;
 
 const ARCHIVE_TREE_FIELD_KEYS = [
   'structure',
@@ -357,188 +350,6 @@ const ARCHIVE_TREE_FIELD_KEYS = [
   'catalog_tree',
   'catalogtree'
 ];
-
-const StructuredViewer = defineComponent({
-  name: 'StructuredViewer',
-  props: {
-    value: {
-      type: [String, Number, Boolean, Object, Array],
-      default: ''
-    }
-  },
-  setup(props) {
-    const parsedValue = computed(() => parseStructuredValue(props.value));
-
-    const blocks = computed(() => {
-      const value = parsedValue.value;
-      if (isObjectLike(value) || Array.isArray(value)) {
-        return buildBlocksFromValue(value);
-      }
-      return [];
-    });
-
-    const fallbackText = computed(() => formatPrimitive(parsedValue.value));
-
-    function renderBlock(block) {
-      const children = Array.isArray(block.children) ? block.children : [];
-      const valueText = block.valueText ?? '';
-      const displayLabel = block.label || '[value]';
-
-      const nodes = [
-        h('div', { class: 'structured-block__name' }, displayLabel)
-      ];
-
-      const showValueLine =
-        valueText !== '' || children.length === 0;
-
-      if (showValueLine) {
-        nodes.push(
-          h('div', { class: 'structured-block__value' }, valueText)
-        );
-      }
-
-      for (const child of children) {
-        nodes.push(renderBlock(child));
-      }
-
-      return h(
-        'div',
-        {
-          class: 'structured-block',
-          style: {
-            paddingLeft: `${block.depth * INDENT_STEP}px`,
-            marginBottom: '14px'
-          }
-        },
-        nodes
-      );
-    }
-
-    return () => {
-      if (blocks.value.length) {
-        return h(
-          'div',
-          { class: 'structured-viewer' },
-          blocks.value.map((block) => renderBlock(block))
-        );
-      }
-      return h(
-        'div',
-        { class: 'structured-viewer structured-viewer--plain' },
-        fallbackText.value
-      );
-    };
-  }
-});
-
-const ArchiveTreeCellRenderer = defineComponent({
-  name: 'ArchiveTreeCellRenderer',
-  props: {
-    value: {
-      type: [Object, Array, String],
-      default: null
-    }
-  },
-  setup(props) {
-    const nodes = computed(() => normalizeArchiveNodes(parseStructuredValue(props.value)));
-
-    function normalizeArchiveNodes(value) {
-      if (!value) return [];
-      const list = Array.isArray(value) ? value : [value];
-      return list
-        .map((item) => normalizeArchiveNode(item))
-        .filter(Boolean);
-    }
-
-    function normalizeArchiveNode(item) {
-      if (!item || typeof item !== 'object') return null;
-      const unitid = toCleanText(item.unitid);
-      const title = toCleanText(item.title);
-      const date = toCleanText(item.date);
-      const extent = toCleanText(item.extent);
-      const scopecontent = toCleanText(item.scopecontent);
-
-      const children = Array.isArray(item.children)
-        ? item.children.map((child) => normalizeArchiveNode(child)).filter(Boolean)
-        : [];
-
-      if (!unitid && !title && !date && !extent && !scopecontent && !children.length) {
-        return null;
-      }
-
-      return {
-        unitid,
-        title,
-        date,
-        extent,
-        scopecontent,
-        children
-      };
-    }
-
-    function toCleanText(value) {
-      if (value === null || value === undefined) return '';
-      const text = typeof value === 'string' ? value.trim() : String(value);
-      return text.trim();
-    }
-
-    function renderScopecontent(node) {
-      if (!node.scopecontent) return null;
-      return h(
-        'details',
-        { class: 'archive-tree__scope' },
-        [
-          h('summary', { class: 'archive-tree__scope-summary' }, t('documentDetail.archiveTree.expand')),
-          h('div', { class: 'archive-tree__scope-body' }, node.scopecontent)
-        ]
-      );
-    }
-
-    function renderNode(node, depth, key) {
-      const titleText = [node.unitid, node.title].filter(Boolean).join(' ').trim();
-      const metaItems = [node.date, node.extent].filter(Boolean);
-      const childNodes = Array.isArray(node.children) ? node.children : [];
-
-      return h(
-        'div',
-        {
-          class: 'archive-tree__node',
-          key,
-          style: { marginLeft: `${depth * INDENT_STEP}px` }
-        },
-        [
-          h('div', { class: 'archive-tree__header' }, [
-            h('div', { class: 'archive-tree__title' }, titleText || '未命名节点'),
-            metaItems.length
-              ? h(
-                  'div',
-                  { class: 'archive-tree__meta' },
-                  metaItems.map((meta, metaIndex) =>
-                    h('span', { class: 'archive-tree__meta-item', key: `meta-${metaIndex}` }, meta)
-                  )
-                )
-              : null
-          ]),
-          renderScopecontent(node),
-          ...childNodes.map((child, childIndex) =>
-            renderNode(child, depth + 1, `${key}-${childIndex}`)
-          )
-        ].filter(Boolean)
-      );
-    }
-
-    return () => {
-      if (!nodes.value.length) {
-        return h('div', { class: 'archive-tree archive-tree--empty' }, '—');
-      }
-      return h(
-        'div',
-        { class: 'archive-tree' },
-        nodes.value.map((node, index) => renderNode(node, 0, `node-${index}`))
-      );
-    };
-  }
-});
 
 const route = useRoute();
 const router = useRouter();
@@ -700,99 +511,6 @@ const chunkRangeLabel = computed(() => {
   const end = Math.min(offset + visibleChunks.value.length, chunkTotal.value);
   return `${start}-${end} / ${chunkTotal.value}`;
 });
-
-/** ---------------------------
- *  StructuredViewer helpers
- *  --------------------------- */
-
-function isObjectLike(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isDisplayEmptyString(value) {
-  return typeof value === 'string' && value.trim() === '';
-}
-
-function formatPrimitive(value) {
-  if (value === undefined) return '';
-  if (value === null) return 'null';
-  return String(value);
-}
-
-function parseStructuredValue(value) {
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch (error) {
-      return value;
-    }
-  }
-  return value;
-}
-
-function buildBlocksFromValue(value, depth = 0) {
-  if (isObjectLike(value)) {
-    return Object.entries(value)
-      // 关键修改：移除 value 为 "" 或纯空白 的字段
-      .filter(([, entryValue]) => !isDisplayEmptyString(entryValue))
-      .map(([key, entryValue]) => {
-        const isChildStructured =
-          isObjectLike(entryValue) || Array.isArray(entryValue);
-
-        const childBlocks = isChildStructured
-          ? buildBlocksFromValue(entryValue, depth + 1)
-          : undefined;
-
-        const valueText = isChildStructured
-          ? undefined
-          : formatPrimitive(entryValue);
-
-        const hasChildren = Array.isArray(childBlocks) && childBlocks.length > 0;
-        const hasValue = valueText !== undefined && valueText !== '';
-
-        // 进一步保险：如果既没有可显示的值也没有子内容，就不展示这个字段
-        if (!hasChildren && !hasValue) {
-          return null;
-        }
-
-        return {
-          label: key,
-          valueText: hasValue ? valueText : undefined,
-          children: hasChildren ? childBlocks : undefined,
-          depth
-        };
-      })
-      .filter(Boolean);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item, index) => {
-      const isChildStructured = isObjectLike(item) || Array.isArray(item);
-      const childBlocks = isChildStructured
-        ? buildBlocksFromValue(item, depth + 1)
-        : undefined;
-
-      const valueText = isChildStructured ? undefined : formatPrimitive(item);
-
-      return {
-        label: `[${index}]`,
-        valueText,
-        children: isChildStructured ? childBlocks : undefined,
-        depth,
-        index
-      };
-    });
-  }
-
-  return [
-    {
-      label: '',
-      valueText: formatPrimitive(value),
-      children: undefined,
-      depth
-    }
-  ];
-}
 
 /** ---------------------------
  *  JSON header → root columns helpers
@@ -1346,29 +1064,6 @@ function normalizeFieldKey(header) {
 function isArchiveTreeField(header) {
   const key = normalizeFieldKey(header);
   return ARCHIVE_TREE_FIELD_KEYS.includes(key);
-}
-
-function hasArchiveText(value) {
-  if (value === null || value === undefined) return false;
-  if (typeof value === 'string') return value.trim() !== '';
-  return String(value).trim() !== '';
-}
-
-function isArchiveTreeNodeLike(node) {
-  if (!node || typeof node !== 'object') return false;
-  const hasMetadata = ['unitid', 'title', 'date', 'extent', 'scopecontent'].some((key) =>
-    hasArchiveText(node[key])
-  );
-  const children = Array.isArray(node.children) ? node.children : [];
-  const hasChildNode = children.some((child) => isArchiveTreeNodeLike(child));
-  return hasMetadata || hasChildNode;
-}
-
-function isArchiveTreeValue(rawValue) {
-  const parsed = parseStructuredValue(rawValue);
-  if (!parsed) return false;
-  const values = Array.isArray(parsed) ? parsed : [parsed];
-  return values.some((value) => isArchiveTreeNodeLike(value));
 }
 
 function resolvePreviewRenderer(header) {

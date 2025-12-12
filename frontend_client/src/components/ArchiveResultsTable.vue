@@ -127,27 +127,30 @@
         <section class="archive-detail__metadata">
           <header class="archive-detail__metadata-header">
             <h4>{{ uiTexts.metadata }}</h4>
-            <span class="archive-detail__hint" v-if="!hasMetadata(activeArchive)">
+            <span class="archive-detail__hint" v-if="!hasMetadataEntries">
               {{ uiTexts.noMetadata }}
             </span>
           </header>
-          <div v-if="hasMetadata(activeArchive)" class="archive-tree">
-            <dl class="archive-tree__list">
-              <template v-for="(value, key) in detailMetadata" :key="key">
+          <div v-if="hasMetadataEntries" class="archive-tree">
+            <dl v-if="detailEntries.length" class="archive-tree__list">
+              <template v-for="([key, value], index) in detailEntries" :key="`${key}-${index}`">
                 <div class="archive-tree__item">
                   <dt>
                     <HighlightedText class="archive-detail__text" :text="key" :tokens="highlightTokens" />
                   </dt>
                   <dd>
-                    <ArchiveTreePreview
-                      v-if="shouldRenderArchiveTree(value)"
-                      :value="parseStructuredValue(value)"
-                      :highlight-tokens="highlightTokens"
+                    <ArchiveTreeCellRenderer
+                      v-if="isArchiveTreeValue(value)"
+                      :value="value"
+                      :expand-label="uiTexts.expandDetails"
+                      :empty-text="uiTexts.emptyCell"
                     />
-                    <ArchiveTreeNode
+                    <StructuredViewer v-else-if="isStructuredRenderable(value)" :value="value" />
+                    <HighlightedText
                       v-else
-                      :value="parseStructuredValue(value)"
-                      :highlight-tokens="highlightTokens"
+                      class="archive-detail__text"
+                      :text="formatStructuredFallback(value, uiTexts.emptyCell)"
+                      :tokens="highlightTokens"
                     />
                   </dd>
                 </div>
@@ -170,7 +173,17 @@
 <script setup>
 import { computed, defineComponent, h, ref, useAttrs } from 'vue';
 
-import ArchiveTreeNode from './ArchiveTreeNode.vue';
+import {
+  ArchiveTreeCellRenderer,
+  StructuredViewer,
+  formatStructuredFallback,
+  hasArchiveText,
+  isObjectLike,
+  isArchiveTreeValue,
+  isStructuredRenderable,
+  parseStructuredValue
+} from '../../../frontend_shared/components/structured';
+
 import BaseModal from './BaseModal.vue';
 
 const props = defineProps({
@@ -274,124 +287,6 @@ const HighlightedText = defineComponent({
   }
 });
 
-const ArchiveTreePreview = defineComponent({
-  name: 'ArchiveTreePreview',
-  props: {
-    value: {
-      type: [Object, Array, String],
-      default: null
-    },
-    highlightTokens: {
-      type: Array,
-      default: () => []
-    }
-  },
-  setup(props) {
-    const nodes = computed(() => normalizeArchiveNodes(parseStructuredValue(props.value)));
-
-    function normalizeArchiveNodes(value) {
-      if (!value) return [];
-      const list = Array.isArray(value) ? value : [value];
-      return list
-        .map((item) => normalizeArchiveNode(item))
-        .filter(Boolean);
-    }
-
-    function normalizeArchiveNode(item) {
-      if (!item || typeof item !== 'object') return null;
-      const unitid = toCleanText(item.unitid);
-      const title = toCleanText(item.title);
-      const date = toCleanText(item.date);
-      const extent = toCleanText(item.extent);
-      const scopecontent = toCleanText(item.scopecontent);
-
-      const children = Array.isArray(item.children)
-        ? item.children.map((child) => normalizeArchiveNode(child)).filter(Boolean)
-        : [];
-
-      if (!unitid && !title && !date && !extent && !scopecontent && !children.length) {
-        return null;
-      }
-
-      return {
-        unitid,
-        title,
-        date,
-        extent,
-        scopecontent,
-        children
-      };
-    }
-
-    function toCleanText(value) {
-      if (value === null || value === undefined) return '';
-      const text = typeof value === 'string' ? value.trim() : String(value);
-      return text.trim();
-    }
-
-    function renderScopecontent(node) {
-      if (!node.scopecontent) return null;
-      return h('details', { class: 'archive-tree__scope' }, [
-        h('summary', { class: 'archive-tree__scope-summary' }, '展开'),
-        h('div', { class: 'archive-tree__scope-body' }, [
-          h(HighlightedText, { text: node.scopecontent, tokens: props.highlightTokens })
-        ])
-      ]);
-    }
-
-    function renderNode(node, depth, key) {
-      const titleText = [node.unitid, node.title].filter(Boolean).join(' ').trim();
-      const metaItems = [node.date, node.extent].filter(Boolean);
-      const childNodes = Array.isArray(node.children) ? node.children : [];
-
-      return h(
-        'div',
-        {
-          class: 'archive-tree__node',
-          key,
-          style: { marginLeft: `${depth * 14}px` }
-        },
-        [
-          h('div', { class: 'archive-tree__header' }, [
-            h(HighlightedText, {
-              class: 'archive-tree__title',
-              text: titleText || '未命名节点',
-              tokens: props.highlightTokens
-            }),
-            metaItems.length
-              ? h(
-                  'div',
-                  { class: 'archive-tree__meta' },
-                  metaItems.map((meta, metaIndex) =>
-                    h(HighlightedText, {
-                      class: 'archive-tree__meta-item',
-                      text: meta,
-                      tokens: props.highlightTokens,
-                      key: `meta-${metaIndex}`
-                    })
-                  )
-                )
-              : null
-          ]),
-          renderScopecontent(node),
-          ...childNodes.map((child, childIndex) => renderNode(child, depth + 1, `${key}-${childIndex}`))
-        ].filter(Boolean)
-      );
-    }
-
-    return () => {
-      if (!nodes.value.length) {
-        return h('div', { class: 'archive-tree archive-tree--empty' }, '—');
-      }
-      return h(
-        'div',
-        { class: 'archive-tree' },
-        nodes.value.map((node, index) => renderNode(node, 0, `node-${index}`))
-      );
-    };
-  }
-});
-
 const defaultTexts = {
   placeholder: '搜索结果在这里显示',
   loading: '正在加载…',
@@ -401,6 +296,8 @@ const defaultTexts = {
   close: '关闭',
   metadata: '档案元数据',
   noMetadata: '暂无可展示的元数据',
+  expandDetails: '展开',
+  emptyCell: '—',
   previous: '上一页',
   next: '下一页',
   columns: {
@@ -447,70 +344,21 @@ const detailTitle = computed(() => {
   return `${uiTexts.value.columns.archive}：${resolveArchiveName(activeArchive.value)}`;
 });
 
-const detailMetadata = computed(() => {
-  const metadata = activeArchive.value?.metadata;
-  const parsed = parseStructuredValue(metadata);
+const detailEntries = computed(() => {
+  const metadata = parseStructuredValue(activeArchive.value?.metadata);
 
-  if (isObjectLike(parsed)) return parsed;
-  if (Array.isArray(parsed)) return { 内容: parsed };
+  if (isObjectLike(metadata)) return Object.entries(metadata);
+  if (Array.isArray(metadata) && metadata.length) return [['内容', metadata]];
+  if (hasArchiveText(metadata)) return [['内容', metadata]];
 
-  if (hasArchiveText(parsed)) {
-    return { 内容: parsed };
-  }
-
-  return null;
+  return [];
 });
+
+const hasMetadataEntries = computed(() => detailEntries.value.length > 0);
 
 function openDetails(archive) {
   activeArchive.value = archive;
   isDetailOpen.value = true;
-}
-
-function hasMetadata(archive) {
-  return Boolean(archive) && Boolean(detailMetadata.value);
-}
-
-function isObjectLike(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function hasArchiveText(value) {
-  if (value === null || value === undefined) return false;
-  if (typeof value === 'string') return value.trim() !== '';
-  return String(value).trim() !== '';
-}
-
-function isArchiveTreeNodeLike(node) {
-  if (!isObjectLike(node)) return false;
-  const hasMetadata = ['unitid', 'title', 'date', 'extent', 'scopecontent'].some((key) =>
-    hasArchiveText(node[key])
-  );
-  const children = Array.isArray(node.children) ? node.children : [];
-  const hasChildNode = children.some((child) => isArchiveTreeNodeLike(child));
-  return hasMetadata || hasChildNode;
-}
-
-function parseStructuredValue(value) {
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value);
-    } catch (error) {
-      return value;
-    }
-  }
-  return value;
-}
-
-function isArchiveTreeValue(rawValue) {
-  const parsed = parseStructuredValue(rawValue);
-  if (!parsed || typeof parsed !== 'object') return false;
-  const values = Array.isArray(parsed) ? parsed : [parsed];
-  return values.some((value) => isArchiveTreeNodeLike(value));
-}
-
-function shouldRenderArchiveTree(value) {
-  if (!value) return false;
-  return isArchiveTreeValue(value);
 }
 
 function formatFallback(archive) {
