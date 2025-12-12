@@ -13,50 +13,66 @@
       {{ uiTexts.empty }}
     </div>
     <div v-else class="archive-table__body">
-      <table>
-        <thead>
-          <tr>
-            <th>{{ uiTexts.columns.index }}</th>
-            <th>{{ uiTexts.columns.archive }}</th>
-            <th>{{ uiTexts.columns.document }}</th>
-            <th>{{ uiTexts.columns.domain }}</th>
-            <th>{{ uiTexts.columns.detail }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="(archive, index) in archives" :key="`${archive.id || archive.externalId || index}`">
-            <tr class="archive-row" @click="toggleExpanded(index)">
-              <td>{{ archive.page || index + 1 }}</td>
-              <td>{{ archive.archiveName || archive.archive_name || '—' }}</td>
-              <td>{{ archive.documentName || archive.document_name || '—' }}</td>
-              <td>{{ archive.domainName || archive.domain_name || '—' }}</td>
-              <td class="archive-row__cta">
-                <span>{{ expanded.has(index) ? uiTexts.collapse : uiTexts.expand }}</span>
-                <span aria-hidden="true">{{ expanded.has(index) ? '▴' : '▾' }}</span>
+      <div class="archive-table__scroll">
+        <table class="archive-table__grid">
+          <colgroup>
+            <col style="width: 90px" />
+            <col style="width: 220px" />
+            <col style="width: 240px" />
+            <col style="width: 160px" />
+            <col style="width: 140px" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>{{ uiTexts.columns.index }}</th>
+              <th>{{ uiTexts.columns.archive }}</th>
+              <th>{{ uiTexts.columns.document }}</th>
+              <th>{{ uiTexts.columns.domain }}</th>
+              <th>{{ uiTexts.columns.detail }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(archive, index) in archives"
+              :key="`${archive.id || archive.externalId || index}`"
+              class="archive-row"
+            >
+              <td>
+                <button class="archive-cell" type="button" @click="openDetails(archive, index)">
+                  <span class="archive-cell__text">{{ resolveIndex(archive, index) }}</span>
+                </button>
+              </td>
+              <td>
+                <button class="archive-cell" type="button" @click="openDetails(archive, index)">
+                  <span class="archive-cell__text" :title="resolveArchiveName(archive)">
+                    {{ truncateText(resolveArchiveName(archive)) }}
+                  </span>
+                </button>
+              </td>
+              <td>
+                <button class="archive-cell" type="button" @click="openDetails(archive, index)">
+                  <span class="archive-cell__text" :title="resolveDocumentName(archive)">
+                    {{ truncateText(resolveDocumentName(archive)) }}
+                  </span>
+                </button>
+              </td>
+              <td>
+                <button class="archive-cell" type="button" @click="openDetails(archive, index)">
+                  <span class="archive-cell__text" :title="resolveDomainName(archive)">
+                    {{ truncateText(resolveDomainName(archive)) }}
+                  </span>
+                </button>
+              </td>
+              <td>
+                <button class="archive-cell archive-cell--cta" type="button" @click="openDetails(archive, index)">
+                  <span>{{ uiTexts.view }}</span>
+                  <span aria-hidden="true">▸</span>
+                </button>
               </td>
             </tr>
-            <tr v-if="expanded.has(index)" class="archive-details">
-              <td :colspan="5">
-                <div class="archive-details__content">
-                  <pre v-if="!hasMetadata(archive)" class="archive-details__fallback">{{ formatFallback(archive) }}</pre>
-                  <div v-else class="archive-tree">
-                    <dl class="archive-tree__list">
-                      <template v-for="(value, key) in archive.metadata" :key="key">
-                        <div class="archive-tree__item">
-                          <dt>{{ key }}</dt>
-                          <dd>
-                            <ArchiveTreeNode :value="value" />
-                          </dd>
-                        </div>
-                      </template>
-                    </dl>
-                  </div>
-                </div>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
 
       <div v-if="totalPages > 1" class="archive-table__pagination">
         <button
@@ -78,13 +94,61 @@
         </button>
       </div>
     </div>
+
+    <BaseModal v-model="isDetailOpen" :title="detailTitle" :close-on-overlay="true">
+      <div v-if="activeArchive" class="archive-detail">
+        <dl class="archive-detail__meta">
+          <div class="archive-detail__item">
+            <dt>{{ uiTexts.columns.archive }}</dt>
+            <dd>{{ resolveArchiveName(activeArchive) }}</dd>
+          </div>
+          <div class="archive-detail__item">
+            <dt>{{ uiTexts.columns.document }}</dt>
+            <dd>{{ resolveDocumentName(activeArchive) }}</dd>
+          </div>
+          <div class="archive-detail__item">
+            <dt>{{ uiTexts.columns.domain }}</dt>
+            <dd>{{ resolveDomainName(activeArchive) }}</dd>
+          </div>
+        </dl>
+
+        <section class="archive-detail__metadata">
+          <header class="archive-detail__metadata-header">
+            <h4>{{ uiTexts.metadata }}</h4>
+            <span class="archive-detail__hint" v-if="!hasMetadata(activeArchive)">
+              {{ uiTexts.noMetadata }}
+            </span>
+          </header>
+          <div v-if="hasMetadata(activeArchive)" class="archive-tree">
+            <dl class="archive-tree__list">
+              <template v-for="(value, key) in activeArchive.metadata" :key="key">
+                <div class="archive-tree__item">
+                  <dt>{{ key }}</dt>
+                  <dd>
+                    <ArchiveTreeNode :value="value" />
+                  </dd>
+                </div>
+              </template>
+            </dl>
+          </div>
+          <pre v-else class="archive-details__fallback">{{ formatFallback(activeArchive) }}</pre>
+        </section>
+      </div>
+
+      <template #footer>
+        <button class="archive-table__close" type="button" @click="isDetailOpen = false">
+          {{ uiTexts.close }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive } from 'vue';
+import { computed, ref } from 'vue';
 
 import ArchiveTreeNode from './ArchiveTreeNode.vue';
+import BaseModal from './BaseModal.vue';
 
 const props = defineProps({
   archives: {
@@ -119,15 +183,18 @@ const props = defineProps({
 
 defineEmits(['update:page']);
 
-const expanded = reactive(new Set());
+const activeArchive = ref(null);
+const isDetailOpen = ref(false);
 
 const defaultTexts = {
   placeholder: '搜索结果在这里显示',
   loading: '正在加载…',
   error: '加载失败，请稍后重试',
   empty: '暂无搜索结果',
-  collapse: '收起',
-  expand: '展开',
+  view: '查看',
+  close: '关闭',
+  metadata: '档案元数据',
+  noMetadata: '暂无可展示的元数据',
   previous: '上一页',
   next: '下一页',
   columns: {
@@ -155,12 +222,14 @@ const totalPages = computed(() => {
   return Math.max(Math.ceil(safeTotal / safeSize), 1);
 });
 
-function toggleExpanded(index) {
-  if (expanded.has(index)) {
-    expanded.delete(index);
-  } else {
-    expanded.add(index);
-  }
+const detailTitle = computed(() => {
+  if (!activeArchive.value) return uiTexts.value.metadata;
+  return `${uiTexts.value.columns.archive}：${resolveArchiveName(activeArchive.value)}`;
+});
+
+function openDetails(archive) {
+  activeArchive.value = archive;
+  isDetailOpen.value = true;
 }
 
 function hasMetadata(archive) {
@@ -175,6 +244,29 @@ function formatFallback(archive) {
     return String(archive);
   }
 }
+
+function resolveIndex(archive, index) {
+  if (archive && archive.page) return archive.page;
+  return index + 1;
+}
+
+function resolveArchiveName(archive) {
+  return archive?.archiveName || archive?.archive_name || '—';
+}
+
+function resolveDocumentName(archive) {
+  return archive?.documentName || archive?.document_name || '—';
+}
+
+function resolveDomainName(archive) {
+  return archive?.domainName || archive?.domain_name || '—';
+}
+
+function truncateText(text, maxLength = 22) {
+  if (!text || typeof text !== 'string') return text;
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}…`;
+}
 </script>
 
 <style scoped lang="scss">
@@ -184,22 +276,47 @@ function formatFallback(archive) {
   border-radius: 18px;
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-.archive-table__body table {
+.archive-table__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.archive-table__scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.archive-table__grid {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid #e5e7eb;
+  min-width: 800px;
 }
 
 .archive-table__body th,
 .archive-table__body td {
   padding: 14px 16px;
-  border-bottom: 1px solid #f1f5f9;
+  border: 1px solid #e5e7eb;
   text-align: left;
+  white-space: nowrap;
+  background: #ffffff;
+}
+
+.archive-table__body th {
+  font-weight: 700;
+  color: #0f172a;
+  background: linear-gradient(180deg, #f9fafb, #eff3ff);
 }
 
 .archive-row {
-  cursor: pointer;
   transition: background-color 0.2s ease;
 }
 
@@ -207,24 +324,28 @@ function formatFallback(archive) {
   background: #f8fbff;
 }
 
-.archive-row__cta {
+.archive-cell {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.archive-cell__text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.archive-cell--cta {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: #2563eb;
-  font-weight: 600;
-}
-
-.archive-details td {
-  background: linear-gradient(180deg, #f9fbff, #ffffff);
-}
-
-.archive-details__content {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 12px 14px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.06);
+  font-weight: 700;
 }
 
 .archive-details__fallback {
@@ -232,6 +353,10 @@ function formatFallback(archive) {
   white-space: pre-wrap;
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   color: #1f2937;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
 }
 
 .archive-tree__list {
@@ -247,6 +372,11 @@ function formatFallback(archive) {
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 10px 12px;
+}
+
+.archive-tree__item:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.08);
 }
 
 .archive-tree__item dt {
@@ -298,5 +428,75 @@ function formatFallback(archive) {
 
 .archive-table__placeholder--error {
   color: #dc2626;
+}
+
+.archive-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.archive-detail__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 14px;
+  margin: 0;
+  padding: 0;
+}
+
+.archive-detail__item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.archive-detail__item dt {
+  margin: 0 0 4px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.archive-detail__item dd {
+  margin: 0;
+  color: #1f2937;
+}
+
+.archive-detail__metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.archive-detail__metadata-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.archive-detail__metadata-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.archive-detail__hint {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.archive-table__close {
+  border: none;
+  background: #111827;
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.archive-table__close:hover {
+  background: #1f2937;
 }
 </style>

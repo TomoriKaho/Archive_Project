@@ -28,6 +28,26 @@
       <!-- Results area fades in when entering traditional search mode. -->
       <Transition name="landing-archives" appear>
         <div v-if="isTraditionalMode" class="landing-view__archives">
+          <div v-if="searchState !== 'idle'" class="landing-view__toolbar">
+            <div class="landing-view__toolbar-total">{{ archiveCountLabel }}</div>
+            <div v-if="pageRangeOptions.length" class="landing-view__toolbar-range">
+              <span class="landing-view__toolbar-label">{{ archiveTableTexts.rangeLabel }}</span>
+              <div class="landing-view__toolbar-select">
+                <select
+                  id="archive-range-select"
+                  :value="searchPage"
+                  class="landing-view__range-input"
+                  :aria-label="archiveTableTexts.rangeLabel"
+                  @change="onRangeChange"
+                >
+                  <option v-for="option in pageRangeOptions" :key="option.index" :value="option.index">
+                    {{ option.label }}
+                  </option>
+                </select>
+                <span class="landing-view__toolbar-arrow" aria-hidden="true">▾</span>
+              </div>
+            </div>
+          </div>
           <div class="landing-view__archives-panel">
             <!-- Centered placeholder for the idle state. -->
             <div v-if="searchState === 'idle'" class="landing-view__archives-placeholder">
@@ -118,6 +138,26 @@ const language = computed(() => preferencesStore.language);
 const selectedDomains = computed(() => preferencesStore.preferredDomainIds);
 const domainOptions = computed(() => domainsStore.items);
 const isTraditionalMode = computed(() => searchMode.value === 'traditional');
+const searchTotalPages = computed(() => {
+  const total = Number.isFinite(totalArchives.value) ? totalArchives.value : 0;
+  if (!total) return 1;
+  return Math.max(Math.ceil(total / pageSize), 1);
+});
+const pageRangeOptions = computed(() => {
+  const total = Number.isFinite(totalArchives.value) ? totalArchives.value : 0;
+  const pages = Math.max(searchTotalPages.value, 1);
+  return Array.from({ length: pages }, (_, idx) => {
+    const index = idx + 1;
+    const start = total === 0 ? 0 : idx * pageSize + 1;
+    const end = total === 0 ? 0 : Math.min((idx + 1) * pageSize, total);
+    return { index, label: `${start}-${end}` };
+  });
+});
+const archiveCountLabel = computed(() => {
+  const total = Number(totalArchives.value) || 0;
+  const label = archiveTableTexts.value?.countLabel;
+  return typeof label === 'function' ? label(total) : `${total}`;
+});
 
 const languagePack = {
   zh: {
@@ -202,10 +242,14 @@ const archiveTableTexts = computed(() =>
         loading: '正在加载…',
         error: '搜索失败，请稍后重试',
         empty: '未找到符合条件的档案',
-        collapse: '收起',
-        expand: '展开',
+        view: '查看',
+        close: '关闭',
+        metadata: '档案元数据',
+        noMetadata: '暂无可展示的元数据',
         previous: '上一页',
         next: '下一页',
+        rangeLabel: '结果序号范围',
+        countLabel: (total) => `共${total}条档案`,
         columns: {
           index: '页序号',
           archive: '档案名称',
@@ -219,10 +263,14 @@ const archiveTableTexts = computed(() =>
         loading: 'Loading…',
         error: 'Search failed. Please try again later.',
         empty: 'No archives found',
-        collapse: 'Collapse',
-        expand: 'Expand',
+        view: 'View',
+        close: 'Close',
+        metadata: 'Archive metadata',
+        noMetadata: 'No metadata to show yet',
         previous: 'Previous',
         next: 'Next',
+        rangeLabel: 'Result range',
+        countLabel: (total) => `${total} archives`,
         columns: {
           index: 'Page',
           archive: 'Archive Name',
@@ -377,6 +425,11 @@ function loadPage(page) {
   performArchiveSearch(target);
 }
 
+function onRangeChange(event) {
+  const target = Number(event.target.value) || 1;
+  loadPage(target);
+}
+
 function handleLogout() {
   authStore.logout();
 }
@@ -502,6 +555,8 @@ function handleLogout() {
   overflow: hidden;
   padding: 0 0 0.75rem;
   display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
 .landing-view--traditional .landing-view__archives {
@@ -515,8 +570,11 @@ function handleLogout() {
   background: rgba(255, 255, 255, 0.88);
   border-radius: 20px;
   box-shadow: 0 20px 55px rgba(28, 39, 84, 0.14);
-  overflow: auto;
+  overflow: hidden;
   position: relative;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .landing-view__archives-placeholder {
@@ -586,8 +644,68 @@ function handleLogout() {
 }
 
 :deep(.landing-view__archives-table) {
-  height: 100%;
-  min-height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.landing-view__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.5rem 0.85rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+.landing-view__toolbar-total {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.landing-view__toolbar-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #334155;
+  font-weight: 600;
+}
+
+.landing-view__toolbar-label {
+  color: #475569;
+}
+
+.landing-view__toolbar-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.landing-view__range-input {
+  appearance: none;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  padding: 0.5rem 2.4rem 0.5rem 0.9rem;
+  font-weight: 700;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  min-width: 130px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.landing-view__range-input:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.landing-view__toolbar-arrow {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  color: #475569;
+  font-weight: 700;
 }
 
 .landing-view__archives-panel::-webkit-scrollbar {
