@@ -100,15 +100,33 @@
         <dl class="archive-detail__meta">
           <div class="archive-detail__item">
             <dt>{{ uiTexts.columns.archive }}</dt>
-            <dd>{{ resolveArchiveName(activeArchive) }}</dd>
+            <dd>
+              <HighlightedText
+                class="archive-detail__text"
+                :text="resolveArchiveName(activeArchive)"
+                :tokens="highlightTokens"
+              />
+            </dd>
           </div>
           <div class="archive-detail__item">
             <dt>{{ uiTexts.columns.document }}</dt>
-            <dd>{{ resolveDocumentName(activeArchive) }}</dd>
+            <dd>
+              <HighlightedText
+                class="archive-detail__text"
+                :text="resolveDocumentName(activeArchive)"
+                :tokens="highlightTokens"
+              />
+            </dd>
           </div>
           <div class="archive-detail__item">
             <dt>{{ uiTexts.columns.domain }}</dt>
-            <dd>{{ resolveDomainName(activeArchive) }}</dd>
+            <dd>
+              <HighlightedText
+                class="archive-detail__text"
+                :text="resolveDomainName(activeArchive)"
+                :tokens="highlightTokens"
+              />
+            </dd>
           </div>
         </dl>
 
@@ -123,10 +141,20 @@
             <dl class="archive-tree__list">
               <template v-for="(value, key) in detailMetadata" :key="key">
                 <div class="archive-tree__item">
-                  <dt>{{ key }}</dt>
+                  <dt>
+                    <HighlightedText class="archive-detail__text" :text="key" :tokens="highlightTokens" />
+                  </dt>
                   <dd>
-                    <ArchiveTreePreview v-if="shouldRenderArchiveTree(value)" :value="parseStructuredValue(value)" />
-                    <ArchiveTreeNode v-else :value="parseStructuredValue(value)" />
+                    <ArchiveTreePreview
+                      v-if="shouldRenderArchiveTree(value)"
+                      :value="parseStructuredValue(value)"
+                      :highlight-tokens="highlightTokens"
+                    />
+                    <ArchiveTreeNode
+                      v-else
+                      :value="parseStructuredValue(value)"
+                      :highlight-tokens="highlightTokens"
+                    />
                   </dd>
                 </div>
               </template>
@@ -146,7 +174,7 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, ref } from 'vue';
+import { computed, defineComponent, h, ref, useAttrs } from 'vue';
 
 import ArchiveTreeNode from './ArchiveTreeNode.vue';
 import BaseModal from './BaseModal.vue';
@@ -155,6 +183,14 @@ const props = defineProps({
   archives: {
     type: Array,
     default: () => []
+  },
+  searchQuery: {
+    type: String,
+    default: ''
+  },
+  searchType: {
+    type: String,
+    default: 'precise'
   },
   page: {
     type: Number,
@@ -187,12 +223,73 @@ defineEmits(['update:page']);
 const activeArchive = ref(null);
 const isDetailOpen = ref(false);
 
+const HighlightedText = defineComponent({
+  name: 'HighlightedText',
+  props: {
+    text: {
+      type: [String, Number, Boolean],
+      default: ''
+    },
+    tokens: {
+      type: Array,
+      default: () => []
+    }
+  },
+  setup(props) {
+    const attrs = useAttrs();
+    const matcher = computed(() => buildMatcher(props.tokens));
+
+    function buildMatcher(tokens = []) {
+      const normalized = tokens
+        .map((token) => (token === null || token === undefined ? '' : String(token).trim()))
+        .filter(Boolean);
+      if (!normalized.length) return null;
+      return new RegExp(`(${normalized.map((token) => escapeRegExp(token)).join('|')})`, 'gi');
+    }
+
+    function escapeRegExp(text) {
+      return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    return () => {
+      const content = props.text === null || props.text === undefined ? '' : String(props.text);
+      const highlightMatcher = matcher.value;
+
+      const baseProps = { ...attrs, class: ['archive-highlight-text', attrs.class] };
+
+      if (!content || !highlightMatcher) {
+        return h('span', baseProps, content);
+      }
+
+      const segmentMatcher = new RegExp(highlightMatcher.source, 'gi');
+      const strictMatcher = new RegExp(`^${highlightMatcher.source}$`, 'i');
+      const segments = content.split(segmentMatcher);
+
+      return h(
+        'span',
+        baseProps,
+        segments
+          .filter((part) => part !== '')
+          .map((part, index) =>
+            strictMatcher.test(part)
+              ? h('mark', { class: 'archive-highlight', key: `mark-${index}` }, part)
+              : h('span', { key: `text-${index}` }, part)
+          )
+      );
+    };
+  }
+});
+
 const ArchiveTreePreview = defineComponent({
   name: 'ArchiveTreePreview',
   props: {
     value: {
       type: [Object, Array, String],
       default: null
+    },
+    highlightTokens: {
+      type: Array,
+      default: () => []
     }
   },
   setup(props) {
@@ -242,7 +339,9 @@ const ArchiveTreePreview = defineComponent({
       if (!node.scopecontent) return null;
       return h('details', { class: 'archive-tree__scope' }, [
         h('summary', { class: 'archive-tree__scope-summary' }, '展开'),
-        h('div', { class: 'archive-tree__scope-body' }, node.scopecontent)
+        h('div', { class: 'archive-tree__scope-body' }, [
+          h(HighlightedText, { text: node.scopecontent, tokens: props.highlightTokens })
+        ])
       ]);
     }
 
@@ -260,13 +359,22 @@ const ArchiveTreePreview = defineComponent({
         },
         [
           h('div', { class: 'archive-tree__header' }, [
-            h('div', { class: 'archive-tree__title' }, titleText || '未命名节点'),
+            h(HighlightedText, {
+              class: 'archive-tree__title',
+              text: titleText || '未命名节点',
+              tokens: props.highlightTokens
+            }),
             metaItems.length
               ? h(
                   'div',
                   { class: 'archive-tree__meta' },
                   metaItems.map((meta, metaIndex) =>
-                    h('span', { class: 'archive-tree__meta-item', key: `meta-${metaIndex}` }, meta)
+                    h(HighlightedText, {
+                      class: 'archive-tree__meta-item',
+                      text: meta,
+                      tokens: props.highlightTokens,
+                      key: `meta-${metaIndex}`
+                    })
                   )
                 )
               : null
@@ -318,6 +426,20 @@ const uiTexts = computed(() => ({
     ...(props.texts?.columns || {})
   }
 }));
+
+const highlightTokens = computed(() => {
+  const query = (props.searchQuery || '').trim();
+  if (!query) return [];
+
+  if (props.searchType === 'fuzzy') {
+    return query
+      .split(/[\s,，。；;、]+/)
+      .map((token) => token.trim())
+      .filter(Boolean);
+  }
+
+  return [query];
+});
 
 const totalPages = computed(() => {
   const safeTotal = Number.isFinite(props.total) ? props.total : 0;
@@ -722,5 +844,16 @@ function truncateText(text, maxLength = 22) {
 
 .archive-table__close:hover {
   background: #1f2937;
+}
+
+.archive-highlight-text {
+  display: inline;
+}
+
+.archive-highlight {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 4px;
+  padding: 0 2px;
 }
 </style>

@@ -58,6 +58,8 @@
               v-else
               class="landing-view__archives-table"
               :archives="archives"
+              :search-query="query"
+              :search-type="searchType"
               :page="searchPage"
               :page-size="pageSize"
               :total="totalArchives"
