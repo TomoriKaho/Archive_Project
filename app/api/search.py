@@ -221,34 +221,57 @@ def search_archives(
     domain_id_list = _parse_domain_ids(domain_ids)
     documents = _iter_documents_with_domain(db, domain_id_list)
 
-    start_index = (page - 1) * page_size
-    end_index = start_index + page_size
-
-    matched_items: List[ArchiveSearchItem] = []
-    total_matches = 0
-
+    candidates: list[dict[str, Any]] = []
+    match_index = 0
     for document, domain_name in documents:
         for archive in _iter_archives(document):
             normalized_metadata = _normalize_metadata(archive)
             text_candidates = _collect_text_candidates(normalized_metadata)
-            haystack = " \n ".join(text_candidates)
+            archive_name = _extract_archive_name(normalized_metadata) or document.title
+
+            haystack_sources = text_candidates + [archive_name, document.title, domain_name]
+            haystack = " \n ".join(filter(None, haystack_sources))
             if not _matches(tokens, haystack, mode):
                 continue
 
-            archive_name = _extract_archive_name(normalized_metadata) or document.title
-            total_matches += 1
-            if total_matches <= start_index or total_matches > end_index:
-                continue
-
-            matched_items.append(
-                ArchiveSearchItem(
-                    page=total_matches,
-                    archive_name=archive_name,
-                    document_name=document.title,
-                    domain_name=domain_name,
-                    metadata=normalized_metadata,
-                )
+            name_hit = any(
+                _matches(tokens, source, mode)
+                for source in (archive_name, document.title, domain_name)
+                if source
             )
+
+            candidates.append(
+                {
+                    "priority": 0 if name_hit else 1,
+                    "index": match_index,
+                    "archive_name": archive_name,
+                    "document_name": document.title,
+                    "domain_name": domain_name,
+                    "metadata": normalized_metadata,
+                }
+            )
+            match_index += 1
+
+    sorted_candidates = sorted(candidates, key=lambda item: (item["priority"], item["index"]))
+    total_matches = len(sorted_candidates)
+
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    matched_items: List[ArchiveSearchItem] = []
+
+    for display_index, item in enumerate(sorted_candidates, start=1):
+        if display_index <= start_index or display_index > end_index:
+            continue
+
+        matched_items.append(
+            ArchiveSearchItem(
+                page=display_index,
+                archive_name=item["archive_name"],
+                document_name=item["document_name"],
+                domain_name=item["domain_name"],
+                metadata=item["metadata"],
+            )
+        )
 
     logger.info(
         "search_archives query=%s mode=%s domains=%s total=%s page=%s size=%s",
