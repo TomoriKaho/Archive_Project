@@ -123,8 +123,20 @@ _PROMPT_TEMPLATES = {
 }
 
 _REFERENCE_LABELS = {
-    "zh": {"heading": "参考资料", "heading_separator": "：", "url_separator": "："},
-    "en": {"heading": "References", "heading_separator": ":", "url_separator": ": "},
+    "zh": {
+        "heading": "参考资料",
+        "heading_separator": "：",
+        "title_link_separator": "，",
+        "link_label": "链接",
+        "url_separator": "：",
+    },
+    "en": {
+        "heading": "References",
+        "heading_separator": ":",
+        "title_link_separator": ", ",
+        "link_label": "Link",
+        "url_separator": ": ",
+    },
 }
 
 
@@ -786,11 +798,16 @@ def format_references_from_titles(
     labels = _REFERENCE_LABELS.get(language) or _REFERENCE_LABELS[_FALLBACK_LANGUAGE]
     heading = labels.get("heading", "参考资料")
     heading_separator = labels.get("heading_separator", "：")
+    title_link_separator = labels.get("title_link_separator", "，")
+    link_label = labels.get("link_label", "链接")
+    url_separator = labels.get("url_separator", "：")
 
     lines: list[str] = []
     for idx, (title, urls) in enumerate(entries, start=1):
         if urls:
-            lines.append(f"{idx}. {title}，链接：{urls[0]}")
+            lines.append(
+                f"{idx}. {title}{title_link_separator}{link_label}{url_separator}{urls[0]}"
+            )
             for u in urls[1:]:
                 lines.append(f"   {u}")
         else:
