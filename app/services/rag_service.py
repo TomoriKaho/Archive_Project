@@ -4,14 +4,15 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from collections import defaultdict
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Sequence
-import re
 from urllib import error, request
 
 from dotenv import find_dotenv, load_dotenv
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.entities import Chunk, Document
@@ -59,7 +60,9 @@ NEIGHBOR_WINDOW_SIZE = int(os.getenv("RAG_NEIGHBOR_WINDOW_SIZE", "1"))
 NEIGHBOR_MAX_TOTAL_CHUNKS = int(os.getenv("RAG_NEIGHBOR_MAX_TOTAL_CHUNKS", "100"))
 """Safety limit to avoid overlong contexts after neighbor expansion."""
 
-RAG_CHAT_TIMEOUT = int(os.getenv("RAG_CHAT_TIMEOUT", os.getenv("RAG_OLLAMA_TIMEOUT", "60")))
+RAG_CHAT_TIMEOUT = int(
+    os.getenv("RAG_CHAT_TIMEOUT", os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
+)
 """HTTP timeout applied to chat requests."""
 
 CHUNK_MEMORY_WINDOW_MULTIPLIER = int(os.getenv("RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER", "3"))
@@ -77,6 +80,10 @@ RAG_CONTEXT_MAX_CHUNKS = int(os.getenv("RAG_CONTEXT_MAX_CHUNKS", "40"))
 
 RAG_HISTORY_MAX_USER_TURNS = int(os.getenv("RAG_HISTORY_MAX_USER_TURNS", "3"))
 """Only keep last N user turns for final answer prompt (reduce token bloat)."""
+
+# 参考文献：每个 title 最多扫描多少行（防止某个 title 命中太多行）
+RAG_REFERENCE_ROWS_PER_TITLE = int(os.getenv("RAG_REFERENCE_ROWS_PER_TITLE", "20"))
+"""Row scan limit per title when building reference URLs from DB."""
 
 _FALLBACK_LANGUAGE = "zh"
 _PROMPT_TEMPLATES = {
@@ -299,10 +306,7 @@ def build_retrieval_query_text(
     question: str,
     history: Sequence[dict[str, str]] | None = None,
 ) -> str:
-    """根据当前问题 + 近期会话历史，构造用于向量检索的查询文本。
-
-    A：这里不再调用云端 chat 做关键词提取（避免检索阶段多次云端往返）。
-    """
+    """根据当前问题 + 近期会话历史，构造用于向量检索的查询文本（不调用云端）。"""
     q = (question or "").strip()
     if not q:
         return ""
@@ -348,7 +352,6 @@ def search_chunks_by_id_candidates(
     C：把“每个 candidate 一次查询”改为“少量 candidate 合并 OR 一次查询”，
        显著减少 DB 往返与扫描次数（仍建议 DB 侧加 pg_trgm 索引）。
     """
-
     if not id_candidates:
         return []
 
@@ -541,24 +544,32 @@ def retrieve_with_scores(
     return expanded_chunks, references
 
 
-# === B：构造最终上下文时，做 per-chunk 与 total 截断 ===
+# === B：构造最终上下文时，做 per-chunk 与 total 截断，并返回 used_chunks ===
+@dataclass(frozen=True)
+class ContextBuildResult:
+    text: str
+    used_chunks: list[Chunk]
+
+
 def build_context(
     chunks: list[Chunk],
     *,
     per_chunk_char_limit: int = RAG_CHUNK_CHAR_LIMIT,
     max_total_chars: int = RAG_CONTEXT_MAX_CHARS,
     max_chunks: int = RAG_CONTEXT_MAX_CHUNKS,
-) -> str:
-    """把检索到的 chunk 拼成给 LLM 的上下文，只保留正文内容，并控制体积。"""
+) -> ContextBuildResult:
+    """把检索到的 chunk 拼成给 LLM 的上下文，只保留正文内容，并控制体积。
+    同时返回“实际被放进 context 的 chunks”，用于后续严格生成参考文献。
+    """
     if not chunks:
-        return ""
+        return ContextBuildResult(text="", used_chunks=[])
 
     contents: list[str] = []
+    used_chunks: list[Chunk] = []
     total = 0
-    used = 0
 
     for chunk in chunks:
-        if max_chunks and used >= max_chunks:
+        if max_chunks and len(used_chunks) >= max_chunks:
             break
 
         text = (chunk.content or "").strip()
@@ -568,16 +579,15 @@ def build_context(
         if per_chunk_char_limit and len(text) > per_chunk_char_limit:
             text = text[:per_chunk_char_limit].rstrip() + "…"
 
-        # +2 for separators/newlines safety
         projected = total + len(text) + 2
         if max_total_chars and projected > max_total_chars:
             break
 
         contents.append(text)
+        used_chunks.append(chunk)
         total = projected
-        used += 1
 
-    return "\n\n".join(contents)
+    return ContextBuildResult(text="\n\n".join(contents), used_chunks=used_chunks)
 
 
 def _extract_first_url(value: Any) -> str | None:
@@ -599,26 +609,36 @@ def _extract_first_url(value: Any) -> str | None:
     return None
 
 
+def _extract_chunk_title(text: str | None, chunk_id: int) -> str:
+    """从 chunk 正文里提取标题，如果不存在则回退到 chunk ID。"""
+    if not text:
+        return f"Chunk {chunk_id}"
+    head, _, _ = text.partition(":")
+    title = head.strip()
+    return title or f"Chunk {chunk_id}"
+
+
 def build_reference_entries(chunks: Sequence[Chunk]) -> list[tuple[str, str | None]]:
-    """从命中的 chunk 提取文档标题与可用的链接。"""
+    """（旧逻辑）从命中的 chunk 提取去重后的标题与可用的链接。"""
     entries: list[tuple[str, str | None]] = []
-    seen_documents: set[int] = set()
+    seen_titles: set[str] = set()
 
     for chunk in chunks:
-        if not chunk.document or chunk.document_id in seen_documents:
+        title = _extract_chunk_title((chunk.content or "").strip(), chunk.id)
+        if title in seen_titles:
             continue
 
-        seen_documents.add(chunk.document_id)
-        title = (chunk.document.title or "").strip() or f"Document {chunk.document_id}"
-        metadata = chunk.document.doc_metadata if isinstance(chunk.document.doc_metadata, dict) else {}
-        url = _extract_first_url(metadata)
+        seen_titles.add(title)
+        url = _extract_first_url(chunk.content)
+        if not url and chunk.document and isinstance(chunk.document.doc_metadata, dict):
+            url = _extract_first_url(chunk.document.doc_metadata)
         entries.append((title, url))
 
     return entries
 
 
 def format_references(entries: Sequence[tuple[str, str | None]], language: str) -> str:
-    """Render references using the requested language, falling back to Chinese."""
+    """（旧逻辑）Render references using the requested language, falling back to Chinese."""
     labels = _REFERENCE_LABELS.get(language) or _REFERENCE_LABELS[_FALLBACK_LANGUAGE]
     heading = labels.get("heading", "参考资料")
     heading_separator = labels.get("heading_separator", "：")
@@ -634,6 +654,151 @@ def format_references(entries: Sequence[tuple[str, str | None]], language: str) 
     return f"{heading}{heading_separator}\n" + "\n".join(lines)
 
 
+# === 新参考文献逻辑：只对“实际进 context 的 chunk”做 title 去重，并从 DB 行字段抽 URL ===
+def extract_title(text: str) -> str:
+    """title 固定是首字段：取第一个 ':' 之前的部分。"""
+    head, _, _ = (text or "").partition(":")
+    return head.strip()
+
+
+def _escape_like(value: str) -> str:
+    """转义 LIKE 通配符，避免 title 内含 %/_ 时造成误匹配。"""
+    return (value or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _extract_urls_from_row(row_text: str) -> list[str]:
+    """从一行 content 的字段里抽所有 URL（去重、保序）。"""
+    if not row_text:
+        return []
+    seen: set[str] = set()
+    urls: list[str] = []
+    for field in row_text.split(","):
+        for url in _URL_PATTERN.findall(field):
+            if url in seen:
+                continue
+            seen.add(url)
+            urls.append(url)
+    return urls
+
+def extract_title(text: str) -> str:
+    """title 固定是首字段：取第一个 ':' 或 '：' 之前的部分（并去掉 BOM）。"""
+    s = (text or "").lstrip("\ufeff").strip()
+    if not s:
+        return ""
+    # 兼容英文冒号和全角冒号，取最先出现的那个
+    idx_ascii = s.find(":")
+    idx_full = s.find("：")
+    idxs = [i for i in (idx_ascii, idx_full) if i != -1]
+    if not idxs:
+        return s
+    idx = min(idxs)
+    return s[:idx].strip()
+
+def _title_prefix_condition(title: str):
+    """构造：content 以 title 开头的匹配条件（兼容空格/全角冒号/BOM）。"""
+    t = (title or "").lstrip("\ufeff").strip()
+    if not t:
+        return None
+
+    esc = _escape_like(t)
+
+    # 兼容几种常见写法：冒号前可有空格；冒号可为全角；DB 行首可能带 BOM
+    patterns = [
+        f"{esc}:%",
+        f"{esc} :%",
+        f"{esc}：%",
+        f"{esc} ：%",
+        f"\ufeff{esc}:%",
+        f"\ufeff{esc} :%",
+        f"\ufeff{esc}：%",
+        f"\ufeff{esc} ：%",
+    ]
+    return or_(*[Chunk.content.like(p, escape="\\") for p in patterns])
+
+
+def build_reference_entries_from_context(
+    db: Session,
+    used_chunks: Sequence[Chunk],
+    *,
+    domain_ids: list[int] | None = None,
+    rows_per_title: int = RAG_REFERENCE_ROWS_PER_TITLE,
+) -> list[tuple[str, list[str]]]:
+    """
+    参考文献生成（稳版）：
+    - 只对“实际进 context 的 chunks”提 title，并按出现顺序去重
+    - 每个 title 单独查 rows_per_title 行（避免全局 LIMIT 挤掉别人的结果）
+    - 从这些行的字段里抽所有 URL（可能多个），按 title 聚合
+    """
+    # 1) 从 used_chunks 提取 title（按出现顺序去重）
+    titles: list[str] = []
+    seen: set[str] = set()
+    for ch in used_chunks:
+        t = extract_title((ch.content or "").strip())
+        if not t or t in seen:
+            continue
+        seen.add(t)
+        titles.append(t)
+
+    if not titles:
+        return []
+
+    per = max(1, int(rows_per_title)) if rows_per_title else 20
+
+    # 2) 逐 title 查，保证“每个 title 都有自己的 LIMIT 配额”
+    urls_by_title: dict[str, list[str]] = {t: [] for t in titles}
+    seen_url_by_title: dict[str, set[str]] = {t: set() for t in titles}
+
+    for t in titles:
+        cond = _title_prefix_condition(t)
+        if cond is None:
+            continue
+
+        stmt = select(Chunk.content).where(cond)
+
+        if domain_ids:
+            stmt = stmt.join(Chunk.document).where(Document.domain_id.in_(list(domain_ids)))
+
+        # 加 order_by，让结果稳定可复现（不然数据库返回顺序可能飘）
+        stmt = stmt.order_by(Chunk.id.asc()).limit(per)
+
+        rows = db.execute(stmt).scalars().all()
+
+        for row_text in rows:
+            # 保险：只处理 title 真的匹配的行（防止极端情况下 like 命中怪东西）
+            row_title = extract_title(row_text)
+            if row_title != t:
+                continue
+
+            for url in _extract_urls_from_row(row_text):
+                if url in seen_url_by_title[t]:
+                    continue
+                seen_url_by_title[t].add(url)
+                urls_by_title[t].append(url)
+
+    return [(t, urls_by_title.get(t, [])) for t in titles]
+
+
+def format_references_from_titles(
+    entries: Sequence[tuple[str, list[str]]],
+    language: str,
+) -> str:
+    """按新格式渲染：1. Title，链接：URL1（若多个 URL，下一行继续列）"""
+    labels = _REFERENCE_LABELS.get(language) or _REFERENCE_LABELS[_FALLBACK_LANGUAGE]
+    heading = labels.get("heading", "参考资料")
+    heading_separator = labels.get("heading_separator", "：")
+
+    lines: list[str] = []
+    for idx, (title, urls) in enumerate(entries, start=1):
+        if urls:
+            lines.append(f"{idx}. {title}，链接：{urls[0]}")
+            for u in urls[1:]:
+                lines.append(f"   {u}")
+        else:
+            lines.append(f"{idx}. {title}")
+
+    return f"{heading}{heading_separator}\n" + "\n".join(lines)
+
+
 def chunk_to_memory_text(chunk: Chunk) -> str:
     """把单个 chunk 渲染成可持久化的“记忆”文本，只保留内容。"""
     return (chunk.content or "").strip()
@@ -641,7 +806,7 @@ def chunk_to_memory_text(chunk: Chunk) -> str:
 
 def compress_chunk_memory(question: str, chunks: Sequence[Chunk]) -> str:
     """Use the chat model to compress retrieved chunks for long-term memory."""
-    context = build_context(list(chunks))
+    context = build_context(list(chunks)).text
     if not context:
         return ""
     prompt = (
@@ -748,7 +913,6 @@ def answer(
     preferred_language: str | None = None,
 ) -> tuple[str, list[tuple[int, float]], list[Chunk]]:
     """Run the complete RAG flow and return assistant answer plus references and chunks."""
-
     _normalized_language, prompt_template = resolve_prompt_template(preferred_language)
     limit = top_k or DEFAULT_TOP_K
 
@@ -762,8 +926,9 @@ def answer(
     if not references:
         return prompt_template["no_context"], [], []
 
-    # B：上下文拼接做严格截断
-    context = build_context(list(chunks))
+    # B：上下文拼接做严格截断 + 记录 used_chunks（用于参考文献）
+    ctx = build_context(list(chunks))
+    context = ctx.text
 
     system_prompt = prompt_template["system"]
 
@@ -812,7 +977,11 @@ def answer(
     # B：最终回答阶段 history 只保留最近 N 条用户提问，避免把 assistant 长回答塞进去拖慢
     if filtered_history:
         user_only = [m for m in filtered_history if m.get("role") == "user"]
-        trimmed_user = user_only[-max(0, RAG_HISTORY_MAX_USER_TURNS):] if RAG_HISTORY_MAX_USER_TURNS else []
+        trimmed_user = (
+            user_only[-max(0, RAG_HISTORY_MAX_USER_TURNS):]
+            if RAG_HISTORY_MAX_USER_TURNS
+            else []
+        )
         if trimmed_user:
             messages.append(
                 {"role": "assistant", "content": "下面是此前用户的提问（仅用于理解上下文，不需要逐条回复）："}
@@ -834,9 +1003,15 @@ def answer(
     if not final_text:
         final_text = prompt_template["no_context"]
 
-    reference_entries = build_reference_entries(chunks)
-    if reference_entries:
-        reference_block = format_references(reference_entries, _normalized_language)
+    # === 新参考文献拼接：仅对“实际进 context 的 chunks”做 title 去重，并从 DB 行字段抽 URL ===
+    ref_entries = build_reference_entries_from_context(
+        db,
+        ctx.used_chunks,
+        domain_ids=domain_ids,
+        rows_per_title=RAG_REFERENCE_ROWS_PER_TITLE,
+    )
+    if ref_entries:
+        reference_block = format_references_from_titles(ref_entries, _normalized_language)
         final_text = f"{final_text}\n\n{reference_block}"
 
     return final_text, references, chunks
