@@ -6,7 +6,13 @@
       class="archive-tree__node"
       :style="{ marginLeft: `${indentStep * 0}px` }"
     >
-      <ArchiveTreeNode :node="node" :depth="0" :indent="indentStep" :expand-label="expandLabel" />
+      <ArchiveTreeNode
+        :node="node"
+        :depth="0"
+        :indent="indentStep"
+        :expand-label="expandLabel"
+        :highlight-tokens="highlightTokens"
+      />
     </div>
   </div>
   <div v-else class="archive-tree archive-tree--empty">{{ emptyText }}</div>
@@ -23,6 +29,10 @@ const props = defineProps({
   expandLabel: {
     type: String,
     default: '展开'
+  },
+  highlightTokens: {
+    type: Array,
+    default: () => []
   },
   emptyText: {
     type: String,

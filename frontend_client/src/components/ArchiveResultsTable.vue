@@ -118,8 +118,13 @@
                       :value="value"
                       :expand-label="uiTexts.expandDetails"
                       :empty-text="uiTexts.emptyCell"
+                      :highlight-tokens="highlightTokens"
                     />
-                    <StructuredViewer v-else-if="isStructuredRenderable(value)" :value="value" />
+                    <StructuredViewer
+                      v-else-if="isStructuredRenderable(value)"
+                      :value="value"
+                      :highlight-tokens="highlightTokens"
+                    />
                     <HighlightedText
                       v-else
                       class="archive-detail__text"
@@ -218,44 +223,100 @@ const HighlightedText = defineComponent({
   },
   setup(props) {
     const attrs = useAttrs();
-    const matcher = computed(() => buildMatcher(props.tokens));
 
-    function buildMatcher(tokens = []) {
-      const normalized = tokens
-        .map((token) => (token === null || token === undefined ? '' : String(token).trim()))
-        .filter(Boolean);
-      if (!normalized.length) return null;
-      return new RegExp(`(${normalized.map((token) => escapeRegExp(token)).join('|')})`, 'gi');
+    const normalizedTokens = computed(() =>
+      Array.from(
+        new Set(
+          (props.tokens || [])
+            .map((token) => (token === null || token === undefined ? '' : String(token).trim()))
+            .filter(Boolean)
+            .map((token) => normalizeText(token))
+        )
+      )
+    );
+
+    function normalizeText(text) {
+      return text
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
     }
 
-    function escapeRegExp(text) {
-      return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    function buildSegments(rawText) {
+      const content = rawText === null || rawText === undefined ? '' : String(rawText);
+      const tokens = normalizedTokens.value;
+
+      const baseProps = { ...attrs, class: ['archive-highlight-text', attrs.class] };
+      if (!content || !tokens.length) {
+        return { baseProps, segments: [{ text: content, highlight: false }] };
+      }
+
+      const normalizedContent = normalizeText(content);
+      const matches = tokens
+        .flatMap((token) => findAllMatches(normalizedContent, token))
+        .sort((a, b) => a.start - b.start || a.end - b.end);
+      const merged = mergeRanges(matches);
+
+      if (!merged.length) return { baseProps, segments: [{ text: content, highlight: false }] };
+
+      const segments = [];
+      let cursor = 0;
+      merged.forEach(({ start, end }, index) => {
+        if (start > cursor) {
+          segments.push({ text: content.slice(cursor, start), highlight: false, key: `pre-${index}` });
+        }
+        segments.push({ text: content.slice(start, end), highlight: true, key: `mark-${index}` });
+        cursor = end;
+      });
+
+      if (cursor < content.length) {
+        segments.push({ text: content.slice(cursor), highlight: false, key: 'post' });
+      }
+
+      return { baseProps, segments };
+    }
+
+    function findAllMatches(content, token) {
+      const matches = [];
+      if (!token) return matches;
+      let startIndex = 0;
+      while (startIndex < content.length) {
+        const matchIndex = content.indexOf(token, startIndex);
+        if (matchIndex === -1) break;
+        matches.push({ start: matchIndex, end: matchIndex + token.length });
+        startIndex = matchIndex + token.length;
+      }
+      return matches;
+    }
+
+    function mergeRanges(ranges) {
+      if (!ranges.length) return [];
+      const merged = [ranges[0]];
+
+      for (let i = 1; i < ranges.length; i += 1) {
+        const current = ranges[i];
+        const last = merged[merged.length - 1];
+        if (current.start <= last.end) {
+          last.end = Math.max(last.end, current.end);
+        } else {
+          merged.push({ ...current });
+        }
+      }
+
+      return merged;
     }
 
     return () => {
-      const content = props.text === null || props.text === undefined ? '' : String(props.text);
-      const highlightMatcher = matcher.value;
-
-      const baseProps = { ...attrs, class: ['archive-highlight-text', attrs.class] };
-
-      if (!content || !highlightMatcher) {
-        return h('span', baseProps, content);
-      }
-
-      const segmentMatcher = new RegExp(highlightMatcher.source, 'gi');
-      const strictMatcher = new RegExp(`^${highlightMatcher.source}$`, 'i');
-      const segments = content.split(segmentMatcher);
+      const { baseProps, segments } = buildSegments(props.text);
 
       return h(
         'span',
         baseProps,
-        segments
-          .filter((part) => part !== '')
-          .map((part, index) =>
-            strictMatcher.test(part)
-              ? h('mark', { class: 'archive-highlight', key: `mark-${index}` }, part)
-              : h('span', { key: `text-${index}` }, part)
-          )
+        segments.map((segment, index) =>
+          segment.highlight
+            ? h('mark', { class: 'archive-highlight', key: segment.key || `mark-${index}` }, segment.text)
+            : h('span', { key: segment.key || `text-${index}` }, segment.text)
+        )
       );
     };
   }
