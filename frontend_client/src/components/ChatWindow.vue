@@ -33,14 +33,11 @@
         <p>{{ texts.empty }}</p>
       </div>
       <transition name="chat-status" mode="out-in">
-        <div v-if="isRetrieving" key="retrieving" class="chat-window__streaming chat-window__streaming--thinking">
-          <span class="chat-window__streaming-label chat-window__streaming-label--pulse">{{ texts.retrieving }}</span>
-          <button type="button" class="chat-window__stop" @click="emit('stop-thinking')">
-            {{ texts.stopThinking || texts.stop }}
-          </button>
-        </div>
-        <div v-else-if="isThinking" key="thinking" class="chat-window__streaming chat-window__streaming--thinking">
+        <div v-if="isThinkingDisplayed" key="thinking" class="chat-window__streaming chat-window__streaming--thinking">
           <span class="chat-window__streaming-label chat-window__streaming-label--pulse">{{ texts.thinking }}</span>
+          <div class="chat-window__progress" aria-hidden="true">
+            <div class="chat-window__progress-bar" :style="{ width: `${thinkingProgress}%` }"></div>
+          </div>
           <button type="button" class="chat-window__stop" @click="emit('stop-thinking')">
             {{ texts.stopThinking || texts.stop }}
           </button>
@@ -119,7 +116,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
   messages: {
@@ -174,7 +171,7 @@ const props = defineProps({
       languageFlag: '🇨🇳',
       deleteConversation: '删除会话',
       empty: '开始新的对话，系统将基于选定的知识域为你解答。',
-      retrieving: '助手正在检索…',
+      retrieving: '助手正在思考…',
       thinking: '助手正在思考…',
       stopThinking: '停止思考',
       stopped: '已停止思考',
@@ -215,6 +212,83 @@ const messageContainer = ref(null);
 const currentPhase = computed(() => props.assistantPhase || (props.isSending ? 'thinking' : null));
 const isRetrieving = computed(() => currentPhase.value === 'retrieving');
 const isThinking = computed(() => currentPhase.value === 'thinking');
+const isThinkingPhase = computed(() => isRetrieving.value || isThinking.value);
+const thinkingCompletionPending = ref(false);
+const isThinkingDisplayed = computed(() => isThinkingPhase.value || thinkingCompletionPending.value);
+const thinkingProgress = ref(0);
+let progressTimer = null;
+let completionResetTimer = null;
+
+function clearProgressTimer() {
+  if (progressTimer) {
+    clearTimeout(progressTimer);
+    progressTimer = null;
+  }
+}
+
+function clearCompletionResetTimer() {
+  if (completionResetTimer) {
+    clearTimeout(completionResetTimer);
+    completionResetTimer = null;
+  }
+}
+
+function holdCompletion(duration) {
+  clearCompletionResetTimer();
+  thinkingCompletionPending.value = true;
+  completionResetTimer = window.setTimeout(() => {
+    thinkingCompletionPending.value = false;
+    thinkingProgress.value = 0;
+    completionResetTimer = null;
+  }, duration);
+}
+
+function scheduleProgress() {
+  clearProgressTimer();
+
+  if (!isThinkingPhase.value) {
+    return;
+  }
+
+  const milestones = [60, 80, 92];
+  const current = thinkingProgress.value;
+  const stageIndex = milestones.findIndex((target) => current < target);
+  const nextTarget = stageIndex === -1 ? 96 : milestones[stageIndex];
+  const step = Math.max(1, Math.round((nextTarget - current) / 8));
+  const delay = 300 + Math.max(0, stageIndex) * 280;
+
+  thinkingProgress.value = Math.min(nextTarget, current + step);
+  progressTimer = window.setTimeout(scheduleProgress, delay);
+}
+
+watch(isThinkingPhase, (active, wasActive) => {
+  if (active) {
+    clearCompletionResetTimer();
+    thinkingCompletionPending.value = false;
+    thinkingProgress.value = 0;
+    scheduleProgress();
+    return;
+  }
+
+  clearProgressTimer();
+  if (wasActive) {
+    thinkingProgress.value = 100;
+    holdCompletion(props.isStreaming ? 260 : 700);
+  } else {
+    thinkingProgress.value = 0;
+  }
+});
+
+watch(
+  () => props.isStreaming,
+  (streaming) => {
+    if (streaming && isThinkingDisplayed.value) {
+      clearProgressTimer();
+      thinkingProgress.value = 100;
+      holdCompletion(260);
+    }
+  }
+);
 
 const MIN_INPUT_HEIGHT = 44;
 const MAX_INPUT_HEIGHT = 240;
@@ -419,6 +493,10 @@ function scrollToBottom() {
 onMounted(() => {
   scrollToBottom();
   autoResizeInput();
+});
+
+onBeforeUnmount(() => {
+  clearProgressTimer();
 });
 
 function autoResizeInput() {
@@ -672,6 +750,26 @@ function autoResizeInput() {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.chat-window__progress {
+  flex: 0 0 160px;
+  width: 160px;
+  height: 6px;
+  background: rgba(90, 80, 181, 0.14);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.chat-window__progress-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: linear-gradient(90deg, #a68bff 0%, #5a50b5 100%);
+  border-radius: inherit;
+  transition: width 0.6s ease-out;
+  box-shadow: 0 6px 12px rgba(90, 80, 181, 0.18);
 }
 
 .chat-window__streaming-label--pulse {
