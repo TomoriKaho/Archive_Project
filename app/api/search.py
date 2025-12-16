@@ -198,7 +198,7 @@ def _matches(tokens: list[str], text: str, mode: str) -> bool:
 
 @router.get("/search/archives", response_model=ArchiveSearchResponse)
 def search_archives(
-    q: str = Query(..., min_length=1, max_length=100, description="搜索关键词"),
+    q: str = Query(..., min_length=1, description="搜索关键词"),
     page: int = Query(1, ge=1, description="页码，从1开始"),
     page_size: int = Query(10, ge=1, le=10, description="每页数量，最大10"),
     domain_ids: str | None = Query(
@@ -210,6 +210,9 @@ def search_archives(
     db: Session = Depends(get_db),
 ):
     """在指定知识域内按archive粒度进行传统搜索。"""
+
+    if len(q) > 250:
+        raise HTTPException(status_code=400, detail="搜索关键词长度不能超过250个字符")
 
     tokens = _tokenize_query(q)
     if not tokens:
