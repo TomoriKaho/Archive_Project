@@ -261,23 +261,27 @@ function scheduleProgress() {
   progressTimer = window.setTimeout(scheduleProgress, delay);
 }
 
-watch(isThinkingPhase, (active, wasActive) => {
-  if (active) {
-    clearCompletionResetTimer();
-    thinkingCompletionPending.value = false;
-    thinkingProgress.value = 0;
-    scheduleProgress();
-    return;
-  }
+watch(
+  isThinkingPhase,
+  (active, wasActive) => {
+    if (active) {
+      clearCompletionResetTimer();
+      thinkingCompletionPending.value = false;
+      thinkingProgress.value = 0;
+      scheduleProgress();
+      return;
+    }
 
-  clearProgressTimer();
-  if (wasActive) {
-    thinkingProgress.value = 100;
-    holdCompletion(props.isStreaming ? 260 : 700);
-  } else {
-    thinkingProgress.value = 0;
-  }
-});
+    clearProgressTimer();
+    if (wasActive) {
+      thinkingProgress.value = 100;
+      holdCompletion(props.isStreaming ? 260 : 700);
+    } else {
+      thinkingProgress.value = 0;
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   () => props.isStreaming,
