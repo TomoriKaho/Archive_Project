@@ -7,22 +7,74 @@
 
 ## 目录
 - [Archive Project](#archive-project)
+  - [零、新服务器初始化（Docker/Python/Node）](#零新服务器初始化dockerpythonnode)
   - [目录](#目录)
   - [一、环境要求](#一环境要求)
   - [二、环境变量（统一清单）](#二环境变量统一清单)
     - [后端（根目录 `.env`）](#后端根目录-env)
     - [管理端前端（`frontend_admin/.env.local`）](#管理端前端frontend_adminenvlocal)
     - [客户端前端（`frontend_client/.env.local`）](#客户端前端frontend_clientenvlocal)
-  - [三、快速启动（后端 + 依赖服务 + 前端）](#三快速启动后端--依赖服务--前端)
+  - [三、快速启动（Docker Compose 一键启动）](#三快速启动docker-compose-一键启动)
+    - [1) 准备环境变量](#1-准备环境变量)
+    - [2) 一键启动](#2-一键启动)
+    - [3) 停止或重启](#3-停止或重启)
+  - [四、手动启动（后端 + 依赖服务 + 前端）](#四手动启动后端--依赖服务--前端)
     - [1) 克隆仓库 \& Python 依赖](#1-克隆仓库--python-依赖)
     - [2) 配置环境变量](#2-配置环境变量)
     - [3) 启动依赖服务（Docker）](#3-启动依赖服务docker)
     - [4) 迁移数据库](#4-迁移数据库)
     - [5) 启动后端（FastAPI）](#5-启动后端fastapi)
     - [6) 启动前端（Vue CLI）](#6-启动前端vue-cli)
-  - [四、常用命令](#四常用命令)
-  - [五、RAG 相关](#五rag-相关)
-  - [六、故障排查速记](#六故障排查速记)
+  - [五、常用命令](#五常用命令)
+  - [六、RAG 相关](#六rag-相关)
+  - [七、故障排查速记](#七故障排查速记)
+
+---
+
+## 零、新服务器初始化（Docker/Python/Node）
+
+以下命令假设使用 Ubuntu 22.04/24.04：
+
+1. 更新基础软件并安装常用工具：
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   sudo apt install -y git curl build-essential ca-certificates
+   ```
+2. 安装 Python（本地调试或运行脚本时使用）：
+   ```bash
+   sudo apt install -y python3.11 python3.11-venv python3-pip
+   ```
+3. 安装 Docker Engine 与 Compose 插件：
+   ```bash
+   sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   echo \
+     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+     sudo tee /etc/apt/sources.list.d/docker.list
+   sudo apt update
+   sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+   # （国内可选）配置 Docker Hub 加速镜像
+   sudo mkdir -p /etc/docker
+   cat <<'EOF' | sudo tee /etc/docker/daemon.json
+   {
+     "registry-mirrors": ["https://mirror.ccs.tencentyun.com"]
+   }
+   EOF
+   sudo systemctl restart docker
+
+   # 可选：将当前用户加入 docker 组，避免每次 sudo
+   sudo usermod -aG docker $USER
+   newgrp docker
+   ```
+4. （可选）安装 Node.js 以在宿主机调试前端：
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+   sudo apt install -y nodejs
+   ```
+
+完成上述步骤后即可使用 `docker compose` 运行项目，或按需使用 Python/Node 进行本地开发。
 
 ---
 
@@ -92,7 +144,49 @@ VUE_APP_TOKEN_STORAGE_KEY=archive_ai_client_token
 
 ---
 
-## 三、快速启动（后端 + 依赖服务 + 前端）
+## 三、快速启动（Docker Compose 一键启动）
+
+> 适合在新服务器上快速拉起整套服务（后端 + PostgreSQL + Qdrant + 两个前端）。
+
+### 1) 准备环境变量
+
+- 复制 `.env.example` 为 `.env`，并将数据库、向量库地址指向 compose 内的服务：
+  ```dotenv
+  DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/mydb
+  QDRANT_URL=http://qdrant:6333
+  ```
+- 在 `frontend_admin/.env.local` 和 `frontend_client/.env.local` 中设置 API 地址指向后端容器：
+  ```dotenv
+  VUE_APP_API_BASE_URL=http://backend:8000/api
+  VUE_APP_TOKEN_STORAGE_KEY=archive_ai_admin_token   # 管理端示例
+  ```
+  客户端可将 `VUE_APP_TOKEN_STORAGE_KEY` 改为 `archive_ai_client_token`（或保持默认）。
+
+### 2) 一键启动
+
+```bash
+docker compose up -d
+```
+
+- 首次会自动拉取镜像并安装依赖，完成后服务端口：
+  - 后端 API：`http://<服务器IP>:8000`（Swagger 文档在 `/docs`）
+  - 管理端前端：`http://<服务器IP>:8080`
+  - 客户端前端：`http://<服务器IP>:8081`
+- 查看单个服务日志：`docker compose logs -f backend`（其他服务同理）。
+
+### 3) 停止或重启
+
+```bash
+docker compose stop          # 停止所有容器
+docker compose start         # 重新启动
+docker compose down          # 停止并移除容器（保留卷数据）
+```
+
+> 需要更新依赖或代码时，可 `docker compose down` 后重新 `docker compose up -d`，卷会保留数据库与向量库数据。
+
+---
+
+## 四、手动启动（后端 + 依赖服务 + 前端）
 
 ### 1) 克隆仓库 & Python 依赖
 ```bash
@@ -100,7 +194,7 @@ git clone git@github.com:TomoriKaho/Archive_Project.git
 cd Archive_Project
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 ```
 
 ### 2) 配置环境变量
@@ -110,14 +204,14 @@ pip install -r requirements.txt
 ### 3) 启动依赖服务（Docker）
 ```bash
 # PostgreSQL（一次性创建容器，后续仅需 docker start rag-pg）
-docker run --name rag-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres
+docker run --name rag-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d mirrors.tencent.com/library/postgres:15
 # Qdrant（同理，一次性创建容器）
 docker run -d --name qdrant \
   -p 6333:6333 \
   -v $(pwd)/qdrant_storage:/qdrant/storage \
   -e QDRANT__SERVICE__USER__UID=$(id -u) \
   -e QDRANT__SERVICE__USER__GID=$(id -g) \
-  qdrant/qdrant
+  mirrors.tencent.com/qdrant/qdrant:latest
 ```
 
 > 之后重启服务可用：`docker start rag-pg && docker start qdrant`
@@ -137,11 +231,13 @@ uvicorn app.main:app --reload
 ```bash
 # 管理端前端
 cd frontend_admin
+npm config set registry https://registry.npmmirror.com
 npm install           # 首次安装依赖
 npm run serve         # 启动管理端（默认 http://localhost:8080）
 
 # 客户端前端（建议另开终端）
 cd frontend_client
+npm config set registry https://registry.npmmirror.com
 npm install           # 首次安装依赖
 npm run serve         # 启动客户端（默认 http://localhost:8081）
 ```
@@ -150,7 +246,7 @@ npm run serve         # 启动客户端（默认 http://localhost:8081）
 
 ---
 
-## 四、常用命令
+## 五、常用命令
 
 **后端**
 ```bash
@@ -185,7 +281,7 @@ docker logs -f qdrant
 
 ---
 
-## 五、RAG 相关
+## 六、RAG 相关
 
 ```bash
 # 启动/准备 Ollama（本机）
@@ -215,7 +311,7 @@ curl -X POST http://localhost:8000/chats/7/messages \
 
 ---
 
-## 六、故障排查速记
+## 七、故障排查速记
 - **`npm: command not found`**：先安装 Node.js（推荐 nvm 安装 LTS），再进入对应前端目录执行 `npm install`。
 - **前端 404 或无法登录**：确认 `frontend_admin/.env.local` / `frontend_client/.env.local` 的 `VUE_APP_API_BASE_URL` 指向后端；同时确认后端 `uvicorn` 正常运行。
 - **数据库连接失败**：检查 `DATABASE_URL`、Postgres 容器是否启动、端口是否占用。
