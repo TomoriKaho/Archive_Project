@@ -11,3 +11,5 @@ frontend_admin/dist/
 frontend_client/node_modules/
 frontend_client/dist/
 legacy_frontend/
+frontend_admin/package-lock.json
+frontend_client/package-lock.json
