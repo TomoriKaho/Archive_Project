@@ -13,3 +13,4 @@ frontend_client/dist/
 legacy_frontend/
 frontend_admin/package-lock.json
 frontend_client/package-lock.json
+.venv/

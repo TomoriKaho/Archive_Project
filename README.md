@@ -7,8 +7,8 @@
 
 ## 目录
 - [Archive Project](#archive-project)
-  - [零、新服务器初始化（Docker/Python/Node）](#零新服务器初始化dockerpythonnode)
   - [目录](#目录)
+  - [零、新服务器初始化（Docker/Python/Node）](#零新服务器初始化dockerpythonnode)
   - [一、环境要求](#一环境要求)
   - [二、环境变量（统一清单）](#二环境变量统一清单)
     - [后端（根目录 `.env`）](#后端根目录-env)
@@ -287,7 +287,6 @@ docker logs -f qdrant
 # 启动/准备 Ollama（本机）
 ollama serve &
 ollama pull qwen3-embedding:8b
-ollama pull llama3.1:8b
 ```
 
 **示例调用**
