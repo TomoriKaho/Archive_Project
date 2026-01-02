@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: mydb
+      POSTGRES_DB: rag
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -35,7 +35,7 @@ services:
       - postgres
       - qdrant
     ports:
-      - "8000:8000"
+      - "18000:8000"
 
   frontend_admin:
     image: node:18
@@ -43,6 +43,7 @@ services:
     working_dir: /app/frontend_admin
     volumes:
       - ./frontend_admin:/app/frontend_admin
+      - ./frontend_shared:/app/frontend_shared
     command: sh -c "npm config set registry https://registry.npmmirror.com && npm install && npm run serve -- --host 0.0.0.0 --port 8080"
     ports:
       - "8080:8080"
@@ -55,7 +56,8 @@ services:
     working_dir: /app/frontend_client
     volumes:
       - ./frontend_client:/app/frontend_client
-    command: sh -c "npm config set registry https://registry.npmmirror.com && npm install && npm run serve -- --host 0.0.0.0 --port 8081"
+      - ./frontend_shared:/app/frontend_shared
+    command: sh -c "npm config set registry https://registry.npmmirror.com && npm install && npm run serve -- --host 0.0.0.0"
     ports:
       - "8081:8081"
     depends_on:

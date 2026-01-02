@@ -8,6 +8,18 @@
 ## 目录
 - [Archive Project](#archive-project)
   - [目录](#目录)
+  - [CentOS 一键启动（Docker Compose）](#centos-一键启动docker-compose)
+    - [1) 安装 Docker 与 Compose](#1-安装-docker-与-compose)
+    - [2) 放行防火墙端口](#2-放行防火墙端口)
+    - [3) 快速启动](#3-快速启动)
+    - [4) 常见问题排查](#4-常见问题排查)
+    - [5) 停止与清理](#5-停止与清理)
+  - [Ubuntu 一键启动（Docker Compose）](#ubuntu-一键启动docker-compose)
+    - [1) 安装 Docker 与 Compose](#1-安装-docker-与-compose-1)
+    - [2) 放行防火墙端口](#2-放行防火墙端口-1)
+    - [3) 快速启动](#3-快速启动-1)
+    - [4) 常见问题排查](#4-常见问题排查-1)
+    - [5) 停止与清理](#5-停止与清理-1)
   - [零、新服务器初始化（Docker/Python/Node）](#零新服务器初始化dockerpythonnode)
   - [一、环境要求](#一环境要求)
   - [二、环境变量（统一清单）](#二环境变量统一清单)
@@ -28,6 +40,192 @@
   - [五、常用命令](#五常用命令)
   - [六、RAG 相关](#六rag-相关)
   - [七、故障排查速记](#七故障排查速记)
+
+---
+
+## CentOS 一键启动（Docker Compose）
+
+> 适用于 CentOS 7/8/Stream。使用 `docker compose up -d --build` 一键拉起 PostgreSQL、Qdrant、Ollama、后端与两个前端。
+
+### 1) 安装 Docker 与 Compose
+
+**CentOS 7（yum）示例：**
+```bash
+sudo yum install -y yum-utils ca-certificates curl
+sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+```
+
+**CentOS 8/Stream（dnf）示例：**
+```bash
+sudo dnf install -y dnf-plugins-core ca-certificates curl
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+```
+
+> 可选：将当前用户加入 docker 组避免每次 sudo：
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### 2) 放行防火墙端口
+
+按默认端口放行（如有修改请同步调整）：
+- 后端：18000
+- 管理端：8080
+- 客户端：8081
+- PostgreSQL：5432
+- Qdrant：6333
+- Ollama：11434
+
+firewalld 示例：
+```bash
+sudo firewall-cmd --permanent --add-port=18000/tcp
+sudo firewall-cmd --permanent --add-port=8080/tcp
+sudo firewall-cmd --permanent --add-port=8081/tcp
+sudo firewall-cmd --permanent --add-port=5432/tcp
+sudo firewall-cmd --permanent --add-port=6333/tcp
+sudo firewall-cmd --permanent --add-port=11434/tcp
+sudo firewall-cmd --reload
+```
+
+> 云服务器还需要在安全组中放行上述端口。
+
+### 3) 快速启动
+
+```bash
+git clone git@github.com:TomoriKaho/Archive_Project.git
+cd Archive_Project
+cp .env.example .env
+```
+
+编辑 `.env`（必须与 compose 使用的 `../.env` 保持一致）：  
+- 数据库：`DATABASE_URL`、`POSTGRES_*`
+- Qdrant：`QDRANT_URL=http://qdrant:6333`
+- Ollama：`OLLAMA_BASE_URL=http://ollama:11434`
+- 模型列表：`OLLAMA_MODELS=qwen3-embedding:8b`（逗号分隔）
+- 前端调用后端：`VUE_APP_API_BASE_URL=http://<服务器IP>:18000/api`
+
+启动：
+```bash
+docker compose up -d --build
+```
+
+查看状态与日志：
+```bash
+docker compose ps
+docker compose logs -f backend
+```
+
+### 4) 常见问题排查
+
+- **后端连不上 postgres/qdrant/ollama**：确认 `.env` 中 `DATABASE_URL/QDRANT_URL/OLLAMA_BASE_URL` 均指向 compose 内服务名（postgres/qdrant/ollama），并查看 `backend` 日志。
+- **alembic 迁移失败**：检查 `alembic.ini` 与 `migrations/versions` 是否存在，确保数据库账号权限正确。
+- **Ollama 拉模型失败或过慢**：可再次运行 `docker compose up -d ollama_init` 触发重试；必要时更换更小模型或手动 `docker exec -it archive-ollama ollama pull <model>`.
+- **前端访问不到后端**：确认 `VUE_APP_API_BASE_URL` 指向宿主机 IP（不要写 `backend:18000`），同时检查后端端口与 CORS 设置。
+- **容器监听 127.0.0.1 的问题**：本仓库已强制监听 `0.0.0.0`，若自行改动请确保仍为 0.0.0.0。
+
+### 5) 停止与清理
+
+```bash
+docker compose down
+```
+
+> 如需清空数据库/向量库/Ollama 模型，请谨慎使用（会删除卷数据）：
+```bash
+docker compose down -v
+```
+
+---
+
+## Ubuntu 一键启动（Docker Compose）
+
+> 适用于 Ubuntu 20.04/22.04/24.04。使用 `docker compose up -d --build` 一键拉起 PostgreSQL、Qdrant、Ollama、后端与两个前端。
+
+### 1) 安装 Docker 与 Compose
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+```
+
+> 可选：将当前用户加入 docker 组避免每次 sudo：
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### 2) 放行防火墙端口
+
+如果启用了 UFW，请放行（如有修改请同步调整）：
+```bash
+sudo ufw allow 18000/tcp
+sudo ufw allow 8080/tcp
+sudo ufw allow 8081/tcp
+sudo ufw allow 5432/tcp
+sudo ufw allow 6333/tcp
+sudo ufw allow 11434/tcp
+sudo ufw reload
+```
+
+> 云服务器还需要在安全组中放行上述端口。
+
+### 3) 快速启动
+
+```bash
+git clone git@github.com:TomoriKaho/Archive_Project.git
+cd Archive_Project
+cp .env.example .env
+```
+
+编辑 `.env`（必须与 compose 使用的 `../.env` 保持一致）：  
+- 数据库：`DATABASE_URL`、`POSTGRES_*`
+- Qdrant：`QDRANT_URL=http://qdrant:6333`
+- Ollama：`OLLAMA_BASE_URL=http://ollama:11434`
+- 模型列表：`OLLAMA_MODELS=qwen3-embedding:8b`（逗号分隔）
+- 前端调用后端：`VUE_APP_API_BASE_URL=http://<服务器IP>:18000/api`
+
+启动：
+```bash
+docker compose up -d --build
+```
+
+查看状态与日志：
+```bash
+docker compose ps
+docker compose logs -f backend
+```
+
+### 4) 常见问题排查
+
+- **后端连不上 postgres/qdrant/ollama**：确认 `.env` 中 `DATABASE_URL/QDRANT_URL/OLLAMA_BASE_URL` 均指向 compose 内服务名（postgres/qdrant/ollama），并查看 `backend` 日志。
+- **alembic 迁移失败**：检查 `alembic.ini` 与 `migrations/versions` 是否存在，确保数据库账号权限正确。
+- **Ollama 拉模型失败或过慢**：可再次运行 `docker compose up -d ollama_init` 触发重试；必要时更换更小模型或手动 `docker exec -it archive-ollama ollama pull <model>`.
+- **前端访问不到后端**：确认 `VUE_APP_API_BASE_URL` 指向宿主机 IP（不要写 `backend:18000`），同时检查后端端口与 CORS 设置。
+- **容器监听 127.0.0.1 的问题**：本仓库已强制监听 `0.0.0.0`，若自行改动请确保仍为 0.0.0.0。
+
+### 5) 停止与清理
+
+```bash
+docker compose down
+```
+
+> 如需清空数据库/向量库/Ollama 模型，请谨慎使用（会删除卷数据）：
+```bash
+docker compose down -v
+```
 
 ---
 
@@ -129,7 +327,7 @@ set -a && source .env && set +a
 ### 管理端前端（`frontend_admin/.env.local`）
 ```dotenv
 # 后端 API 基地址（保持与后端 uvicorn 端口一致）
-VUE_APP_API_BASE_URL=http://localhost:8000/api
+VUE_APP_API_BASE_URL=http://localhost:18000/api
 # 前端本地存储的 Token 键名
 VUE_APP_TOKEN_STORAGE_KEY=archive_ai_admin_token
 ```
@@ -137,7 +335,7 @@ VUE_APP_TOKEN_STORAGE_KEY=archive_ai_admin_token
 ### 客户端前端（`frontend_client/.env.local`）
 ```dotenv
 # 后端 API 基地址（保持与后端 uvicorn 端口一致）
-VUE_APP_API_BASE_URL=http://localhost:8000/api
+VUE_APP_API_BASE_URL=http://localhost:18000/api
 # 前端本地存储的 Token 键名
 VUE_APP_TOKEN_STORAGE_KEY=archive_ai_client_token
 ```
@@ -157,7 +355,7 @@ VUE_APP_TOKEN_STORAGE_KEY=archive_ai_client_token
   ```
 - 在 `frontend_admin/.env.local` 和 `frontend_client/.env.local` 中设置 API 地址指向后端容器：
   ```dotenv
-  VUE_APP_API_BASE_URL=http://backend:8000/api
+  VUE_APP_API_BASE_URL=http://backend:18000/api
   VUE_APP_TOKEN_STORAGE_KEY=archive_ai_admin_token   # 管理端示例
   ```
   客户端可将 `VUE_APP_TOKEN_STORAGE_KEY` 改为 `archive_ai_client_token`（或保持默认）。
@@ -169,7 +367,7 @@ docker compose up -d
 ```
 
 - 首次会自动拉取镜像并安装依赖，完成后服务端口：
-  - 后端 API：`http://<服务器IP>:8000`（Swagger 文档在 `/docs`）
+  - 后端 API：`http://<服务器IP>:18000`（Swagger 文档在 `/docs`）
   - 管理端前端：`http://<服务器IP>:8080`
   - 客户端前端：`http://<服务器IP>:8081`
 - 查看单个服务日志：`docker compose logs -f backend`（其他服务同理）。
@@ -224,7 +422,7 @@ alembic upgrade head
 ### 5) 启动后端（FastAPI）
 ```bash
 uvicorn app.main:app --reload
-# 默认监听 http://localhost:8000
+# 默认监听 http://localhost:18000
 ```
 
 ### 6) 启动前端（Vue CLI）
@@ -292,11 +490,11 @@ ollama pull qwen3-embedding:8b
 **示例调用**
 ```bash
 # 将某文档向量写入 Qdrant（如实现了对应路由）
-curl -X POST http://localhost:8000/rag/ingest/42
+curl -X POST http://localhost:18000/rag/ingest/42
 
 # 在 chat 中触发 RAG 生成
 token="<Bearer JWT>"
-curl -X POST http://localhost:8000/chats/7/messages \
+curl -X POST http://localhost:18000/chats/7/messages \
      -H 'Content-Type: application/json' \
      -H "Authorization: Bearer $token" \
      -d '{"role":"user","content":"Ask something","top_k":8,"domain_ids":[3]}'

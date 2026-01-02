@@ -27,7 +27,7 @@ cp .env.example .env.local
 Edit the file as needed:
 
 ```
-VUE_APP_API_BASE_URL=http://localhost:8000/api
+VUE_APP_API_BASE_URL=http://localhost:18000/api
 VUE_APP_TOKEN_STORAGE_KEY=archive_ai_admin_token
 ```
 

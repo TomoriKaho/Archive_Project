@@ -18,7 +18,7 @@ npm run serve          # 默认在 http://localhost:8081
 
 创建 `.env.local` 后配置后端接口地址与 Token 键名：
 ```bash
-VUE_APP_API_BASE_URL=http://localhost:8000/api
+VUE_APP_API_BASE_URL=http://localhost:18000/api
 VUE_APP_TOKEN_STORAGE_KEY=archive_ai_client_token
 ```
 
