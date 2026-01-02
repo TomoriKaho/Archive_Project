@@ -150,6 +150,8 @@ def resolve_prompt_template(language: str | None) -> tuple[str, dict[str, str]]:
     return normalized or _FALLBACK_LANGUAGE, template
 
 
+
+
 def normalize_language_code(language: str | None) -> str | None:
     """Normalize user-provided language code to supported values."""
     if not language:

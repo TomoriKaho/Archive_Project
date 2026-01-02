@@ -3,7 +3,10 @@ set -eu
 
 MODELS_RAW=${OLLAMA_MODELS:-}
 if [ -z "$MODELS_RAW" ]; then
-  echo "[ollama_pull_models] OLLAMA_MODELS is empty; skipping model pull."
+  MODELS_RAW=${OLLAMA_EMBED_MODEL:-}
+fi
+if [ -z "$MODELS_RAW" ]; then
+  echo "[ollama_pull_models] OLLAMA_MODELS and OLLAMA_EMBED_MODEL are empty; skipping model pull."
   exit 0
 fi
 
