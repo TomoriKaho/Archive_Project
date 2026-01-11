@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/auth';
 import { updateDocumentTitle } from '@/i18n';
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(process.env.BASE_URL),
   routes: [
     {
       path: '/login',
