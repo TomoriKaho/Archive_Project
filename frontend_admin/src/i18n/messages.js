@@ -309,6 +309,7 @@ export const messages = {
       table: {
         name: '名称',
         description: '描述',
+        language: '语言',
         created: '创建时间',
         updated: '更新时间'
       },
@@ -317,6 +318,8 @@ export const messages = {
         nameLabel: '名称',
         descriptionLabel: '描述',
         descriptionPlaceholder: '可选描述',
+        languageLabel: '语言',
+        languagePlaceholder: '选择语言（可选）',
         hint: '域创建后默认启用。',
         validation: {
           nameRequired: '请输入域名称。'
@@ -788,6 +791,7 @@ export const messages = {
       table: {
         name: 'Name',
         description: 'Description',
+        language: 'Language',
         created: 'Created',
         updated: 'Updated'
       },
@@ -796,6 +800,8 @@ export const messages = {
         nameLabel: 'Name',
         descriptionLabel: 'Description',
         descriptionPlaceholder: 'Optional description',
+        languageLabel: 'Language',
+        languagePlaceholder: 'Select language (optional)',
         hint: 'Domains are always active once created.',
         validation: {
           nameRequired: 'Name is required.'

@@ -31,11 +31,12 @@
       </thead>
       <tbody>
         <tr v-if="domainsStore.items.length === 0">
-          <td colspan="5" class="empty">{{ t('domains.empty') }}</td>
+          <td colspan="6" class="empty">{{ t('domains.empty') }}</td>
         </tr>
         <tr v-for="domain in domainsStore.items" :key="domain.id">
           <td>{{ domain.name }}</td>
           <td>{{ domain.description || '—' }}</td>
+          <td>{{ domain.language || '—' }}</td>
           <td>{{ formatDate(domain.created_at) }}</td>
           <td>{{ formatDate(domain.updated_at) }}</td>
           <td class="actions">
@@ -68,6 +69,15 @@
           rows="3"
           :placeholder="t('domains.form.descriptionPlaceholder')"
         ></textarea>
+      </div>
+      <div class="form-field">
+        <label for="domain-language">{{ t('domains.form.languageLabel') }}</label>
+        <select id="domain-language" v-model="form.language">
+          <option value="">{{ t('domains.form.languagePlaceholder') }}</option>
+          <option v-for="option in languageOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
       </div>
       <p class="form-hint">{{ t('domains.form.hint') }}</p>
       <template #footer>
@@ -108,9 +118,44 @@ import { useDomainsStore } from '@/store/domains';
 const domainsStore = useDomainsStore();
 const { t, locale } = useI18n();
 
+const languageOptions = [
+  { value: 'en', label: 'English / 英语 (en)' },
+  { value: 'zh', label: '简体中文 / Chinese (zh)' },
+  { value: 'zh_tw', label: '繁体中文 / Traditional Chinese (zh_tw)' },
+  { value: 'ru', label: 'Russian / 俄语 (ru)' },
+  { value: 'ja', label: 'Japanese / 日语 (ja)' },
+  { value: 'ko', label: 'Korean / 韩语 (ko)' },
+  { value: 'es', label: 'Spanish / 西班牙语 (es)' },
+  { value: 'fr', label: 'French / 法语 (fr)' },
+  { value: 'pt', label: 'Portuguese / 葡萄牙语 (pt)' },
+  { value: 'de', label: 'German / 德语 (de)' },
+  { value: 'it', label: 'Italian / 意大利语 (it)' },
+  { value: 'th', label: 'Thai / 泰语 (th)' },
+  { value: 'vi', label: 'Vietnamese / 越南语 (vi)' },
+  { value: 'id', label: 'Indonesian / 印度尼西亚语 (id)' },
+  { value: 'ms', label: 'Malay / 马来语 (ms)' },
+  { value: 'ar', label: 'Arabic / 阿拉伯语 (ar)' },
+  { value: 'hi', label: 'Hindi / 印地语 (hi)' },
+  { value: 'he', label: 'Hebrew / 希伯来语 (he)' },
+  { value: 'ur', label: 'Urdu / 乌尔都语 (ur)' },
+  { value: 'bn', label: 'Bengali / 孟加拉语 (bn)' },
+  { value: 'pl', label: 'Polish / 波兰语 (pl)' },
+  { value: 'nl', label: 'Dutch / 荷兰语 (nl)' },
+  { value: 'tr', label: 'Turkish / 土耳其语 (tr)' },
+  { value: 'km', label: 'Khmer / 高棉语 (km)' },
+  { value: 'cs', label: 'Czech / 捷克语 (cs)' },
+  { value: 'sv', label: 'Swedish / 瑞典语 (sv)' },
+  { value: 'hu', label: 'Hungarian / 匈牙利语 (hu)' },
+  { value: 'da', label: 'Danish / 丹麦语 (da)' },
+  { value: 'fi', label: 'Finnish / 芬兰语 (fi)' },
+  { value: 'tl', label: 'Tagalog / 他加禄语 (tl)' },
+  { value: 'fa', label: 'Persian / 波斯语 (fa)' }
+];
+
 const columns = computed(() => [
   { key: 'name', label: t('domains.table.name'), sortable: true },
   { key: 'description', label: t('domains.table.description'), sortable: true },
+  { key: 'language', label: t('domains.table.language'), sortable: true },
   { key: 'created_at', label: t('domains.table.created'), sortable: true },
   { key: 'updated_at', label: t('domains.table.updated'), sortable: true }
 ]);
@@ -127,7 +172,8 @@ const deletingDomainId = ref(null);
 
 const form = reactive({
   name: '',
-  description: ''
+  description: '',
+  language: ''
 });
 
 const errors = reactive({
@@ -155,6 +201,7 @@ function openCreate() {
   editingDomainId.value = null;
   form.name = '';
   form.description = '';
+  form.language = '';
   errors.name = '';
   isModalOpen.value = true;
 }
@@ -163,6 +210,7 @@ function openEdit(domain) {
   editingDomainId.value = domain.id;
   form.name = domain.name;
   form.description = domain.description;
+  form.language = domain.language || '';
   errors.name = '';
   isModalOpen.value = true;
 }
@@ -181,7 +229,8 @@ async function submit() {
   isSaving.value = true;
   const payload = {
     name: form.name,
-    description: form.description
+    description: form.description,
+    language: form.language || null
   };
   try {
     const success = editingDomainId.value

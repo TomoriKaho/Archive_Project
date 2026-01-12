@@ -51,7 +51,8 @@ export const useDomainsStore = defineStore('domains', {
       try {
         const body = {
           name: payload.name,
-          description: payload.description || null
+          description: payload.description || null,
+          language: payload.language || null
         };
         await createDomain(body);
         uiStore.showToast({
@@ -84,7 +85,8 @@ export const useDomainsStore = defineStore('domains', {
       try {
         const body = {
           name: payload.name,
-          description: payload.description || null
+          description: payload.description || null,
+          language: payload.language || null
         };
         await updateDomain(domainId, body);
         uiStore.showToast({

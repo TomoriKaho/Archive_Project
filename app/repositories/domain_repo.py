@@ -12,11 +12,16 @@ class DomainRepository(Repository[Domain]):
         stmt = select(Domain).where(Domain.name == name)
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_or_create(self, name: str, description: str | None = None) -> Domain:
+    def get_or_create(
+        self,
+        name: str,
+        description: str | None = None,
+        language: str | None = None,
+    ) -> Domain:
         dom = self.get_by_name(name)
         if dom:
             return dom
-        return self.create(name=name, description=description)
+        return self.create(name=name, description=description, language=language)
 
     def list(
         self,
@@ -28,6 +33,8 @@ class DomainRepository(Repository[Domain]):
     ) -> list[Domain]:
         if sort_by == "description":
             sort_column = Domain.description
+        elif sort_by == "language":
+            sort_column = Domain.language
         elif sort_by == "created_at":
             sort_column = Domain.created_at
         elif sort_by == "updated_at":

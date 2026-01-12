@@ -17,7 +17,11 @@ def create_domain(payload: DomainCreate, db: Session = Depends(get_db)):
     repo = DomainRepository(db)
     if repo.get_by_name(payload.name):
         raise HTTPException(400, "domain name already exists")
-    return repo.create(name=payload.name, description=payload.description)
+    return repo.create(
+        name=payload.name,
+        description=payload.description,
+        language=payload.language,
+    )
 
 # List domains
 @router.get("", response_model=list[DomainOut])
@@ -25,7 +29,7 @@ def list_domains(
     db: Session = Depends(get_db),
     offset: int = 0,
     limit: int = Query(100, le=200),
-    sort_by: Literal["name", "description", "created_at", "updated_at"] = Query(
+    sort_by: Literal["name", "description", "language", "created_at", "updated_at"] = Query(
         "name", description="排序字段"
     ),
     order: Literal["asc", "desc"] = Query("asc", description="排序方向"),

@@ -90,6 +90,7 @@ class Domain(Base):  # 定义数据来源实体
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)  # 主键
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # 名称唯一防止重复录入
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 可选描述信息
+    language: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # 可选语言码（如 en/zh）
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())  # 创建时间
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())  # 更新时间
     documents: Mapped[List["Document"]] = relationship(  # 域与文档一对多关系
