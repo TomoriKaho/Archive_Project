@@ -16,11 +16,13 @@
             :submitting="isCreatingConversation"
             :mode="searchMode"
             :search-type="searchType"
+            :enable-chinese-search="enableChineseSearch"
             :lifted="isTraditionalMode"
             @submit="handleSubmit"
             @update:domains="updateDomains"
             @update:mode="setSearchMode"
             @update:searchType="setSearchType"
+            @update:chineseSearch="setChineseSearch"
           />
         </Transition>
       </div>
@@ -143,6 +145,7 @@ const query = ref('');
 const isCreatingConversation = ref(false);
 const searchMode = ref('assistant');
 const searchType = ref('precise');
+const enableChineseSearch = ref(false);
 
 // UI animation helpers
 const isUiReady = ref(false);
@@ -212,7 +215,8 @@ const languagePack = {
         switchToFuzzy: '切换至模糊搜索',
         switchToPrecise: '切换至精准搜索',
         precise: '精准搜索',
-        fuzzy: '模糊搜索'
+        fuzzy: '模糊搜索',
+        chineseSearch: '启用中文搜索'
       }
     }
   },
@@ -243,7 +247,8 @@ const languagePack = {
         switchToFuzzy: 'Switch to fuzzy search',
         switchToPrecise: 'Switch to precise search',
         precise: 'Precise Search',
-        fuzzy: 'Fuzzy Search'
+        fuzzy: 'Fuzzy Search',
+        chineseSearch: 'Enable Chinese Search'
       }
     }
   }
@@ -420,6 +425,13 @@ function setSearchType(type) {
   }
 }
 
+function setChineseSearch(value) {
+  enableChineseSearch.value = Boolean(value);
+  if (isTraditionalMode.value && query.value.trim()) {
+    performArchiveSearch(1);
+  }
+}
+
 async function performArchiveSearch(page = 1, content = query.value.trim()) {
   const keyword = content.trim();
   if (!keyword) {
@@ -435,6 +447,7 @@ async function performArchiveSearch(page = 1, content = query.value.trim()) {
       query: keyword,
       domainIds: selectedDomains.value,
       mode: searchType.value,
+      enableChinese: enableChineseSearch.value,
       page,
       pageSize
     });

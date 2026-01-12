@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.models.entities import Document, Domain
 from app.schemas.search import ArchiveSearchItem, ArchiveSearchResponse
+from app.services.translation_service import translate_text
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,22 @@ def _tokenize_query(query: str) -> list[str]:
         seen.add(lower)
         normalized.append(clean)
     return normalized
+
+
+def _contains_chinese(text: str) -> bool:
+    """判断文本是否包含中文字符。"""
+
+    return bool(re.search(r"[\u4e00-\u9fff]", text))
+
+
+def _fetch_domain_languages(db: Session, domain_ids: Sequence[int] | None) -> set[str]:
+    """获取所选知识域的语言集合。"""
+
+    stmt = select(Domain.language)
+    if domain_ids:
+        stmt = stmt.where(Domain.id.in_(domain_ids))
+    rows = db.execute(stmt).scalars().all()
+    return {value.strip().lower() for value in rows if value and value.strip()}
 
 
 def _iter_documents_with_domain(db: Session, domain_ids: Sequence[int] | None) -> list[Tuple[Document, str]]:
@@ -196,30 +213,12 @@ def _matches(tokens: list[str], text: str, mode: str) -> bool:
     return True
 
 
-@router.get("/search/archives", response_model=ArchiveSearchResponse)
-def search_archives(
-    q: str = Query(..., min_length=1, description="搜索关键词"),
-    page: int = Query(1, ge=1, description="页码，从1开始"),
-    page_size: int = Query(10, ge=1, le=10, description="每页数量，最大10"),
-    domain_ids: str | None = Query(
-        default=None,
-        description="逗号分隔的domain id列表，可选",
-        alias="domain_ids",
-    ),
-    mode: str = Query("precise", pattern="^(precise|fuzzy)$"),
-    db: Session = Depends(get_db),
-):
-    """在指定知识域内按archive粒度进行传统搜索。"""
-
-    if len(q) > 250:
-        raise HTTPException(status_code=400, detail="搜索关键词长度不能超过250个字符")
-
-    tokens = _tokenize_query(q)
-    if not tokens:
-        raise HTTPException(status_code=400, detail="请输入不少于2个字符的有效搜索词")
-
-    domain_id_list = _parse_domain_ids(domain_ids)
-    documents = _iter_documents_with_domain(db, domain_id_list)
+def _search_with_tokens(
+    documents: list[Tuple[Document, str]],
+    tokens: list[str],
+    mode: str,
+) -> list[dict[str, Any]]:
+    """根据词元在文档中寻找匹配档案。"""
 
     candidates: list[dict[str, Any]] = []
     match_index = 0
@@ -251,8 +250,88 @@ def search_archives(
                 }
             )
             match_index += 1
+    return candidates
 
-    sorted_candidates = sorted(candidates, key=lambda item: (item["priority"], item["index"]))
+
+def _translate_queries(query: str, target_languages: set[str]) -> list[str]:
+    """将中文查询翻译成目标语言列表。"""
+
+    translated_queries: list[str] = []
+    for language in sorted(target_languages):
+        if language == "zh":
+            continue
+        translated = translate_text(query, source_language="zh", target_language=language)
+        if translated:
+            translated_queries.append(translated)
+    return translated_queries
+
+
+@router.get("/search/archives", response_model=ArchiveSearchResponse)
+def search_archives(
+    q: str = Query(..., min_length=1, description="搜索关键词"),
+    page: int = Query(1, ge=1, description="页码，从1开始"),
+    page_size: int = Query(10, ge=1, le=10, description="每页数量，最大10"),
+    domain_ids: str | None = Query(
+        default=None,
+        description="逗号分隔的domain id列表，可选",
+        alias="domain_ids",
+    ),
+    mode: str = Query("precise", pattern="^(precise|fuzzy)$"),
+    enable_chinese: bool = Query(False, description="是否启用中文翻译检索"),
+    db: Session = Depends(get_db),
+):
+    """在指定知识域内按archive粒度进行传统搜索。"""
+
+    if len(q) > 250:
+        raise HTTPException(status_code=400, detail="搜索关键词长度不能超过250个字符")
+
+    domain_id_list = _parse_domain_ids(domain_ids)
+    documents = _iter_documents_with_domain(db, domain_id_list)
+
+    tokens = _tokenize_query(q)
+    if not tokens:
+        raise HTTPException(status_code=400, detail="请输入不少于2个字符的有效搜索词")
+
+    query_variants = [q]
+    if enable_chinese and _contains_chinese(q):
+        languages = _fetch_domain_languages(db, domain_id_list)
+        query_variants.extend(_translate_queries(q, languages))
+
+    unique_queries: list[str] = []
+    seen_queries: set[str] = set()
+    for item in query_variants:
+        cleaned = item.strip()
+        if not cleaned or cleaned in seen_queries:
+            continue
+        seen_queries.add(cleaned)
+        unique_queries.append(cleaned)
+
+    combined: dict[str, dict[str, Any]] = {}
+    for variant in unique_queries:
+        variant_tokens = _tokenize_query(variant)
+        if not variant_tokens:
+            continue
+        for candidate in _search_with_tokens(documents, variant_tokens, mode):
+            key = json.dumps(
+                {
+                    "archive_name": candidate["archive_name"],
+                    "document_name": candidate["document_name"],
+                    "domain_name": candidate["domain_name"],
+                    "metadata": candidate["metadata"],
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            existing = combined.get(key)
+            if not existing:
+                combined[key] = candidate
+                continue
+            if (candidate["priority"], candidate["index"]) < (existing["priority"], existing["index"]):
+                existing["priority"] = candidate["priority"]
+                existing["index"] = candidate["index"]
+
+    sorted_candidates = sorted(combined.values(), key=lambda item: (item["priority"], item["index"]))
     total_matches = len(sorted_candidates)
 
     start_index = (page - 1) * page_size
@@ -288,4 +367,3 @@ def search_archives(
         page=page,
         page_size=page_size,
     )
-

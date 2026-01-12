@@ -312,6 +312,12 @@ RAG_TOP_K=10
 RAG_OLLAMA_TIMEOUT=60
 RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER=3
 
+# 机器翻译（传统搜索启用中文搜索时使用）
+TRANSLATION_API_URL=https://dashscope.aliyuncs.com/api/v1/services/aigc/machine-translation
+TRANSLATION_API_KEY=sk-your-translation-api-key
+TRANSLATION_MODEL=qwen-mt-lite
+TRANSLATION_API_TIMEOUT=20
+
 # 向量入库批量配置
 DOCUMENT_INDEX_BATCH_SIZE=32
 

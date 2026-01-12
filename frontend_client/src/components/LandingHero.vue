@@ -18,10 +18,12 @@
         :submitting="submitting"
         :mode="mode"
         :search-type="searchType"
+        :enable-chinese-search="enableChineseSearch"
         @submit="handleSubmit"
         @update:domains="updateDomains"
         @update:mode="updateMode"
         @update:searchType="updateSearchType"
+        @update:chineseSearch="updateChineseSearch"
         @domains-panel-toggle="handleDomainsPanelToggle"
       />
     </div>
@@ -61,13 +63,24 @@ const props = defineProps({
     type: String,
     default: 'precise'
   },
+  enableChineseSearch: {
+    type: Boolean,
+    default: false
+  },
   lifted: {
     type: Boolean,
     default: false
   }
 });
 
-const emit = defineEmits(['update:modelValue', 'submit', 'update:domains', 'update:mode', 'update:searchType']);
+const emit = defineEmits([
+  'update:modelValue',
+  'submit',
+  'update:domains',
+  'update:mode',
+  'update:searchType',
+  'update:chineseSearch'
+]);
 
 const query = ref(props.modelValue);
 const domainsPanelOpen = ref(false);
@@ -103,6 +116,10 @@ function updateMode(nextMode) {
 
 function updateSearchType(nextType) {
   emit('update:searchType', nextType);
+}
+
+function updateChineseSearch(nextValue) {
+  emit('update:chineseSearch', nextValue);
 }
 </script>
 

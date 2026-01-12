@@ -88,6 +88,17 @@
                 ></span>
               </span>
             </button>
+            <label
+              v-if="mode === 'traditional'"
+              class="query-composer__chinese-toggle"
+            >
+              <input
+                type="checkbox"
+                :checked="enableChineseSearch"
+                @change="toggleChineseSearch"
+              />
+              <span class="query-composer__chinese-label">{{ texts.chineseSearch }}</span>
+            </label>
           </div>
         </div>
         <button class="query-composer__submit" type="submit" :disabled="!canSubmit || submitting">
@@ -129,6 +140,10 @@ const props = defineProps({
   searchType: {
     type: String,
     default: 'precise'
+  },
+  enableChineseSearch: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -138,7 +153,8 @@ const emit = defineEmits([
   'update:domains',
   'domains-panel-toggle',
   'update:mode',
-  'update:searchType'
+  'update:searchType',
+  'update:chineseSearch'
 ]);
 
 const draft = ref(props.modelValue);
@@ -233,6 +249,10 @@ function toggleMode() {
 
 function toggleSearchType() {
   emit('update:searchType', props.searchType === 'precise' ? 'fuzzy' : 'precise');
+}
+
+function toggleChineseSearch() {
+  emit('update:chineseSearch', !props.enableChineseSearch);
 }
 
 function handleSubmit() {
@@ -439,6 +459,32 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.04);
+}
+
+.query-composer__chinese-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  background: rgba(237, 242, 255, 0.95);
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.query-composer__chinese-toggle:hover {
+  background: rgba(218, 231, 255, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.query-composer__chinese-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #1f8fe5;
 }
 
 .query-composer__search-switch:hover {
