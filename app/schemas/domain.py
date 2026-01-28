@@ -36,6 +36,27 @@ ALLOWED_LANGUAGE_CODES = {
     "fa",
 }
 
+LANGUAGE_CODE_ALIASES = {
+    "zh_cn": "zh",
+    "zh_hans": "zh",
+    "zh_hant": "zh_tw",
+    "en_us": "en",
+    "en_gb": "en",
+}
+
+
+def normalize_language_code(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    normalized = normalized.replace("-", "_")
+    normalized = LANGUAGE_CODE_ALIASES.get(normalized, normalized)
+    if normalized not in ALLOWED_LANGUAGE_CODES:
+        raise ValueError("unsupported language code")
+    return normalized
+
 class DomainCreate(ORMModel):
     name: str = Field(..., min_length=1)
     description: str | None = None
@@ -44,14 +65,7 @@ class DomainCreate(ORMModel):
     @field_validator("language")
     @classmethod
     def validate_language(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip().lower()
-        if not normalized:
-            return None
-        if normalized not in ALLOWED_LANGUAGE_CODES:
-            raise ValueError("unsupported language code")
-        return normalized
+        return normalize_language_code(value)
 
 class DomainUpdate(ORMModel):
     name: str | None = Field(None, min_length=1)
@@ -61,14 +75,7 @@ class DomainUpdate(ORMModel):
     @field_validator("language")
     @classmethod
     def validate_language(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip().lower()
-        if not normalized:
-            return None
-        if normalized not in ALLOWED_LANGUAGE_CODES:
-            raise ValueError("unsupported language code")
-        return normalized
+        return normalize_language_code(value)
 
 class DomainOut(ORMModel):
     id: int
