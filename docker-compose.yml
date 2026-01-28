@@ -57,6 +57,8 @@ services:
     container_name: archive-backend
     env_file:
       - .env
+    volumes:
+    - /opt/Archive_Project/migrations/versions/beb055932c98_domains_add_language.py:/app/migrations/versions/beb055932c98_domains_add_language.py:ro
     depends_on:
       - ollama
       - postgres
