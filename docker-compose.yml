@@ -1,5 +1,7 @@
 services:
   postgres:
+    networks:
+     - archive_net
     image: postgres:15
     container_name: archive-postgres
     environment:
@@ -12,6 +14,8 @@ services:
       - "5432:5432"
 
   qdrant:
+    networks:
+     - archive_net
     image: qdrant/qdrant:latest
     container_name: archive-qdrant
     volumes:
@@ -20,6 +24,8 @@ services:
       - "6333:6333"
 
   qdrant_init:
+    networks:
+     - archive_net
     image: curlimages/curl:8.11.1
     container_name: archive-qdrant-init
     env_file:
@@ -31,6 +37,8 @@ services:
       - qdrant
 
   ollama:
+    networks:
+     - archive_net
     image: ollama/ollama:latest
     container_name: archive-ollama
     volumes:
@@ -39,6 +47,8 @@ services:
       - "11434:11434"
 
   ollama_pull:
+    networks:
+     - archive_net
     image: ollama/ollama:latest
     container_name: archive-ollama-pull
     env_file:
@@ -53,6 +63,8 @@ services:
       - ollama
 
   backend:
+    networks:
+     - archive_net
     image: archive-backend:2026-01-10
     container_name: archive-backend
     env_file:
@@ -68,6 +80,8 @@ services:
 
 
   frontend_admin:
+    networks:
+     - archive_net
     image: nginx:alpine
     container_name: archive-frontend-admin
     ports:
@@ -79,6 +93,8 @@ services:
       - backend
 
   frontend_client:
+    networks:
+     - archive_net
     image: nginx:alpine
     container_name: archive-frontend-client
     ports:
@@ -90,6 +106,8 @@ services:
       - backend
       
   gateway:
+    networks:
+     - archive_net
     image: nginx:alpine
     container_name: archive-gateway
     ports:
@@ -106,3 +124,12 @@ volumes:
   postgres_data:
   qdrant_storage:
   ollama_data:
+
+networks:
+  archive_net:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+        - subnet: "fd00:2026:0128::/64"
