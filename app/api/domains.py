@@ -20,7 +20,7 @@ def create_domain(payload: DomainCreate, db: Session = Depends(get_db)):
     return repo.create(
         name=payload.name,
         description=payload.description,
-        language=payload.language,
+        language=payload.language or "zh",
     )
 
 # List domains
@@ -46,14 +46,14 @@ def get_domain(domain_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "domain not found")
     return dom
 
-# Update domain, partial update, only non-null fields in payload will be updated
+# Update domain, partial update, only provided fields in payload will be updated
 @router.patch("/{domain_id}", response_model=DomainOut)
 def update_domain(domain_id: int, payload: DomainUpdate, db: Session = Depends(get_db)):
     repo = DomainRepository(db)
     dom = repo.get(domain_id)
     if not dom:
         raise HTTPException(404, "domain not found")
-    update_data = payload.model_dump(exclude_none=True)
+    update_data = payload.model_dump(exclude_unset=True)
     new_name = update_data.get("name")
     if new_name is not None:
         stripped_name = new_name.strip()
@@ -64,6 +64,9 @@ def update_domain(domain_id: int, payload: DomainUpdate, db: Session = Depends(g
             existing = repo.get_by_name(stripped_name)
             if existing and existing.id != domain_id:
                 raise HTTPException(400, "domain name already exists")
+    if "language" in update_data:
+        language = update_data.pop("language")
+        dom.language = language or "zh"
     return repo.update(dom, **update_data)
 
 # Delete domain, also delete all related documents and chunks

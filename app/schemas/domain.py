@@ -74,6 +74,6 @@ class DomainOut(ORMModel):
     id: int
     name: str
     description: str | None
-    language: str | None
+    language: str
     created_at: datetime
     updated_at: datetime
