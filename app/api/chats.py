@@ -32,39 +32,90 @@ router = APIRouter(prefix="/chats", tags=["chats"])
 # ---- chats ----
 
 # Create a new chat
+@router.post("", response_model=ChatOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=ChatOut, status_code=status.HTTP_201_CREATED)
-def create_chat(payload: ChatCreate, db: Session = Depends(get_db)):
-    data = payload.model_dump()
-    title = data.get("title")
-    if not title or not title.strip():
-        data["title"] = "新会话"
-    else:
-        data["title"] = title.strip()
+def create_chat(
+    payload: ChatCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    data = payload.model_dump(exclude_none=True)
+
+    # title 处理
+    title = (data.get("title") or "").strip()
+    data["title"] = title or "新会话"
+
+    # ✅ 永远以 token 用户为准，忽略前端传的 user_id（避免 FK 500）
+    data["user_id"] = current_user.id
+
     return ChatRepository(db).create(**data)
 
+
 # List chats for a user with pagination
+@router.get("", response_model=list[ChatOut], include_in_schema=False)
 @router.get("/", response_model=list[ChatOut])
-def list_chats(user_id: int, offset: int = 0, limit: int = Query(50, le=200), db: Session = Depends(get_db)):
-    return ChatRepository(db).list_by_user(user_id, offset=offset, limit=limit)
+def list_chats(
+    user_id: int | None = None,
+    offset: int = 0,
+    limit: int = Query(50, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    target_user_id = user_id if user_id is not None else current_user.id
+
+    # ✅ 非管理员只能看自己的 chats
+    if target_user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "chat access denied")
+
+    return ChatRepository(db).list_by_user(target_user_id, offset=offset, limit=limit)
+
 
 # Update a chat's details
 @router.patch("/{chat_id}", response_model=ChatOut)
-def update_chat(chat_id: int, payload: ChatUpdate, db: Session = Depends(get_db)):
+def update_chat(
+    chat_id: int,
+    payload: ChatUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     repo = ChatRepository(db)
     chat = repo.get(chat_id)
     if not chat:
         raise HTTPException(404, "chat not found")
+
+    # ✅ 归属校验
+    if chat.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "chat access denied")
+
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
         return chat
+
+    # title 去空白
+    if "title" in updates and updates["title"] is not None:
+        t = updates["title"].strip()
+        updates["title"] = t or "新会话"
+
     return repo.update(chat, **updates)
+
 
 # Delete a chat by ID
 @router.delete("/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_chat(chat_id: int, db: Session = Depends(get_db)):
-    if not ChatRepository(db).get(chat_id):
+def delete_chat(
+    chat_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    repo = ChatRepository(db)
+    chat = repo.get(chat_id)
+    if not chat:
         raise HTTPException(404, "chat not found")
-    ChatRepository(db).delete(chat_id)
+
+    # ✅ 归属校验
+    if chat.user_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "chat access denied")
+
+    repo.delete(chat_id)
 
 # ---- messages ----
 

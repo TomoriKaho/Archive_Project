@@ -70,7 +70,8 @@ services:
     env_file:
       - .env
     volumes:
-    - /opt/Archive_Project/migrations/versions/beb055932c98_domains_add_language.py:/app/migrations/versions/beb055932c98_domains_add_language.py:ro
+      - /opt/Archive_Project/migrations/versions/beb055932c98_domains_add_language.py:/app/migrations/versions/beb055932c98_domains_add_language.py:ro
+      - /opt/Archive_Project/app/api/chats.py:/app/app/api/chats.py:ro
     depends_on:
       - ollama
       - postgres
