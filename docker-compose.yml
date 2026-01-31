@@ -63,6 +63,7 @@ services:
       - ollama
 
   backend:
+    entrypoint: [ "/scripts/entrypoint_wrap.sh" ]
     networks:
       - archive_net
     image: archive-backend:2026-01-10
@@ -70,10 +71,11 @@ services:
     env_file:
       - .env
     volumes:
+      - ./scripts:/scripts:ro
       - /opt/Archive_Project/app:/app/app
       - /opt/Archive_Project/migrations:/app/migrations
       - /opt/Archive_Project/backend_entrypoint.sh:/app/scripts/backend_entrypoint.sh:ro
-
+      - /opt/Archive_Project/gai.conf:/etc/gai.conf:ro
     depends_on:
       - ollama
       - postgres
