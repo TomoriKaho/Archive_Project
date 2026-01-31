@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
@@ -29,61 +30,111 @@ load_dotenv(find_dotenv(), override=False)
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+
+# -------------------------
+# Env helpers
+# -------------------------
+def _env_str(*keys: str, default: str = "") -> str:
+    for k in keys:
+        v = os.getenv(k)
+        if v is not None and str(v).strip() != "":
+            return str(v).strip()
+    return default
+
+
+def _env_int(*keys: str, default: int) -> int:
+    for k in keys:
+        v = os.getenv(k)
+        if v is None or str(v).strip() == "":
+            continue
+        try:
+            return int(str(v).strip())
+        except ValueError:
+            logger.warning("Invalid int env %s=%r, fallback to default=%s", k, v, default)
+            return default
+    return default
+
+
+def _env_bool(*keys: str, default: bool = False) -> bool:
+    for k in keys:
+        v = os.getenv(k)
+        if v is None:
+            continue
+        s = str(v).strip().lower()
+        if s in {"1", "true", "yes", "y", "on"}:
+            return True
+        if s in {"0", "false", "no", "n", "off"}:
+            return False
+    return default
+
+
+def _ms(t0: float) -> float:
+    return (time.perf_counter() - t0) * 1000.0
+
+
+# -------------------------
+# Core configs
+# -------------------------
+OLLAMA_URL = _env_str("OLLAMA_URL", default="http://localhost:11434")
 """Base URL of the Ollama service used for chat completion."""
 
-CHAT_API_URL = os.getenv(
-    "CHAT_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
+CHAT_API_URL = _env_str(
+    "CHAT_API_URL",
+    default="https://dashscope.aliyuncs.com/compatible-mode/v1",
 )
 """Base URL of the cloud chat completion endpoint (OpenAI-compatible)."""
 
-CHAT_API_KEY = os.getenv("CHAT_API_KEY", "")
+CHAT_API_KEY = _env_str("CHAT_API_KEY", default="")
 """API key used to authenticate against the cloud chat provider."""
 
-CHAT_MODEL = os.getenv("CHAT_MODEL", "qwen3-vl-plus")
+CHAT_MODEL = _env_str("CHAT_MODEL", default="qwen3-vl-plus")
 """Chat model identifier when querying the cloud provider."""
 
-DEFAULT_TOP_K = int(os.getenv("RAG_TOP_K", "10"))
+DEFAULT_TOP_K = _env_int("RAG_TOP_K", default=10)
 """Default number of chunks retrieved when no explicit top_k is provided."""
 
-# 注意：你给的变量名里没带 RAG_ 前缀；这里仍以代码实际读取的 env 为准。
-STRING_MATCH_MAX_PER_ID = int(os.getenv("RAG_STRING_MATCH_MAX_PER_ID", "10"))
+# 兼容你 .env 里没有 RAG_ 前缀的写法
+STRING_MATCH_MAX_PER_ID = _env_int("RAG_STRING_MATCH_MAX_PER_ID", "STRING_MATCH_MAX_PER_ID", default=10)
 """Upper bound of chunks fetched per ID candidate during string search."""
 
-# 合并 OR 查询后，会对 candidate 数量做硬上限，避免 OR 过大导致 DB 计划变差
-STRING_MATCH_MAX_CANDIDATES = int(os.getenv("RAG_STRING_MATCH_MAX_CANDIDATES", "6"))
+STRING_MATCH_MAX_CANDIDATES = _env_int("RAG_STRING_MATCH_MAX_CANDIDATES", "STRING_MATCH_MAX_CANDIDATES", default=6)
 """Max number of ID/URL candidates used in DB string match per request."""
 
-NEIGHBOR_WINDOW_SIZE = int(os.getenv("RAG_NEIGHBOR_WINDOW_SIZE", "1"))
+NEIGHBOR_WINDOW_SIZE = _env_int("RAG_NEIGHBOR_WINDOW_SIZE", "NEIGHBOR_WINDOW_SIZE", default=1)
 """Default window size when expanding chunks with their neighbors."""
 
-NEIGHBOR_MAX_TOTAL_CHUNKS = int(os.getenv("RAG_NEIGHBOR_MAX_TOTAL_CHUNKS", "100"))
+NEIGHBOR_MAX_TOTAL_CHUNKS = _env_int("RAG_NEIGHBOR_MAX_TOTAL_CHUNKS", "NEIGHBOR_MAX_TOTAL_CHUNKS", default=100)
 """Safety limit to avoid overlong contexts after neighbor expansion."""
 
-RAG_CHAT_TIMEOUT = int(
-    os.getenv("RAG_CHAT_TIMEOUT", os.getenv("RAG_OLLAMA_TIMEOUT", "60"))
-)
+RAG_CHAT_TIMEOUT = _env_int("RAG_CHAT_TIMEOUT", "RAG_OLLAMA_TIMEOUT", default=60)
 """HTTP timeout applied to chat requests."""
 
-CHUNK_MEMORY_WINDOW_MULTIPLIER = int(os.getenv("RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER", "3"))
+CHUNK_MEMORY_WINDOW_MULTIPLIER = _env_int("RAG_CHUNK_MEMORY_WINDOW_MULTIPLIER", default=3)
 """Number of historical chunk batches kept in memory, expressed as a multiplier of top_k."""
 
-# === B：上下文体积控制（强烈建议开启） ===
-RAG_CHUNK_CHAR_LIMIT = int(os.getenv("RAG_CHUNK_CHAR_LIMIT", "1200"))
+# 上下文体积控制
+RAG_CHUNK_CHAR_LIMIT = _env_int("RAG_CHUNK_CHAR_LIMIT", default=1200)
 """Max chars kept per chunk when building final LLM context."""
 
-RAG_CONTEXT_MAX_CHARS = int(os.getenv("RAG_CONTEXT_MAX_CHARS", "12000"))
+RAG_CONTEXT_MAX_CHARS = _env_int("RAG_CONTEXT_MAX_CHARS", default=12000)
 """Max total chars for all chunks combined in final LLM context."""
 
-RAG_CONTEXT_MAX_CHUNKS = int(os.getenv("RAG_CONTEXT_MAX_CHUNKS", "40"))
+RAG_CONTEXT_MAX_CHUNKS = _env_int("RAG_CONTEXT_MAX_CHUNKS", default=40)
 """Hard cap on number of chunks included in final LLM context (after expansion)."""
 
-RAG_HISTORY_MAX_USER_TURNS = int(os.getenv("RAG_HISTORY_MAX_USER_TURNS", "3"))
+RAG_HISTORY_MAX_USER_TURNS = _env_int("RAG_HISTORY_MAX_USER_TURNS", default=3)
 """Only keep last N user turns for final answer prompt (reduce token bloat)."""
 
-# 参考文献：每个 title 最多扫描多少行（防止某个 title 命中太多行）
-RAG_REFERENCE_ROWS_PER_TITLE = int(os.getenv("RAG_REFERENCE_ROWS_PER_TITLE", "20"))
+RAG_REFERENCE_ROWS_PER_TITLE = _env_int("RAG_REFERENCE_ROWS_PER_TITLE", default=20)
 """Row scan limit per title when building reference URLs from DB."""
+
+# 新增：对照实验开关
+RAG_DISABLE_STRING_MATCH = _env_bool("RAG_DISABLE_STRING_MATCH", default=False)
+RAG_DISABLE_REFERENCES = _env_bool("RAG_DISABLE_REFERENCES", default=False)
+
+# 新增：性能日志开关（默认关）
+RAG_PERF_LOG = _env_bool("RAG_PERF_LOG", default=False)
+
 
 _FALLBACK_LANGUAGE = "zh"
 _PROMPT_TEMPLATES = {
@@ -150,8 +201,6 @@ def resolve_prompt_template(language: str | None) -> tuple[str, dict[str, str]]:
     return normalized or _FALLBACK_LANGUAGE, template
 
 
-
-
 def normalize_language_code(language: str | None) -> str | None:
     """Normalize user-provided language code to supported values."""
     if not language:
@@ -162,6 +211,16 @@ def normalize_language_code(language: str | None) -> str | None:
     if lowered.startswith("zh") or lowered.startswith("cn"):
         return "zh"
     return None
+
+
+def _perf(msg: str, **kv: Any) -> None:
+    """Perf log helper (only when RAG_PERF_LOG=1)."""
+    if not RAG_PERF_LOG:
+        return
+    if kv:
+        logger.info("[RAG_PERF] %s | %s", msg, " ".join(f"{k}={v}" for k, v in kv.items()))
+    else:
+        logger.info("[RAG_PERF] %s", msg)
 
 
 def index_chunks(chunks: Sequence[Chunk]) -> int:
@@ -215,8 +274,6 @@ _DIGIT_RUN = re.compile(r"\d{4,}")
 _ALNUM_MIXED = re.compile(r"[A-Za-z][A-Za-z0-9\-_]*\d[A-Za-z0-9\-_]{2,}")
 _ERA_PREFIX = re.compile(r"(平|昭|令)[^\d]{0,2}\d{1,}")
 _URL_PATTERN = re.compile(r"https?://[^\s<>\u3000\"']+", re.IGNORECASE)
-
-# 更宽松的分词：保留中日韩字符片段、字母数字片段
 _WORDISH = re.compile(r"[A-Za-z0-9\-_]{2,}|[\u4e00-\u9fff]{2,}|[\u3040-\u30ff]{2,}|[\uac00-\ud7af]{2,}")
 
 
@@ -281,7 +338,6 @@ def _dedupe_preserve_order(items: Sequence[str]) -> list[str]:
     return out
 
 
-# === A：检索 query 构造改为纯本地（不再调用云端 chat）===
 @lru_cache(maxsize=256)
 def _extract_keyword_tokens_local(text: str, *, limit: int = 24) -> tuple[str, ...]:
     """本地抽取关键词，用于向量检索 query（快、稳定、可缓存）。"""
@@ -293,16 +349,12 @@ def _extract_keyword_tokens_local(text: str, *, limit: int = 24) -> tuple[str, .
         return tuple()
 
     tokens: list[str] = []
-    # 强信号：URL / 长数字 / 混合编号
     tokens.extend(_URL_PATTERN.findall(normalized))
     tokens.extend(_DIGIT_RUN.findall(normalized))
     tokens.extend(_ALNUM_MIXED.findall(normalized))
     tokens.extend(_ERA_PREFIX.findall(normalized))
-
-    # 其他“像词”的片段
     tokens.extend(_WORDISH.findall(normalized))
 
-    # 清洗：去掉特别长的垃圾段，保留相对短、信息密度高的 token
     cleaned: list[str] = []
     for t in tokens:
         s = (t or "").strip()
@@ -325,7 +377,6 @@ def build_retrieval_query_text(
     if not q:
         return ""
 
-    # 仅取最近若干条用户问题（不拿 assistant 长回答，避免把向量 query 搞“发胖”）
     user_tail: list[str] = []
     if history:
         for msg in reversed(history):
@@ -339,7 +390,6 @@ def build_retrieval_query_text(
                 break
         user_tail.reverse()
 
-    # 把历史和当前问题各自抽 token，然后拼成紧凑 query
     parts: list[str] = []
     for ut in user_tail[-RAG_HISTORY_MAX_USER_TURNS:]:
         toks = _extract_keyword_tokens_local(ut, limit=12)
@@ -353,7 +403,6 @@ def build_retrieval_query_text(
     return merged or q
 
 
-# === C：字符串匹配查询合并，减少 DB 往返 ===
 def search_chunks_by_id_candidates(
     db: Session,
     id_candidates: list[str],
@@ -363,30 +412,22 @@ def search_chunks_by_id_candidates(
 ) -> list[Chunk]:
     """Perform fuzzy string search for chunks containing any of the IDs.
 
-    C：把“每个 candidate 一次查询”改为“少量 candidate 合并 OR 一次查询”，
-       显著减少 DB 往返与扫描次数（仍建议 DB 侧加 pg_trgm 索引）。
+    把“每个 candidate 一次查询”改为“少量 candidate 合并 OR 一次查询”，
+    显著减少 DB 往返与扫描次数（仍建议 DB 侧加 pg_trgm 索引）。
     """
     if not id_candidates:
         return []
 
-    # 强制去重 + 限制 candidate 数量（URL/长编号优先）
     cands = _dedupe_preserve_order(id_candidates)
     cands.sort(key=lambda s: (0 if s.startswith("http") else 1, -len(s)))
     cands = cands[: max(1, STRING_MATCH_MAX_CANDIDATES)]
 
-    # ⚠️ 强烈建议：Postgres 启用 pg_trgm 并建立索引，否则 ILIKE '%...%' 依旧可能慢：
-    #   CREATE EXTENSION IF NOT EXISTS pg_trgm;
-    #   CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_chunks_content_trgm
-    #     ON chunks USING GIN (content gin_trgm_ops);
-
     conditions = [Chunk.content.ilike(f"%{cand}%") for cand in cands]
     stmt = select(Chunk).where(or_(*conditions))
 
-    # domain 过滤才 join Document，避免无谓 join
     if domain_ids:
         stmt = stmt.join(Chunk.document).where(Document.domain_id.in_(list(domain_ids)))
 
-    # 近似“每个 candidate 限额”：总量上限 = limit_per_id * candidate_count
     total_limit = max(1, int(limit_per_id)) * len(cands) if limit_per_id else 50
     stmt = stmt.limit(total_limit)
 
@@ -496,9 +537,11 @@ def retrieve_with_scores(
     history: Sequence[dict[str, str]] | None = None,
 ) -> tuple[list[Chunk], list[tuple[int, float]]]:
     """Retrieve chunks along with their similarity scores."""
+    t_all = time.perf_counter()
     limit = top_k or DEFAULT_TOP_K
 
-    # 先从原始问题提取编号/URL，用于字符串匹配
+    # 1) string match candidates
+    t0 = time.perf_counter()
     id_candidates = extract_id_candidates(question)
     strict_targets = extract_strict_match_targets(question)
 
@@ -509,34 +552,55 @@ def retrieve_with_scores(
             continue
         seen_candidate.add(candidate)
         combined_candidates.append(candidate)
+    _perf("extract_candidates", ms=round(_ms(t0), 1), cands=len(combined_candidates))
 
-    string_matches = search_chunks_by_id_candidates(
-        db,
-        combined_candidates,
-        domain_ids=domain_ids,
-        limit_per_id=STRING_MATCH_MAX_PER_ID,
-    )
+    # 2) string match (optional)
+    t0 = time.perf_counter()
+    string_matches: list[Chunk] = []
+    if not RAG_DISABLE_STRING_MATCH:
+        string_matches = search_chunks_by_id_candidates(
+            db,
+            combined_candidates,
+            domain_ids=domain_ids,
+            limit_per_id=STRING_MATCH_MAX_PER_ID,
+        )
+    _perf("string_match", ms=round(_ms(t0), 1), disabled=int(RAG_DISABLE_STRING_MATCH), hits=len(string_matches))
 
-    # A：用本地构造的 query text，而不是云端 LLM 关键词提取
+    # 3) build query text + embed
+    t0 = time.perf_counter()
     query_text = build_retrieval_query_text(question, history)
-    query_vec = embed(query_text)
+    _perf("build_query_text", ms=round(_ms(t0), 1), chars=len(query_text))
 
+    t0 = time.perf_counter()
+    query_vec = embed(query_text)
+    _perf("embed_query", ms=round(_ms(t0), 1), vec_dim=(len(query_vec) if query_vec else 0))
+
+    # 4) qdrant search
+    t0 = time.perf_counter()
     search_results = search_with_scores(
         query_vec,
         limit,
         domain_ids=domain_ids,
     )
+    _perf("qdrant_search", ms=round(_ms(t0), 1), hits=len(search_results))
+
     chunk_ids = [chunk_id for chunk_id, _ in search_results]
 
+    # 5) fetch chunks from DB
+    t0 = time.perf_counter()
     repo = ChunkRepository(db)
     fetched = repo.get_many(chunk_ids, domain_ids=domain_ids)
     chunk_map = {chunk.id: chunk for chunk in fetched}
     filtered_results = [(cid, score) for cid, score in search_results if cid in chunk_map]
     ordered_chunks = [chunk_map[cid] for cid, _ in filtered_results]
+    _perf("db_fetch_chunks", ms=round(_ms(t0), 1), fetched=len(fetched), kept=len(ordered_chunks))
 
+    # 6) merge
+    t0 = time.perf_counter()
     merged_chunks = merge_string_and_vector_results(
         string_matches, ordered_chunks, limit=limit
     )
+    _perf("merge_results", ms=round(_ms(t0), 1), merged=len(merged_chunks))
 
     score_map: dict[int, float] = {cid: score for cid, score in filtered_results}
     if merged_chunks:
@@ -545,7 +609,8 @@ def retrieve_with_scores(
         for chunk in string_matches:
             score_map[chunk.id] = max(score_map.get(chunk.id, 0.0), string_score)
 
-    # B：邻居扩展不再被 top_k 砍回去，使用 NEIGHBOR_MAX_TOTAL_CHUNKS 做上限
+    # 7) neighbor expand
+    t0 = time.perf_counter()
     expanded_chunks = expand_with_neighbor_chunks(
         db,
         merged_chunks,
@@ -553,12 +618,13 @@ def retrieve_with_scores(
         max_total_chunks=NEIGHBOR_MAX_TOTAL_CHUNKS,
         score_map=score_map,
     )
+    _perf("neighbor_expand", ms=round(_ms(t0), 1), expanded=len(expanded_chunks))
 
     references = [(chunk.id, score_map.get(chunk.id, 0.0)) for chunk in expanded_chunks]
+    _perf("retrieve_total", ms=round(_ms(t_all), 1), final_chunks=len(expanded_chunks))
     return expanded_chunks, references
 
 
-# === B：构造最终上下文时，做 per-chunk 与 total 截断，并返回 used_chunks ===
 @dataclass(frozen=True)
 class ContextBuildResult:
     text: str
@@ -572,9 +638,7 @@ def build_context(
     max_total_chars: int = RAG_CONTEXT_MAX_CHARS,
     max_chunks: int = RAG_CONTEXT_MAX_CHUNKS,
 ) -> ContextBuildResult:
-    """把检索到的 chunk 拼成给 LLM 的上下文，只保留正文内容，并控制体积。
-    同时返回“实际被放进 context 的 chunks”，用于后续严格生成参考文献。
-    """
+    """把检索到的 chunk 拼成给 LLM 的上下文，并控制体积；返回实际 used_chunks。"""
     if not chunks:
         return ContextBuildResult(text="", used_chunks=[])
 
@@ -668,13 +732,9 @@ def format_references(entries: Sequence[tuple[str, str | None]], language: str) 
     return f"{heading}{heading_separator}\n" + "\n".join(lines)
 
 
-# === 新参考文献逻辑：只对“实际进 context 的 chunk”做 title 去重，并从 DB 行字段抽 URL ===
-def extract_title(text: str) -> str:
-    """title 固定是首字段：取第一个 ':' 之前的部分。"""
-    head, _, _ = (text or "").partition(":")
-    return head.strip()
-
-
+# -------------------------
+# New references logic (stable)
+# -------------------------
 def _escape_like(value: str) -> str:
     """转义 LIKE 通配符，避免 title 内含 %/_ 时造成误匹配。"""
     return (value or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -694,12 +754,12 @@ def _extract_urls_from_row(row_text: str) -> list[str]:
             urls.append(url)
     return urls
 
+
 def extract_title(text: str) -> str:
     """title 固定是首字段：取第一个 ':' 或 '：' 之前的部分（并去掉 BOM）。"""
     s = (text or "").lstrip("\ufeff").strip()
     if not s:
         return ""
-    # 兼容英文冒号和全角冒号，取最先出现的那个
     idx_ascii = s.find(":")
     idx_full = s.find("：")
     idxs = [i for i in (idx_ascii, idx_full) if i != -1]
@@ -707,6 +767,7 @@ def extract_title(text: str) -> str:
         return s
     idx = min(idxs)
     return s[:idx].strip()
+
 
 def _title_prefix_condition(title: str):
     """构造：content 以 title 开头的匹配条件（兼容空格/全角冒号/BOM）。"""
@@ -716,7 +777,6 @@ def _title_prefix_condition(title: str):
 
     esc = _escape_like(t)
 
-    # 兼容几种常见写法：冒号前可有空格；冒号可为全角；DB 行首可能带 BOM
     patterns = [
         f"{esc}:%",
         f"{esc} :%",
@@ -743,6 +803,11 @@ def build_reference_entries_from_context(
     - 每个 title 单独查 rows_per_title 行（避免全局 LIMIT 挤掉别人的结果）
     - 从这些行的字段里抽所有 URL（可能多个），按 title 聚合
     """
+    if RAG_DISABLE_REFERENCES:
+        return []
+    if rows_per_title <= 0:
+        return []
+
     # 1) 从 used_chunks 提取 title（按出现顺序去重）
     titles: list[str] = []
     seen: set[str] = set()
@@ -756,12 +821,12 @@ def build_reference_entries_from_context(
     if not titles:
         return []
 
-    per = max(1, int(rows_per_title)) if rows_per_title else 20
+    per = max(1, int(rows_per_title))
 
-    # 2) 逐 title 查，保证“每个 title 都有自己的 LIMIT 配额”
     urls_by_title: dict[str, list[str]] = {t: [] for t in titles}
     seen_url_by_title: dict[str, set[str]] = {t: set() for t in titles}
 
+    t_all = time.perf_counter()
     for t in titles:
         cond = _title_prefix_condition(t)
         if cond is None:
@@ -772,13 +837,11 @@ def build_reference_entries_from_context(
         if domain_ids:
             stmt = stmt.join(Chunk.document).where(Document.domain_id.in_(list(domain_ids)))
 
-        # 加 order_by，让结果稳定可复现（不然数据库返回顺序可能飘）
         stmt = stmt.order_by(Chunk.id.asc()).limit(per)
 
         rows = db.execute(stmt).scalars().all()
 
         for row_text in rows:
-            # 保险：只处理 title 真的匹配的行（防止极端情况下 like 命中怪东西）
             row_title = extract_title(row_text)
             if row_title != t:
                 continue
@@ -789,6 +852,7 @@ def build_reference_entries_from_context(
                 seen_url_by_title[t].add(url)
                 urls_by_title[t].append(url)
 
+    _perf("build_references_db", ms=round(_ms(t_all), 1), titles=len(titles), per=per)
     return [(t, urls_by_title.get(t, [])) for t in titles]
 
 
@@ -807,9 +871,7 @@ def format_references_from_titles(
     lines: list[str] = []
     for idx, (title, urls) in enumerate(entries, start=1):
         if urls:
-            lines.append(
-                f"{idx}. {title}{title_link_separator}{link_label}{url_separator}{urls[0]}"
-            )
+            lines.append(f"{idx}. {title}{title_link_separator}{link_label}{url_separator}{urls[0]}")
             for u in urls[1:]:
                 lines.append(f"   {u}")
         else:
@@ -834,10 +896,7 @@ def compress_chunk_memory(question: str, chunks: Sequence[Chunk]) -> str:
     )
     messages = [
         {"role": "system", "content": prompt},
-        {
-            "role": "user",
-            "content": f"问题：{question}\n\n相关片段：\n{context}",
-        },
+        {"role": "user", "content": f"问题：{question}\n\n相关片段：\n{context}"},
     ]
     try:
         summary = chat(messages)
@@ -854,10 +913,7 @@ def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
     if not CHAT_API_KEY:
         raise RuntimeError("CHAT_API_KEY is required to call the cloud chat API")
 
-    payload = {
-        "model": CHAT_MODEL,
-        "messages": list(messages),
-    }
+    payload = {"model": CHAT_MODEL, "messages": list(messages)}
     req = request.Request(
         url=f"{CHAT_API_URL.rstrip('/')}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -867,6 +923,8 @@ def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
         },
         method="POST",
     )
+
+    t0 = time.perf_counter()
     try:
         with request.urlopen(req, timeout=RAG_CHAT_TIMEOUT) as resp:
             raw = resp.read().decode("utf-8")
@@ -877,6 +935,8 @@ def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
     except error.URLError as exc:
         logger.error("无法连接到云端聊天服务: %s", exc)
         raise RuntimeError("failed to reach cloud chat API") from exc
+    finally:
+        _perf("cloud_chat_http", ms=round(_ms(t0), 1), model=CHAT_MODEL)
 
     data = json.loads(raw) if raw else {}
     choices = data.get("choices") if isinstance(data, dict) else None
@@ -932,9 +992,13 @@ def answer(
     preferred_language: str | None = None,
 ) -> tuple[str, list[tuple[int, float]], list[Chunk]]:
     """Run the complete RAG flow and return assistant answer plus references and chunks."""
+    t_all = time.perf_counter()
     _normalized_language, prompt_template = resolve_prompt_template(preferred_language)
     limit = top_k or DEFAULT_TOP_K
 
+    _perf("answer_start", top_k=limit, domain_ids=(domain_ids or []), qlen=len(question or ""))
+
+    t0 = time.perf_counter()
     chunks, references = retrieve_with_scores(
         question,
         limit,
@@ -942,12 +1006,15 @@ def answer(
         db=db,
         history=history,
     )
+    _perf("answer_retrieve", ms=round(_ms(t0), 1), chunks=len(chunks), refs=len(references))
+
     if not references:
         return prompt_template["no_context"], [], []
 
-    # B：上下文拼接做严格截断 + 记录 used_chunks（用于参考文献）
+    t0 = time.perf_counter()
     ctx = build_context(list(chunks))
     context = ctx.text
+    _perf("answer_build_context", ms=round(_ms(t0), 1), used=len(ctx.used_chunks), ctx_chars=len(context or ""))
 
     system_prompt = prompt_template["system"]
 
@@ -989,22 +1056,14 @@ def answer(
     messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
     if context:
-        messages.append(
-            {"role": "user", "content": prompt_template["context_intro"].format(context=context)}
-        )
+        messages.append({"role": "user", "content": prompt_template["context_intro"].format(context=context)})
 
-    # B：最终回答阶段 history 只保留最近 N 条用户提问，避免把 assistant 长回答塞进去拖慢
+    # 最终回答阶段 history 只保留最近 N 条用户提问
     if filtered_history:
         user_only = [m for m in filtered_history if m.get("role") == "user"]
-        trimmed_user = (
-            user_only[-max(0, RAG_HISTORY_MAX_USER_TURNS):]
-            if RAG_HISTORY_MAX_USER_TURNS
-            else []
-        )
+        trimmed_user = user_only[-max(0, RAG_HISTORY_MAX_USER_TURNS):] if RAG_HISTORY_MAX_USER_TURNS else []
         if trimmed_user:
-            messages.append(
-                {"role": "assistant", "content": "下面是此前用户的提问（仅用于理解上下文，不需要逐条回复）："}
-            )
+            messages.append({"role": "assistant", "content": "下面是此前用户的提问（仅用于理解上下文，不需要逐条回复）："})
             messages.extend(trimmed_user)
 
     messages.append(
@@ -1017,20 +1076,27 @@ def answer(
         }
     )
 
+    t0 = time.perf_counter()
     answer_text = chat(messages)
+    _perf("answer_chat", ms=round(_ms(t0), 1), ans_chars=len(answer_text or ""))
+
     final_text = answer_text.strip() if answer_text else ""
     if not final_text:
         final_text = prompt_template["no_context"]
 
-    # === 新参考文献拼接：仅对“实际进 context 的 chunks”做 title 去重，并从 DB 行字段抽 URL ===
+    # 参考文献（可关闭）
+    t0 = time.perf_counter()
     ref_entries = build_reference_entries_from_context(
         db,
         ctx.used_chunks,
         domain_ids=domain_ids,
         rows_per_title=RAG_REFERENCE_ROWS_PER_TITLE,
     )
+    _perf("answer_refs", ms=round(_ms(t0), 1), disabled=int(RAG_DISABLE_REFERENCES), titles=len(ref_entries))
+
     if ref_entries:
         reference_block = format_references_from_titles(ref_entries, _normalized_language)
         final_text = f"{final_text}\n\n{reference_block}"
 
+    _perf("answer_total", ms=round(_ms(t_all), 1))
     return final_text, references, chunks
