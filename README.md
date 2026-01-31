@@ -455,7 +455,7 @@ npm run serve         # 启动客户端（默认 http://localhost:8081）
 **后端**
 ```bash
 # 运行后端
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 18000
 
 # 重新应用迁移
 alembic upgrade head
