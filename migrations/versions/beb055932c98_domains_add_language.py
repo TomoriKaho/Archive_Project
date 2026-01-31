@@ -7,6 +7,7 @@ Create Date: 2026-01-27 11:50:40
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = "beb055932c98"
@@ -16,11 +17,15 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    columns = [column["name"] for column in inspect(bind).get_columns("domains")]
+
     # Add language column with a default to keep existing rows valid
-    op.add_column(
-        "domains",
-        sa.Column("language", sa.String(length=10), nullable=True, server_default="zh"),
-    )
+    if "language" not in columns:
+        op.add_column(
+            "domains",
+            sa.Column("language", sa.String(length=10), nullable=True, server_default="zh"),
+        )
 
     # Backfill existing rows (some DBs may not apply server_default to old rows)
     op.execute("UPDATE domains SET language='zh' WHERE language IS NULL")

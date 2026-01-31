@@ -5,7 +5,10 @@ import csv
 import io
 import json
 import logging
+import os
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,6 +23,9 @@ from app.services.translation_service import translate_text
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["search"])
+
+TRANSLATION_MAX_LANGUAGES = int(os.getenv("SEARCH_TRANSLATION_MAX_LANGUAGES", "0"))
+TRANSLATION_TOTAL_TIMEOUT = float(os.getenv("SEARCH_TRANSLATION_TIMEOUT", "8"))
 
 
 def _parse_domain_ids(raw_ids: str | None) -> list[int]:
@@ -254,15 +260,49 @@ def _search_with_tokens(
 
 
 def _translate_queries(query: str, target_languages: set[str]) -> list[str]:
-    """将中文查询翻译成目标语言列表。"""
+    """将中文查询翻译成目标语言列表，限制翻译数量与耗时。"""
+
+    languages = [lang for lang in sorted(target_languages) if lang != "zh"]
+    if not languages:
+        return []
+
+    # If max languages is 0 or less, translate all domain languages.
+    if TRANSLATION_MAX_LANGUAGES > 0:
+        languages = languages[:TRANSLATION_MAX_LANGUAGES]
 
     translated_queries: list[str] = []
-    for language in sorted(target_languages):
-        if language == "zh":
-            continue
-        translated = translate_text(query, source_language="zh", target_language=language)
-        if translated:
-            translated_queries.append(translated)
+    if not languages:
+        return translated_queries
+
+    timeout_budget = max(1.0, TRANSLATION_TOTAL_TIMEOUT)
+    start = time.monotonic()
+
+    max_workers = min(4, len(languages))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(translate_text, query, source_language="zh", target_language=language): language
+            for language in languages
+        }
+        try:
+            for future in as_completed(future_map, timeout=timeout_budget):
+                remaining = timeout_budget - (time.monotonic() - start)
+                if remaining <= 0:
+                    break
+                language = future_map[future]
+                try:
+                    translated = future.result(timeout=remaining)
+                except Exception as exc:
+                    logger.warning("translation failed for language=%s: %s", language, exc)
+                    continue
+                if translated:
+                    translated_queries.append(translated)
+        except Exception as exc:
+            logger.warning("translation exceeded timeout budget=%ss: %s", timeout_budget, exc)
+        finally:
+            for pending in future_map:
+                if not pending.done():
+                    pending.cancel()
+
     return translated_queries
 
 
