@@ -289,6 +289,11 @@ docker compose down -v
 
 ### 后端（根目录 `.env`）
 ```dotenv
+# 选择一种运行方式：
+# 1) 后端本地运行（uvicorn 在宿主机）：DATABASE_URL 指向 localhost:5432
+# 2) 后端在 docker compose 中运行：DATABASE_URL 指向 postgres:5432
+# 注意：后端只读取 DATABASE_URL，POSTGRES_* 仅用于容器初始化
+
 # 数据库 & 向量库
 DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5432/mydb
 QDRANT_URL=http://localhost:6333
