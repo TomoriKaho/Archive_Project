@@ -16,3 +16,5 @@ frontend_client/package-lock.json
 .venv/
 ignore/
 .DS_Store
+env.*
+.env.*
