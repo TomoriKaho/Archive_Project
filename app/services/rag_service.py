@@ -148,11 +148,31 @@ _PROMPT_TEMPLATES = {
             "只需直接陈述档案记载的事实即可；\n"
             "3. 你只需要回答最后一个问题，不要重新回答会话历史中的旧问题；\n"
             "4. 在必要的位置添加换行以提升可读性；\n"
-            "5. 当前界面语言为中文，请始终使用中文回答问题。"
+            "5. 当前界面语言为中文，请始终使用中文回答问题；\n"
+            "6. 对于涉及档案事实、时间线、机构、人物、事件关系的问题，"
+            "优先给出完整结论，再补充关键细节、时间范围、相互关系以及能确认或不能确认的边界；\n"
+            "7. 除非用户明确要求极简回答，事实性问题不要只用一句话作答；"
+            "若资料足够，应组织成至少两到三个完整句子，必要时分段说明。"
         ),
         "context_intro": "以下是与当前问题相关的档案片段，请严格基于这些内容进行回答：\n\n{context}",
         "user_instruction_intro": "以下是用户在创建会话时提供的初始指示，请务必逐条严格遵守：\n{instructions}",
         "memory_intro": "下面是若干档案内容的节选，请在回答问题时仅以这些内容为依据：\n\n{memory}",
+        "answer_output_intro": (
+            "请阅读上面的档案资料和对话记录，回答下面的问题。\n"
+            "你必须只输出一个 JSON 对象，不要输出 Markdown 代码块或任何额外说明。\n"
+            "JSON 格式固定为：{\"answer\": string, \"need_references\": boolean}\n"
+            "字段要求：\n"
+            "1. answer：写给用户看的回答正文，不要包含“参考资料”“参考文献”等附录；\n"
+            "2. need_references：只有当 answer 直接使用了档案中的具体事实、编号、日期、姓名、地点、链接，或其他需要用户追溯原始档案的信息时才为 true；\n"
+            "3. 如果只是问候、寒暄、确认需求、说明能力、流程引导、泛化建议，或无需查看原始档案即可理解的回答，则必须为 false；\n"
+            "4. 如果问题涉及多个时间点、机构、人物、档案条目或事件，answer 不要只罗列一句结果，"
+            "应先概括结论，再补充时间范围、主体关系、差异点和重要限定条件；\n"
+            "5. 如果用户的问题带有“分析”“比较”“梳理”“说明”“介绍”“为什么”“是否”等意图，"
+            "answer 应体现分析性，不仅要列事实，还要说明这些事实之间的关系；\n"
+            "6. 若资料只能支持有限结论，要明确说明目前只能确认到哪一层，不要过度推断；\n"
+            "7. JSON 中布尔值必须使用 true 或 false。\n\n"
+            "问题：\n{question}"
+        ),
         "no_context": "当前知识库中没有足够的信息回答该问题。",
     },
     "en": {
@@ -164,11 +184,30 @@ _PROMPT_TEMPLATES = {
             "   simply state the facts.\n"
             "3. Only answer the latest question; do not revisit earlier ones in the conversation.\n"
             "4. Insert line breaks when helpful for readability.\n"
-            "5. The UI language is English; always reply in English."
+            "5. The UI language is English; always reply in English.\n"
+            "6. For archive questions involving facts, timelines, institutions, people, or event relationships,"
+            " give the main conclusion first, then add the key details, time span, relationships, and any limits on what can be confirmed.\n"
+            "7. Unless the user explicitly wants a minimal answer, do not answer factual questions in a single short sentence;"
+            " when the material is sufficient, use at least two or three complete sentences and split into paragraphs when helpful."
         ),
         "context_intro": "Here are the archive snippets relevant to the question. Base your answer strictly on them:\n\n{context}",
         "user_instruction_intro": "Initial user instructions for this chat—follow each item strictly:\n{instructions}",
         "memory_intro": "Below are excerpts from archive content. Use only these passages when answering:\n\n{memory}",
+        "answer_output_intro": (
+            "Read the archive material and conversation above, then answer the question below.\n"
+            "You must output exactly one JSON object, with no Markdown fences or extra commentary.\n"
+            "Use this exact shape: {\"answer\": string, \"need_references\": boolean}\n"
+            "Field requirements:\n"
+            "1. answer: the user-facing reply only; do not include a references appendix;\n"
+            "2. need_references: set to true only when the answer directly uses concrete archival facts, identifiers, dates, names, places, links, or other details that should be traceable to the source archive;\n"
+            "3. If the reply is only a greeting, clarification, capability explanation, workflow guidance, or general advice that does not need source tracing, it must be false;\n"
+            "4. If the question involves multiple dates, institutions, people, archive entries, or events, do not reply with a single bare result;"
+            " first summarize the conclusion, then add the timeline, relationships, differences, and important limitations;\n"
+            "5. If the user is asking for analysis, comparison, explanation, overview, or interpretation, the answer should be analytical rather than a raw fact list;\n"
+            "6. If the material supports only a limited conclusion, state that boundary clearly instead of over-inferring;\n"
+            "7. The boolean value must be true or false.\n\n"
+            "Question:\n{question}"
+        ),
         "no_context": "There is not enough information in the knowledge base to answer this question.",
     },
 }
@@ -631,6 +670,12 @@ class ContextBuildResult:
     used_chunks: list[Chunk]
 
 
+@dataclass(frozen=True)
+class StructuredAnswerResult:
+    answer: str
+    need_references: bool
+
+
 def build_context(
     chunks: list[Chunk],
     *,
@@ -906,7 +951,118 @@ def compress_chunk_memory(question: str, chunks: Sequence[Chunk]) -> str:
     return summary.strip()
 
 
-def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
+def _strip_code_fence(text: str) -> str:
+    """Remove a single fenced code block wrapper if the model adds one."""
+    stripped = (text or "").strip()
+    match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.DOTALL | re.IGNORECASE)
+    return match.group(1).strip() if match else stripped
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    """Extract the first JSON object from model output."""
+    cleaned = _strip_code_fence(text)
+    if not cleaned:
+        return None
+
+    decoder = json.JSONDecoder()
+    for idx, char in enumerate(cleaned):
+        if char != "{":
+            continue
+        try:
+            parsed, _ = decoder.raw_decode(cleaned[idx:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _extract_json_string_field(raw: str, key: str) -> str | None:
+    """Salvage a JSON-like string field from invalid JSON output."""
+    pattern = rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)"'
+    match = re.search(pattern, raw, flags=re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(f'"{match.group(1)}"')
+    except json.JSONDecodeError:
+        return None
+
+
+def _coerce_bool(value: Any) -> bool | None:
+    """Normalize bool-like values returned by the model."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "是", "需要", "need"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "否", "不需要", "无需", "none"}:
+            return False
+    return None
+
+
+def parse_structured_answer(raw: str, *, fallback_text: str) -> StructuredAnswerResult:
+    """Parse the model's structured answer and fall back to plain text safely."""
+    payload = _extract_json_object(raw)
+
+    answer_value: Any = None
+    bool_value: Any = None
+    if payload:
+        for key in ("answer", "content", "text", "response"):
+            if key in payload:
+                answer_value = payload[key]
+                break
+        for key in (
+            "need_references",
+            "include_references",
+            "show_references",
+            "should_include_references",
+        ):
+            if key in payload:
+                bool_value = payload[key]
+                break
+
+    answer_text = answer_value.strip() if isinstance(answer_value, str) else ""
+    if not answer_text:
+        for key in ("answer", "content", "text", "response"):
+            extracted = _extract_json_string_field(raw, key)
+            if extracted and extracted.strip():
+                answer_text = extracted.strip()
+                break
+
+    need_references = _coerce_bool(bool_value)
+    if need_references is None:
+        bool_match = re.search(
+            r'"(?:need_references|include_references|show_references|should_include_references)"\s*:\s*(true|false|"true"|"false"|1|0)',
+            raw,
+            flags=re.IGNORECASE,
+        )
+        if bool_match:
+            need_references = _coerce_bool(bool_match.group(1).strip('"'))
+
+    if answer_text:
+        return StructuredAnswerResult(
+            answer=answer_text,
+            need_references=bool(need_references) if need_references is not None else False,
+        )
+
+    cleaned = _strip_code_fence(raw).strip()
+    if cleaned and not cleaned.startswith("{"):
+        return StructuredAnswerResult(answer=cleaned, need_references=False)
+
+    logger.warning("structured answer parse failed, falling back to default text")
+    return StructuredAnswerResult(answer=fallback_text, need_references=False)
+
+
+def chat(
+    messages: Sequence[dict[str, str]],
+    stream: bool = False,
+    *,
+    response_format: dict[str, Any] | None = None,
+) -> str:
     """Call the cloud chat API (OpenAI-compatible) and return the assistant reply."""
     if stream:
         raise RuntimeError("streaming chat is not supported by the current cloud backend")
@@ -914,6 +1070,8 @@ def chat(messages: Sequence[dict[str, str]], stream: bool = False) -> str:
         raise RuntimeError("CHAT_API_KEY is required to call the cloud chat API")
 
     payload = {"model": CHAT_MODEL, "messages": list(messages)}
+    if response_format:
+        payload["response_format"] = response_format
     req = request.Request(
         url=f"{CHAT_API_URL.rstrip('/')}/chat/completions",
         data=json.dumps(payload).encode("utf-8"),
@@ -1069,30 +1227,41 @@ def answer(
     messages.append(
         {
             "role": "user",
-            "content": (
-                "请阅读上面的档案资料和对话记录，直接用自然语言回答下面这个问题，\n\n"
-                f"{question}"
-            ),
+            "content": prompt_template["answer_output_intro"].format(question=question),
         }
     )
 
     t0 = time.perf_counter()
-    answer_text = chat(messages)
-    _perf("answer_chat", ms=round(_ms(t0), 1), ans_chars=len(answer_text or ""))
+    raw_answer_text = ""
+    try:
+        raw_answer_text = chat(messages, response_format={"type": "json_object"})
+    except RuntimeError:
+        logger.warning("structured answer response_format unsupported, retrying with prompt-only JSON")
+        raw_answer_text = chat(messages)
+    _perf("answer_chat", ms=round(_ms(t0), 1), ans_chars=len(raw_answer_text or ""))
 
-    final_text = answer_text.strip() if answer_text else ""
+    structured_answer = parse_structured_answer(
+        raw_answer_text,
+        fallback_text=prompt_template["no_context"],
+    )
+
+    final_text = structured_answer.answer.strip() if structured_answer.answer else ""
     if not final_text:
         final_text = prompt_template["no_context"]
 
     # 参考文献（可关闭）
-    t0 = time.perf_counter()
-    ref_entries = build_reference_entries_from_context(
-        db,
-        ctx.used_chunks,
-        domain_ids=domain_ids,
-        rows_per_title=RAG_REFERENCE_ROWS_PER_TITLE,
-    )
-    _perf("answer_refs", ms=round(_ms(t0), 1), disabled=int(RAG_DISABLE_REFERENCES), titles=len(ref_entries))
+    ref_entries: list[tuple[str, list[str]]] = []
+    if structured_answer.need_references:
+        t0 = time.perf_counter()
+        ref_entries = build_reference_entries_from_context(
+            db,
+            ctx.used_chunks,
+            domain_ids=domain_ids,
+            rows_per_title=RAG_REFERENCE_ROWS_PER_TITLE,
+        )
+        _perf("answer_refs", ms=round(_ms(t0), 1), disabled=int(RAG_DISABLE_REFERENCES), titles=len(ref_entries))
+    else:
+        _perf("answer_refs", ms=0.0, disabled=int(RAG_DISABLE_REFERENCES), titles=0, skipped=1)
 
     if ref_entries:
         reference_block = format_references_from_titles(ref_entries, _normalized_language)
