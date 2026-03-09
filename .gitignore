@@ -15,3 +15,5 @@ frontend_admin/package-lock.json
 frontend_client/package-lock.json
 .venv/
 ignore/
+env.*
+.env.*

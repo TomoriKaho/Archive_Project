@@ -1,9 +1,11 @@
 import logging
+from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.db.session import SessionLocal
 from app.models.entities import User
 from app.repositories.chat_repo import ChatRepository
 from app.repositories.message_repo import MessageRepository
@@ -27,6 +29,63 @@ from app.services.rag_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _run_post_answer_tasks(
+    *,
+    chat_id: int,
+    question: str,
+    answer_text: str,
+    history_payload: list[dict[str, str]],
+    chunk_texts: list[str],
+    top_k: int,
+) -> None:
+    db = SessionLocal()
+    try:
+        repo = MessageRepository(db)
+        memory_messages = repo.list_memory(chat_id)
+
+        if chunk_texts:
+            pseudo_chunks = [SimpleNamespace(content=text) for text in chunk_texts if text]
+            compressed_memory = compress_chunk_memory(question, pseudo_chunks)
+            if not compressed_memory:
+                compressed_memory = "\n\n".join(text for text in chunk_texts if text)
+            if compressed_memory:
+                stored = repo.create(
+                    chat_id=chat_id,
+                    role="system",
+                    content=f"{CHUNK_MEMORY_PREFIX}{compressed_memory}",
+                )
+                persisted_memory = list(memory_messages)
+                persisted_memory.append(stored)
+                window = (
+                    CHUNK_MEMORY_WINDOW_MULTIPLIER * top_k
+                    if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0
+                    else 0
+                )
+                if window and len(persisted_memory) > window:
+                    overflow = len(persisted_memory) - window
+                    to_delete = [m.id for m in persisted_memory[:overflow]]
+                    repo.delete_many(to_delete)
+
+        history_summary = compress_dialog_history(
+            history_payload
+            + [{"role": "user", "content": question}, {"role": "assistant", "content": answer_text}]
+        )
+        if history_summary:
+            repo.create(
+                chat_id=chat_id,
+                role="system",
+                content=f"{CHAT_SUMMARY_PREFIX}{history_summary}",
+            )
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("post-answer background tasks failed: chat_id=%s", chat_id)
+    finally:
+        db.close()
+
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 # ---- chats ----
@@ -128,6 +187,7 @@ def delete_chat(
 def create_message(
     chat_id: int,
     payload: MessageCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -182,40 +242,19 @@ def create_message(
             references = []
             chunks = []
         assistant_message = repo.create(chat_id=chat_id, role="assistant", content=answer_text)
-        if chunks:
-            persisted_memory = list(memory_messages)
-            compressed_memory = compress_chunk_memory(content, chunks)
-            if not compressed_memory:
-                compressed_memory = "\n\n".join(chunk_to_memory_text(chunk) for chunk in chunks)
-            stored = repo.create(
-                chat_id=chat_id,
-                role="system",
-                content=f"{CHUNK_MEMORY_PREFIX}{compressed_memory}",
-            )
-            persisted_memory.append(stored)
-            window = (
-                CHUNK_MEMORY_WINDOW_MULTIPLIER * top_k
-                if CHUNK_MEMORY_WINDOW_MULTIPLIER > 0
-                else 0
-            )
-            if window and len(persisted_memory) > window:
-                overflow = len(persisted_memory) - window
-                to_delete = [m.id for m in persisted_memory[:overflow]]
-                repo.delete_many(to_delete)
+        chunk_texts = [chunk_to_memory_text(chunk) for chunk in chunks] if chunks else []
+        background_tasks.add_task(
+            _run_post_answer_tasks,
+            chat_id=chat_id,
+            question=content,
+            answer_text=answer_text,
+            history_payload=history_payload,
+            chunk_texts=chunk_texts,
+            top_k=top_k,
+        )
         reference_models = [
             MessageReference(chunk_id=chunk_id, score=score) for chunk_id, score in references
         ]
-
-        history_summary = compress_dialog_history(
-            history_payload
-            + [{"role": "user", "content": content}, {"role": "assistant", "content": answer_text}]
-        )
-        if history_summary:
-            repo.create(
-                chat_id=chat_id,
-                role="system",
-                content=f"{CHAT_SUMMARY_PREFIX}{history_summary}",
-            )
 
     return MessageCreateResponse(
         user=MessageOut.model_validate(user_message),
