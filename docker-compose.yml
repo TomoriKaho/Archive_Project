@@ -67,6 +67,7 @@ services:
       - archive_net
     image: archive-backend:2026-01-10
     container_name: archive-backend
+    restart: unless-stopped
     env_file:
       - .env
     volumes:
