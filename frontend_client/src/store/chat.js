@@ -11,6 +11,83 @@ import { useAuthStore } from './auth';
 import { usePreferencesStore } from './preferences';
 
 const PENDING_DELETE_STORAGE_KEY = 'client-chat-pending-deletes';
+const PENDING_MESSAGES_STORAGE_KEY = 'client-chat-pending-messages';
+const CONVERSATION_PHASES_STORAGE_KEY = 'client-chat-conversation-phases';
+
+const PHASES_ALLOWLIST = ['retrieving', 'thinking'];
+
+function readPendingMessages() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return {};
+  }
+  const stored = window.localStorage.getItem(PENDING_MESSAGES_STORAGE_KEY);
+  try {
+    const parsed = JSON.parse(stored);
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+    const result = {};
+    Object.entries(parsed).forEach(([conversationId, messages]) => {
+      if (!Array.isArray(messages)) {
+        return;
+      }
+      const normalized = messages
+        .filter((message) => message && typeof message === 'object')
+        .map((message) => ({
+          id: message.id,
+          role: message.role || 'user',
+          content: message.content || '',
+          created_at: message.created_at || null,
+          conversation_id: Number(message.conversation_id || conversationId) || null
+        }))
+        .filter((message) => message.id && message.content);
+      if (normalized.length) {
+        result[conversationId] = normalized;
+      }
+    });
+    return result;
+  } catch (error) {
+    console.error('读取待发送消息失败', error);
+    return {};
+  }
+}
+
+function persistPendingMessages(pendingMessages) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  window.localStorage.setItem(PENDING_MESSAGES_STORAGE_KEY, JSON.stringify(pendingMessages || {}));
+}
+
+function readConversationPhases() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return {};
+  }
+  const stored = window.localStorage.getItem(CONVERSATION_PHASES_STORAGE_KEY);
+  try {
+    const parsed = JSON.parse(stored);
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+    const result = {};
+    Object.entries(parsed).forEach(([conversationId, phase]) => {
+      if (PHASES_ALLOWLIST.includes(phase)) {
+        result[conversationId] = phase;
+      }
+    });
+    return result;
+  } catch (error) {
+    console.error('读取会话阶段失败', error);
+    return {};
+  }
+}
+
+function persistConversationPhases(phases) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  window.localStorage.setItem(CONVERSATION_PHASES_STORAGE_KEY, JSON.stringify(phases || {}));
+}
 
 function readPendingDeletionIds() {
   if (typeof window === 'undefined' || !window.localStorage) {
@@ -103,8 +180,8 @@ export const useChatStore = defineStore('client-chat', {
     messages: [],
     isLoading: false,
     sendingConversationIds: [],
-    conversationPhases: {},
-    pendingMessages: {},
+    conversationPhases: readConversationPhases(),
+    pendingMessages: readPendingMessages(),
     streamingMessageId: null,
     streamingConversationId: null,
     streamingTimer: null,
@@ -169,6 +246,8 @@ export const useChatStore = defineStore('client-chat', {
           this.pendingMessages = {};
           this.pendingDeletionIds = [];
           persistPendingDeletionIds(this.pendingDeletionIds);
+          persistConversationPhases(this.conversationPhases);
+          persistPendingMessages(this.pendingMessages);
           return;
         }
         const { data } = await fetchConversations(authStore.user.id);
@@ -236,7 +315,13 @@ export const useChatStore = defineStore('client-chat', {
           return;
         }
         const pendingMessages = this.getPendingMessages(conversationId);
-        const existingMessages = pendingMessages.length ? mergeMessages(data, pendingMessages) : data;
+        const shouldClearPending = this.shouldClearPendingMessages(conversationId, data, pendingMessages);
+        if (shouldClearPending) {
+          this.removePendingMessage(conversationId, null);
+          this.clearConversationPhase(conversationId);
+        }
+        const nextPending = shouldClearPending ? [] : this.getPendingMessages(conversationId);
+        const existingMessages = nextPending.length ? mergeMessages(data, nextPending) : data;
         this.messages = normalizeMessages(existingMessages);
       } finally {
         this.isLoading = false;
@@ -406,12 +491,13 @@ export const useChatStore = defineStore('client-chat', {
         ...this.pendingMessages,
         [conversationId]: [...pending, message]
       };
+      persistPendingMessages(this.pendingMessages);
     },
     removePendingMessage(conversationId, messageId) {
-      if (!conversationId || !messageId) {
+      if (!conversationId) {
         return;
       }
-      const pending = this.getPendingMessages(conversationId).filter((item) => item.id !== messageId);
+      const pending = this.getPendingMessages(conversationId).filter((item) => (messageId ? item.id !== messageId : false));
       if (pending.length) {
         this.pendingMessages = {
           ...this.pendingMessages,
@@ -421,6 +507,7 @@ export const useChatStore = defineStore('client-chat', {
         const { [conversationId]: _removed, ...rest } = this.pendingMessages;
         this.pendingMessages = rest;
       }
+      persistPendingMessages(this.pendingMessages);
     },
     getPendingMessages(conversationId) {
       if (!conversationId) {
@@ -898,8 +985,7 @@ export const useChatStore = defineStore('client-chat', {
       if (!conversationId) {
         return;
       }
-      const allowed = ['retrieving', 'thinking'];
-      if (!allowed.includes(phase)) {
+      if (!PHASES_ALLOWLIST.includes(phase)) {
         this.clearConversationPhase(conversationId);
         return;
       }
@@ -907,6 +993,7 @@ export const useChatStore = defineStore('client-chat', {
         ...this.conversationPhases,
         [conversationId]: phase
       };
+      persistConversationPhases(this.conversationPhases);
     },
     clearConversationPhase(conversationId) {
       if (!conversationId || !this.conversationPhases[conversationId]) {
@@ -914,6 +1001,27 @@ export const useChatStore = defineStore('client-chat', {
       }
       const { [conversationId]: _removed, ...rest } = this.conversationPhases;
       this.conversationPhases = rest;
+      persistConversationPhases(this.conversationPhases);
+    },
+    shouldClearPendingMessages(conversationId, serverMessages, pendingMessages) {
+      if (!conversationId || !pendingMessages?.length || !Array.isArray(serverMessages)) {
+        return false;
+      }
+      const pendingTimes = pendingMessages
+        .map((message) => new Date(message.created_at || '').getTime())
+        .filter((time) => !Number.isNaN(time));
+      if (!pendingTimes.length) {
+        return false;
+      }
+      const latestPending = Math.max(...pendingTimes);
+      const assistantTimes = serverMessages
+        .filter((message) => message?.role === 'assistant')
+        .map((message) => new Date(message?.created_at || '').getTime())
+        .filter((time) => !Number.isNaN(time));
+      if (!assistantTimes.length) {
+        return false;
+      }
+      return Math.max(...assistantTimes) >= latestPending;
     }
   }
 });

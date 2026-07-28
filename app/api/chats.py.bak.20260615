@@ -90,20 +90,6 @@ def _run_post_answer_tasks(
 router = APIRouter(prefix="/chats", tags=["chats"])
 # ---- chats ----
 
-
-def _require_chat_access(
-    chat_id: int,
-    db: Session,
-    current_user: User,
-):
-    chat = ChatRepository(db).get(chat_id)
-    if not chat:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "chat not found")
-    if chat.user_id != current_user.id and not current_user.is_admin:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "chat access denied")
-    return chat
-
-
 # Create a new chat
 @router.post("", response_model=ChatOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=ChatOut, status_code=status.HTTP_201_CREATED)
@@ -278,41 +264,21 @@ def create_message(
 
 # List messages in a chat with pagination
 @router.get("/{chat_id}/messages", response_model=list[MessageOut])
-def list_messages(
-    chat_id: int,
-    offset: int = 0,
-    limit: int = Query(200, le=500),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _require_chat_access(chat_id, db, current_user)
+def list_messages(chat_id: int, offset: int = 0, limit: int = Query(200, le=500), db: Session = Depends(get_db)):
     return MessageRepository(db).list_by_chat(chat_id, offset=offset, limit=limit)
 
 # Update a message's content, identified by message ID
 @router.patch("/messages/{msg_id}", response_model=MessageOut)
-def update_message(
-    msg_id: int,
-    payload: MessageUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def update_message(msg_id: int, payload: MessageUpdate, db: Session = Depends(get_db)):
     repo = MessageRepository(db)
     m = repo.get(msg_id)
     if not m:
         raise HTTPException(404, "message not found")
-    _require_chat_access(m.chat_id, db, current_user)
     return repo.update(m, **payload.model_dump(exclude_none=True))
 
 # Delete a message by ID, identified by message ID
 @router.delete("/messages/{msg_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_message(
-    msg_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    repo = MessageRepository(db)
-    message = repo.get(msg_id)
-    if not message:
+def delete_message(msg_id: int, db: Session = Depends(get_db)):
+    if not MessageRepository(db).get(msg_id):
         raise HTTPException(404, "message not found")
-    _require_chat_access(message.chat_id, db, current_user)
-    repo.delete(msg_id)
+    MessageRepository(db).delete(msg_id)
