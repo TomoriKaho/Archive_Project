@@ -4,7 +4,7 @@ import logging  # 提前配置日志模块
 from fastapi import APIRouter, FastAPI  # 导入FastAPI主体与路由分组
 from fastapi.middleware.cors import CORSMiddleware  # 引入CORS中间件处理跨域预检请求
 
-from app.api import domains, chats, documents, auth, users, rag, search  # 导入各功能路由模块
+from app.api import archives, domains, chats, documents, auth, users, rag, search  # 导入各功能路由模块
 from app.db.schema_compat import (
     ensure_document_uuid_column,
     ensure_document_vector_columns,
@@ -38,6 +38,7 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(rag.router)
 api_router.include_router(search.router)
+api_router.include_router(archives.router)
 
 app.include_router(api_router)
 
