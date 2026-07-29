@@ -519,7 +519,35 @@ curl -X POST http://localhost:18000/chats/7/messages \
 
 ---
 
-## 七、故障排查速记
+## 七、西印度档案 PDF 常驻上传
+
+服务端先应用最新数据库迁移并部署后端。大文件接口使用 8 MiB 分片，
+因此单个 PDF 即使超过网关的 50 MiB 请求上限也能断点续传；默认允许
+单文件最大 10 GiB。
+
+在本机 `.env` 中填写 `ARCHIVE_ADMIN_EMAIL`、
+`ARCHIVE_ADMIN_PASSWORD`，建议同时填写生产环境的
+`ARCHIVE_DOCUMENT_UUID`。先执行只读映射检查：
+
+```bash
+.venv/bin/python scripts/upload_west_indies_archives.py --dry-run
+```
+
+检查通过后以前台常驻模式启动：
+
+```bash
+.venv/bin/python scripts/upload_west_indies_archives.py
+```
+
+脚本默认监听 `~/Projects/Scripts/data/西印度档案馆`，忽略 `.part`
+文件，并通过
+`~/Projects/Scripts/Crawler/西印度档案总馆20260722文档.xlsx`
+将文件名映射到来源“档案id”。上传状态保存在
+`~/.local/state/archive-project/west-indies-uploader.sqlite3`；
+进程中断后再次执行会从服务端已确认的字节偏移继续上传。全部工作簿
+记录上传成功后脚本自动退出。使用 `--once` 可只处理当前已完成文件。
+
+## 八、故障排查速记
 - **`npm: command not found`**：先安装 Node.js（推荐 nvm 安装 LTS），再进入对应前端目录执行 `npm install`。
 - **前端 404 或无法登录**：确认 `frontend_admin/.env.local` / `frontend_client/.env.local` 的 `VUE_APP_API_BASE_URL` 指向后端；同时确认后端 `uvicorn` 正常运行。
 - **数据库连接失败**：检查 `DATABASE_URL`、Postgres 容器是否启动、端口是否占用。

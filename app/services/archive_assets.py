@@ -13,8 +13,8 @@ import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any
-from uuid import UUID
+from typing import Any, Iterable
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,6 +24,7 @@ from app.models.entities import (
     ArchiveAsset,
     ArchiveEntry,
     ArchiveImportJob,
+    ArchiveUploadSession,
     Document,
 )
 
@@ -36,10 +37,24 @@ MAX_IMPORT_FILES = int(os.getenv("ARCHIVE_IMPORT_MAX_FILES", "10000"))
 MAX_UNCOMPRESSED_BYTES = int(
     os.getenv("ARCHIVE_IMPORT_MAX_UNCOMPRESSED_BYTES", str(5 * 1024 * 1024 * 1024))
 )
+ARCHIVE_UPLOAD_CHUNK_BYTES = int(
+    os.getenv("ARCHIVE_UPLOAD_CHUNK_BYTES", str(8 * 1024 * 1024))
+)
+ARCHIVE_UPLOAD_MAX_CHUNK_BYTES = int(
+    os.getenv("ARCHIVE_UPLOAD_MAX_CHUNK_BYTES", str(16 * 1024 * 1024))
+)
+ARCHIVE_UPLOAD_CHUNK_BYTES = min(
+    ARCHIVE_UPLOAD_CHUNK_BYTES, ARCHIVE_UPLOAD_MAX_CHUNK_BYTES
+)
+ARCHIVE_UPLOAD_MAX_FILE_BYTES = int(
+    os.getenv("ARCHIVE_UPLOAD_MAX_FILE_BYTES", str(10 * 1024 * 1024 * 1024))
+)
 
 _KEY_FIELDS = (
     "external_key",
     "archive_id",
+    "档案id",
+    "档案ID",
     "id",
     "uuid",
     "unitid",
@@ -79,6 +94,331 @@ def get_asset_path(object_key: str) -> Path:
     if object_root not in candidate.parents:
         raise ValueError("invalid archive asset object key")
     return candidate
+
+
+def get_upload_path(upload_id: UUID) -> Path:
+    """返回分片上传临时文件路径，路径只由服务端 UUID 决定。"""
+
+    upload_root = (ARCHIVE_ASSET_ROOT / "uploads").resolve()
+    upload_root.mkdir(parents=True, exist_ok=True)
+    return upload_root / f"{upload_id}.part"
+
+
+def iter_document_archives(document: Document) -> Iterable[Any]:
+    """按文档来源格式逐条读取档案元数据。"""
+
+    metadata = document.doc_metadata or {}
+    source = str(metadata.get("source") or "").lower()
+    raw_content = document.raw_content or ""
+
+    if source == "csv":
+        stream = io.StringIO(raw_content.lstrip("\ufeff"))
+        try:
+            csv.field_size_limit(max(csv.field_size_limit(), len(raw_content)))
+            yield from csv.DictReader(stream)
+        except (csv.Error, OverflowError):
+            return
+        return
+
+    if source == "json":
+        try:
+            parsed = json.loads(raw_content)
+        except json.JSONDecodeError:
+            return
+        if isinstance(parsed, dict) and isinstance(parsed.get("entities"), list):
+            entities = parsed.get("entities") or []
+        elif isinstance(parsed, list):
+            entities = parsed
+        else:
+            entities = [parsed]
+        yield from entities
+        return
+
+    for line in raw_content.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            yield json.loads(stripped)
+        except json.JSONDecodeError:
+            yield stripped
+
+
+def normalize_archive_metadata(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, list):
+        return {"items": raw}
+    if isinstance(raw, (str, int, float, bool)):
+        return {"value": raw}
+    return {"value": str(raw)}
+
+
+def extract_archive_title(metadata: dict[str, Any], fallback: str) -> str:
+    for key in ("title", "titulo", "name", "archive_name", "档案名称", "unitid"):
+        value = metadata.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    for value in metadata.values():
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return fallback
+
+
+def _normalize_source_archive_id(value: Any) -> str:
+    text = str(value or "").strip()
+    if text.endswith(".0") and text[:-2].isdigit():
+        return text[:-2]
+    return text
+
+
+def _metadata_source_archive_id(metadata: dict[str, Any]) -> str:
+    for key in (
+        "档案id",
+        "档案ID",
+        "source_archive_id",
+        "source_id",
+        "数据库唯一ID（ES/AGI/档案馆自有ID）",
+        "数据库唯一ID\n（ES/AGI/档案馆自有ID）",
+    ):
+        value = metadata.get(key)
+        if value is not None and str(value).strip():
+            return _normalize_source_archive_id(value)
+    return ""
+
+
+def resolve_archive_entry(
+    db: Session,
+    document_uuid: UUID,
+    source_archive_id: str,
+) -> ArchiveEntry:
+    """通过来源档案 ID 找到原始条目，并返回平台内部稳定条目。"""
+
+    document = db.execute(
+        select(Document).where(Document.uuid == document_uuid)
+    ).scalar_one_or_none()
+    if not document:
+        raise LookupError("document_uuid 不存在")
+
+    wanted = _normalize_source_archive_id(source_archive_id)
+    direct = db.execute(
+        select(ArchiveEntry).where(
+            ArchiveEntry.document_id == document.id,
+            ArchiveEntry.external_key == wanted,
+        )
+    ).scalar_one_or_none()
+    if direct:
+        return direct
+
+    records: list[tuple[int, dict[str, Any], str]] = []
+    matches: list[tuple[int, dict[str, Any], str]] = []
+    for ordinal, raw in enumerate(iter_document_archives(document), start=1):
+        metadata = normalize_archive_metadata(raw)
+        source_id = _metadata_source_archive_id(metadata)
+        external_key = derive_archive_external_key(metadata, ordinal)
+        records.append((ordinal, metadata, external_key))
+        if source_id == wanted:
+            matches.append((ordinal, metadata, external_key))
+    if not matches:
+        raise LookupError(f"文档中不存在来源档案 id: {wanted}")
+    if len(matches) > 1:
+        raise ValueError(f"文档中的来源档案 id 不唯一: {wanted}")
+
+    existing_keys = set(
+        db.execute(
+            select(ArchiveEntry.external_key).where(
+                ArchiveEntry.document_id == document.id
+            )
+        ).scalars()
+    )
+    created_by_key: dict[str, ArchiveEntry] = {}
+    for ordinal, metadata, external_key in records:
+        if external_key in existing_keys:
+            continue
+        entry = ArchiveEntry(
+            document_id=document.id,
+            domain_id=document.domain_id,
+            external_key=external_key,
+            title=extract_archive_title(metadata, document.title)[:512],
+            ordinal=ordinal,
+            metadata_json=metadata,
+        )
+        db.add(entry)
+        existing_keys.add(external_key)
+        created_by_key[external_key] = entry
+    db.flush()
+    _, _, target_key = matches[0]
+    target = created_by_key.get(target_key)
+    if target:
+        return target
+    target = db.execute(
+        select(ArchiveEntry).where(
+            ArchiveEntry.document_id == document.id,
+            ArchiveEntry.external_key == target_key,
+        )
+    ).scalar_one_or_none()
+    if not target:
+        raise RuntimeError("档案条目正规化失败")
+    return target
+
+
+def begin_archive_upload(
+    db: Session,
+    *,
+    created_by_user_id: int,
+    document_uuid: UUID,
+    source_archive_id: str,
+    filename: str,
+    content_type: str,
+    size_bytes: int,
+    sha256: str,
+) -> ArchiveUploadSession:
+    """创建或恢复一个按来源档案 ID 绑定的分片上传会话。"""
+
+    if size_bytes > ARCHIVE_UPLOAD_MAX_FILE_BYTES:
+        raise ValueError("文件超过服务端允许的最大大小")
+    safe_filename = Path(filename).name.strip()
+    if not safe_filename or safe_filename != filename.strip():
+        raise ValueError("filename 必须是不含目录的文件名")
+
+    entry = resolve_archive_entry(db, document_uuid, source_archive_id)
+    digest = sha256.lower()
+    existing_asset = db.execute(
+        select(ArchiveAsset).where(
+            ArchiveAsset.archive_entry_id == entry.id,
+            ArchiveAsset.original_filename == safe_filename,
+        )
+    ).scalar_one_or_none()
+    if existing_asset:
+        if (
+            existing_asset.sha256 == digest
+            and existing_asset.size_bytes == size_bytes
+        ):
+            completed = ArchiveUploadSession(
+                created_by_user_id=created_by_user_id,
+                archive_entry_id=entry.id,
+                archive_asset_id=existing_asset.id,
+                original_filename=safe_filename,
+                content_type=content_type or existing_asset.content_type,
+                size_bytes=size_bytes,
+                sha256=digest,
+                received_bytes=size_bytes,
+                status="completed",
+                completed_at=datetime.now(timezone.utc),
+            )
+            db.add(completed)
+            db.flush()
+            return completed
+        raise FileExistsError("该档案条目已有同名但内容不同的资源")
+
+    active = db.execute(
+        select(ArchiveUploadSession)
+        .where(
+            ArchiveUploadSession.archive_entry_id == entry.id,
+            ArchiveUploadSession.original_filename == safe_filename,
+            ArchiveUploadSession.sha256 == digest,
+            ArchiveUploadSession.size_bytes == size_bytes,
+            ArchiveUploadSession.status == "active",
+        )
+        .order_by(ArchiveUploadSession.created_at.desc())
+    ).scalars().first()
+    if active:
+        path = get_upload_path(active.id)
+        actual_size = path.stat().st_size if path.exists() else 0
+        if actual_size != active.received_bytes:
+            active.received_bytes = actual_size
+        return active
+
+    upload = ArchiveUploadSession(
+        id=uuid4(),
+        created_by_user_id=created_by_user_id,
+        archive_entry_id=entry.id,
+        original_filename=safe_filename,
+        content_type=content_type or "application/octet-stream",
+        size_bytes=size_bytes,
+        sha256=digest,
+        received_bytes=0,
+        status="active",
+    )
+    db.add(upload)
+    db.flush()
+    get_upload_path(upload.id).touch(exist_ok=False)
+    return upload
+
+
+def complete_archive_upload(
+    db: Session,
+    upload: ArchiveUploadSession,
+) -> ArchiveAsset:
+    """校验完整文件并转入内容寻址存储，然后建立下载资源记录。"""
+
+    if upload.status == "completed" and upload.archive_asset_id:
+        asset = db.get(ArchiveAsset, upload.archive_asset_id)
+        if asset:
+            return asset
+    if upload.status != "active":
+        raise ValueError("上传会话已不可完成")
+    if upload.received_bytes != upload.size_bytes:
+        raise ValueError("文件尚未上传完整")
+
+    path = get_upload_path(upload.id)
+    if not path.is_file() or path.stat().st_size != upload.size_bytes:
+        raise ValueError("服务端临时文件大小不一致")
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(4 * 1024 * 1024):
+            digest.update(chunk)
+    actual_sha256 = digest.hexdigest()
+    if actual_sha256 != upload.sha256:
+        path.unlink(missing_ok=True)
+        upload.status = "failed"
+        upload.error_message = "SHA-256 校验失败"
+        raise ValueError(upload.error_message)
+
+    existing_asset = db.execute(
+        select(ArchiveAsset).where(
+            ArchiveAsset.archive_entry_id == upload.archive_entry_id,
+            ArchiveAsset.original_filename == upload.original_filename,
+        )
+    ).scalar_one_or_none()
+    if existing_asset:
+        if (
+            existing_asset.sha256 == upload.sha256
+            and existing_asset.size_bytes == upload.size_bytes
+        ):
+            path.unlink(missing_ok=True)
+            upload.status = "completed"
+            upload.archive_asset_id = existing_asset.id
+            upload.completed_at = datetime.now(timezone.utc)
+            return existing_asset
+        raise FileExistsError("该档案条目已有同名但内容不同的资源")
+
+    object_key = (
+        f"{upload.sha256[:2]}/{upload.sha256[2:4]}/{upload.sha256}"
+    )
+    destination = get_asset_path(object_key)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        path.unlink(missing_ok=True)
+    else:
+        shutil.move(str(path), destination)
+
+    asset = ArchiveAsset(
+        archive_entry_id=upload.archive_entry_id,
+        original_filename=upload.original_filename,
+        object_key=object_key,
+        content_type=upload.content_type,
+        size_bytes=upload.size_bytes,
+        sha256=upload.sha256,
+        status="ready",
+    )
+    db.add(asset)
+    db.flush()
+    upload.archive_asset_id = asset.id
+    upload.status = "completed"
+    upload.completed_at = datetime.now(timezone.utc)
+    upload.error_message = None
+    return asset
 
 
 def save_import_package(upload_file, job_id: UUID) -> Path:

@@ -256,6 +256,63 @@ class ArchiveAsset(Base):
     )
 
 
+class ArchiveUploadSession(Base):
+    """大文件档案资源的可恢复分片上传会话。"""
+
+    __tablename__: ClassVar[str] = "archive_upload_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    archive_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("archive_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    archive_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("archive_assets.id", ondelete="SET NULL"), nullable=True
+    )
+    original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    content_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="application/pdf"
+    )
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    received_bytes: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="active", server_default="active"
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    completed_at: Mapped[Optional[DateTime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_archive_upload_sessions_entry_status",
+            "archive_entry_id",
+            "status",
+        ),
+        Index(
+            "ix_archive_upload_sessions_creator_created",
+            "created_by_user_id",
+            "created_at",
+        ),
+    )
+
+
 class ArchiveImportJob(Base):
     """管理员通过 API 提交的档案资源批量导入任务。"""
 
