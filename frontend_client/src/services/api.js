@@ -1,6 +1,13 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.VUE_APP_API_BASE_URL || '/api';
+const configuredApiBaseUrl = process.env.VUE_APP_API_BASE_URL || '';
+const isLocalApiUrl = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(
+  configuredApiBaseUrl
+);
+const API_BASE_URL =
+  process.env.NODE_ENV === 'production' && isLocalApiUrl
+    ? '/api'
+    : configuredApiBaseUrl || '/api';
 const TOKEN_STORAGE_KEY =
   process.env.VUE_APP_TOKEN_STORAGE_KEY || 'archive_ai_client_token';
 
