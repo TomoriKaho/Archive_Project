@@ -74,6 +74,7 @@ services:
       - /opt/Archive_Project/app:/app/app
       - /opt/Archive_Project/migrations:/app/migrations
       - /opt/Archive_Project/backend_entrypoint.sh:/app/scripts/backend_entrypoint.sh:ro
+      - archive_assets:/app/var/archive-assets
 
     depends_on:
       - ollama
@@ -126,6 +127,7 @@ volumes:
   postgres_data:
   qdrant_storage:
   ollama_data:
+  archive_assets:
 
 
 networks:

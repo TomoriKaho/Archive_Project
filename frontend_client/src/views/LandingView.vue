@@ -207,7 +207,7 @@ const languagePack = {
         submitting: '创建中…',
         domainButton: '选择知识域',
         domainBadge: (count) => `已选${count}`,
-        domainHint: '选择后仅检索勾选的知识域，                不勾选默认从全部知识域检索。',
+        domainHint: '选择知识域并应用后，将显示其中的全部档案；输入关键词可继续筛选。',
         domainApply: '应用',
         domainClear: '清除',
         switchToTraditional: '切换至传统搜索',
@@ -239,7 +239,7 @@ const languagePack = {
         domainButton: 'Choose Domains',
         domainBadge: (count) => `${count} selected`,
         domainHint:
-          'When selected, messages will only search the checked domains. Leave unchecked to search all domains.',
+          'Apply selected domains to show all of their archives; enter keywords to narrow the results.',
         domainApply: 'Apply',
         domainClear: 'Clear',
         switchToTraditional: 'Switch to Traditional Search',
@@ -276,6 +276,11 @@ const archiveTableTexts = computed(() =>
         empty: '未找到符合条件的档案',
         view: '查看',
         close: '关闭',
+        download: '下载档案',
+        downloadUnavailable: '该档案暂无可下载资源',
+        downloadLoading: '正在读取…',
+        downloadChoose: '请选择要下载的文件',
+        downloadFailed: '下载失败，请稍后重试',
         metadata: '档案元数据',
         noMetadata: '暂无可展示的元数据',
         expandDetails: '展开',
@@ -298,6 +303,11 @@ const archiveTableTexts = computed(() =>
         empty: 'No archives found',
         view: 'View',
         close: 'Close',
+        download: 'Download archive',
+        downloadUnavailable: 'No downloadable files are available for this archive.',
+        downloadLoading: 'Loading…',
+        downloadChoose: 'Choose a file to download',
+        downloadFailed: 'Download failed. Please try again.',
         metadata: 'Archive metadata',
         noMetadata: 'No metadata to show yet',
         expandDetails: 'Expand',
@@ -403,6 +413,21 @@ function openHistory() {
 
 function updateDomains(domainIds) {
   preferencesStore.setPreferredDomainIds(domainIds);
+  if (!isTraditionalMode.value) {
+    return;
+  }
+  if (domainIds.length) {
+    performArchiveSearch(1, query.value, domainIds);
+    return;
+  }
+  if (query.value.trim()) {
+    performArchiveSearch(1, query.value, []);
+    return;
+  }
+  searchState.value = 'idle';
+  archives.value = [];
+  totalArchives.value = 0;
+  searchPage.value = 1;
 }
 
 function setSearchMode(mode) {
@@ -432,9 +457,13 @@ function setChineseSearch(value) {
   }
 }
 
-async function performArchiveSearch(page = 1, content = query.value.trim()) {
+async function performArchiveSearch(
+  page = 1,
+  content = query.value.trim(),
+  domainIds = selectedDomains.value
+) {
   const keyword = content.trim();
-  if (!keyword) {
+  if (!keyword && !domainIds.length) {
     searchState.value = 'idle';
     archives.value = [];
     totalArchives.value = 0;
@@ -445,7 +474,7 @@ async function performArchiveSearch(page = 1, content = query.value.trim()) {
   try {
     const response = await searchArchives({
       query: keyword,
-      domainIds: selectedDomains.value,
+      domainIds,
       mode: searchType.value,
       enableChinese: enableChineseSearch.value,
       page,

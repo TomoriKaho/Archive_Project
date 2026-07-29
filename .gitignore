@@ -19,3 +19,4 @@ ignore/
 env.*
 .env.*
 tmp/*
+var/archive-assets/*

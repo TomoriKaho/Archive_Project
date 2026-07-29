@@ -152,6 +152,12 @@ class Document(Base):  # 定义文档实体
         cascade="all, delete-orphan",  # 文档删除时清理切片，保持一致
         passive_deletes=True,  # 交由数据库执行级联
     )
+    archive_entries: Mapped[List["ArchiveEntry"]] = relationship(
+        "ArchiveEntry",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (  # 文档附加索引与约束
         Index(
@@ -161,6 +167,131 @@ class Document(Base):  # 定义文档实体
         ),  # 提升按域和时间排序的查询效率
     )
 
+
+
+class ArchiveEntry(Base):
+    """可搜索、可关联下载资源的稳定档案条目。"""
+
+    __tablename__: ClassVar[str] = "archive_entries"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    domain_id: Mapped[int] = mapped_column(
+        ForeignKey("domains.id", ondelete="CASCADE"), nullable=False
+    )
+    external_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    document: Mapped["Document"] = relationship(
+        "Document", back_populates="archive_entries", passive_deletes=True
+    )
+    assets: Mapped[List["ArchiveAsset"]] = relationship(
+        "ArchiveAsset",
+        back_populates="archive_entry",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "external_key",
+            name="uq_archive_entry_document_external_key",
+        ),
+        Index("ix_archive_entries_domain_id", "domain_id"),
+        Index("ix_archive_entries_document_ordinal", "document_id", "ordinal"),
+    )
+
+
+class ArchiveAsset(Base):
+    """档案条目对应的可下载资源文件元数据。"""
+
+    __tablename__: ClassVar[str] = "archive_assets"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    archive_entry_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("archive_entries.id", ondelete="CASCADE"), nullable=False
+    )
+    original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="application/octet-stream"
+    )
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="ready", server_default="ready"
+    )
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    archive_entry: Mapped["ArchiveEntry"] = relationship(
+        "ArchiveEntry", back_populates="assets", passive_deletes=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "archive_entry_id",
+            "original_filename",
+            name="uq_archive_asset_entry_filename",
+        ),
+        Index("ix_archive_assets_archive_entry_id", "archive_entry_id"),
+        Index("ix_archive_assets_sha256", "sha256"),
+    )
+
+
+class ArchiveImportJob(Base):
+    """管理员通过 API 提交的档案资源批量导入任务。"""
+
+    __tablename__: ClassVar[str] = "archive_import_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    source_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    duplicate_strategy: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="reject", server_default="reject"
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="queued", server_default="queued"
+    )
+    total_entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processed_entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    succeeded_entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_summary: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    started_at: Mapped[Optional[DateTime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[DateTime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_archive_import_jobs_status_created_at", "status", "created_at"),
+    )
 
 
 class Chunk(Base):  # 定义文档切片实体

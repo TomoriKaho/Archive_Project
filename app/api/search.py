@@ -12,12 +12,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.models.entities import Document, Domain
+from app.models.entities import ArchiveAsset, ArchiveEntry, Document, Domain
 from app.schemas.search import ArchiveSearchItem, ArchiveSearchResponse
+from app.services.archive_assets import derive_archive_external_key
 from app.services.translation_service import translate_text
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,36 @@ def _iter_documents_with_domain(db: Session, domain_ids: Sequence[int] | None) -
         stmt = stmt.where(Document.domain_id.in_(domain_ids))
     rows = db.execute(stmt).all()
     return [(row[0], row[1]) for row in rows]
+
+
+def _load_archive_entry_lookup(
+    db: Session,
+    documents: list[Tuple[Document, str]],
+) -> tuple[
+    dict[tuple[int, str], tuple[ArchiveEntry, int]],
+    list[tuple[ArchiveEntry, int]],
+]:
+    """批量加载正规化档案条目及附件数量，供旧数据关联和新条目补充。"""
+
+    document_ids = [document.id for document, _ in documents]
+    if not document_ids:
+        return {}, []
+    rows = db.execute(
+        select(ArchiveEntry, func.count(ArchiveAsset.id))
+        .outerjoin(
+            ArchiveAsset,
+            (ArchiveAsset.archive_entry_id == ArchiveEntry.id)
+            & (ArchiveAsset.status == "ready"),
+        )
+        .where(ArchiveEntry.document_id.in_(document_ids))
+        .group_by(ArchiveEntry.id)
+    ).all()
+    normalized = [(row[0], int(row[1] or 0)) for row in rows]
+    lookup = {
+        (entry.document_id, entry.external_key): (entry, asset_count)
+        for entry, asset_count in normalized
+    }
+    return lookup, normalized
 
 
 def _ensure_csv_field_size_limit(raw_content: str) -> None:
@@ -223,39 +254,99 @@ def _search_with_tokens(
     documents: list[Tuple[Document, str]],
     tokens: list[str],
     mode: str,
+    entry_lookup: dict[tuple[int, str], tuple[ArchiveEntry, int]] | None = None,
+    normalized_entries: list[tuple[ArchiveEntry, int]] | None = None,
 ) -> list[dict[str, Any]]:
-    """根据词元在文档中寻找匹配档案。"""
+    """根据词元在文档中寻找匹配档案；词元为空时返回全部档案。"""
 
+    entry_lookup = entry_lookup or {}
+    normalized_entries = normalized_entries or []
     candidates: list[dict[str, Any]] = []
     match_index = 0
+    seen_keys: set[tuple[int, str]] = set()
+    document_context = {
+        document.id: (document, domain_name)
+        for document, domain_name in documents
+    }
+
+    def append_candidate(
+        *,
+        document: Document,
+        domain_name: str,
+        metadata: dict[str, Any],
+        archive_name: str,
+        external_key: str,
+        entry: ArchiveEntry | None,
+        asset_count: int,
+    ) -> None:
+        nonlocal match_index
+        text_candidates = _collect_text_candidates(metadata)
+        haystack_sources = text_candidates + [
+            archive_name,
+            document.title,
+            domain_name,
+        ]
+        haystack = " \n ".join(filter(None, haystack_sources))
+        if tokens and not _matches(tokens, haystack, mode):
+            return
+        name_hit = not tokens or any(
+            _matches(tokens, source, mode)
+            for source in (archive_name, document.title, domain_name)
+            if source
+        )
+        candidates.append(
+            {
+                "priority": 0 if name_hit else 1,
+                "index": match_index,
+                "archive_id": entry.id if entry else None,
+                "archive_name": archive_name,
+                "document_name": document.title,
+                "domain_name": domain_name,
+                "metadata": metadata,
+                "download_available": asset_count > 0,
+                "asset_count": asset_count,
+            }
+        )
+        match_index += 1
+
     for document, domain_name in documents:
-        for archive in _iter_archives(document):
+        for ordinal, archive in enumerate(_iter_archives(document), start=1):
             normalized_metadata = _normalize_metadata(archive)
-            text_candidates = _collect_text_candidates(normalized_metadata)
             archive_name = _extract_archive_name(normalized_metadata) or document.title
-
-            haystack_sources = text_candidates + [archive_name, document.title, domain_name]
-            haystack = " \n ".join(filter(None, haystack_sources))
-            if not _matches(tokens, haystack, mode):
-                continue
-
-            name_hit = any(
-                _matches(tokens, source, mode)
-                for source in (archive_name, document.title, domain_name)
-                if source
+            external_key = derive_archive_external_key(
+                normalized_metadata, ordinal
+            )
+            key = (document.id, external_key)
+            seen_keys.add(key)
+            entry_info = entry_lookup.get(key)
+            entry, asset_count = entry_info if entry_info else (None, 0)
+            append_candidate(
+                document=document,
+                domain_name=domain_name,
+                metadata=normalized_metadata,
+                archive_name=archive_name,
+                external_key=external_key,
+                entry=entry,
+                asset_count=asset_count,
             )
 
-            candidates.append(
-                {
-                    "priority": 0 if name_hit else 1,
-                    "index": match_index,
-                    "archive_name": archive_name,
-                    "document_name": document.title,
-                    "domain_name": domain_name,
-                    "metadata": normalized_metadata,
-                }
-            )
-            match_index += 1
+    for entry, asset_count in normalized_entries:
+        key = (entry.document_id, entry.external_key)
+        if key in seen_keys:
+            continue
+        context = document_context.get(entry.document_id)
+        if not context:
+            continue
+        document, domain_name = context
+        append_candidate(
+            document=document,
+            domain_name=domain_name,
+            metadata=entry.metadata_json or {},
+            archive_name=entry.title or document.title,
+            external_key=entry.external_key,
+            entry=entry,
+            asset_count=asset_count,
+        )
     return candidates
 
 
@@ -308,7 +399,7 @@ def _translate_queries(query: str, target_languages: set[str]) -> list[str]:
 
 @router.get("/search/archives", response_model=ArchiveSearchResponse)
 def search_archives(
-    q: str = Query(..., min_length=1, description="搜索关键词"),
+    q: str = Query("", description="搜索关键词；选择知识域时可留空以列出全部档案"),
     page: int = Query(1, ge=1, description="页码，从1开始"),
     page_size: int = Query(10, ge=1, le=10, description="每页数量，最大10"),
     domain_ids: str | None = Query(
@@ -327,15 +418,19 @@ def search_archives(
 
     domain_id_list = _parse_domain_ids(domain_ids)
     documents = _iter_documents_with_domain(db, domain_id_list)
+    entry_lookup, normalized_entries = _load_archive_entry_lookup(db, documents)
 
-    tokens = _tokenize_query(q)
-    if not tokens:
+    query = q.strip()
+    tokens = _tokenize_query(query)
+    if not tokens and query:
         raise HTTPException(status_code=400, detail="请输入不少于2个字符的有效搜索词")
+    if not tokens and not domain_id_list:
+        raise HTTPException(status_code=400, detail="请选择至少一个知识域或输入搜索词")
 
-    query_variants = [q]
-    if enable_chinese and _contains_chinese(q):
+    query_variants = [query]
+    if enable_chinese and _contains_chinese(query):
         languages = _fetch_domain_languages(db, domain_id_list)
-        query_variants.extend(_translate_queries(q, languages))
+        query_variants.extend(_translate_queries(query, languages))
 
     unique_queries: list[str] = []
     seen_queries: set[str] = set()
@@ -347,13 +442,22 @@ def search_archives(
         unique_queries.append(cleaned)
 
     combined: dict[str, dict[str, Any]] = {}
-    for variant in unique_queries:
-        variant_tokens = _tokenize_query(variant)
-        if not variant_tokens:
-            continue
-        for candidate in _search_with_tokens(documents, variant_tokens, mode):
+    token_variants = (
+        [_tokenize_query(variant) for variant in unique_queries]
+        if tokens
+        else [[]]
+    )
+    for variant_tokens in token_variants:
+        for candidate in _search_with_tokens(
+            documents,
+            variant_tokens,
+            mode,
+            entry_lookup=entry_lookup,
+            normalized_entries=normalized_entries,
+        ):
             key = json.dumps(
                 {
+                    "archive_id": candidate["archive_id"],
                     "archive_name": candidate["archive_name"],
                     "document_name": candidate["document_name"],
                     "domain_name": candidate["domain_name"],
@@ -385,16 +489,19 @@ def search_archives(
         matched_items.append(
             ArchiveSearchItem(
                 page=display_index,
+                archive_id=item["archive_id"],
                 archive_name=item["archive_name"],
                 document_name=item["document_name"],
                 domain_name=item["domain_name"],
                 metadata=item["metadata"],
+                download_available=item["download_available"],
+                asset_count=item["asset_count"],
             )
         )
 
     logger.info(
         "search_archives query=%s mode=%s domains=%s total=%s page=%s size=%s",
-        q,
+        query,
         mode,
         domain_id_list,
         total_matches,

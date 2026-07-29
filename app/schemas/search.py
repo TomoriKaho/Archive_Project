@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+from uuid import UUID
 
 from pydantic import Field
 
@@ -12,10 +13,15 @@ class ArchiveSearchItem(ORMModel):
     """单条档案搜索结果。"""
 
     page: int = Field(description="结果序号，从1开始")
+    archive_id: UUID | None = Field(
+        default=None, description="正规化档案条目的稳定ID；旧数据可能为空"
+    )
     archive_name: str = Field(description="档案名称，取文档首列或常见字段")
     document_name: str = Field(description="所属文档名称")
     domain_name: str = Field(description="所属知识域名称")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="档案元数据")
+    download_available: bool = Field(default=False, description="是否存在可下载资源")
+    asset_count: int = Field(default=0, description="可下载资源数量")
 
 
 class ArchiveSearchResponse(ORMModel):
@@ -25,4 +31,3 @@ class ArchiveSearchResponse(ORMModel):
     total: int
     page: int
     page_size: int
-

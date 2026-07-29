@@ -138,12 +138,38 @@
           </div>
           <pre v-else class="archive-details__fallback">{{ formatFallback(activeArchive) }}</pre>
         </section>
+
+        <section v-if="assetItems.length > 1" class="archive-detail__assets">
+          <h4>{{ uiTexts.downloadChoose }}</h4>
+          <button
+            v-for="asset in assetItems"
+            :key="asset.id"
+            class="archive-detail__asset"
+            type="button"
+            :disabled="downloadingAssetId === asset.id"
+            @click="startAssetDownload(asset)"
+          >
+            <span>{{ asset.filename }}</span>
+            <span>{{ formatAssetSize(asset.size_bytes) }}</span>
+          </button>
+        </section>
+        <p v-if="assetError" class="archive-detail__asset-error">{{ assetError }}</p>
       </div>
 
       <template #footer>
-        <button class="archive-table__close" type="button" @click="isDetailOpen = false">
-          {{ uiTexts.close }}
-        </button>
+        <div class="archive-table__footer">
+          <button
+            class="archive-table__download"
+            type="button"
+            :disabled="!canDownload || loadingAssets"
+            @click="handleDownload"
+          >
+            {{ loadingAssets ? uiTexts.downloadLoading : uiTexts.download }}
+          </button>
+          <button class="archive-table__close" type="button" @click="isDetailOpen = false">
+            {{ uiTexts.close }}
+          </button>
+        </div>
       </template>
     </BaseModal>
   </div>
@@ -164,6 +190,7 @@ import {
 } from '../../../frontend_shared/components/structured';
 
 import BaseModal from './BaseModal.vue';
+import { downloadArchiveAsset, fetchArchiveAssets } from '@/services/archives';
 
 const props = defineProps({
   archives: {
@@ -208,6 +235,10 @@ defineEmits(['update:page']);
 
 const activeArchive = ref(null);
 const isDetailOpen = ref(false);
+const assetItems = ref([]);
+const assetError = ref('');
+const loadingAssets = ref(false);
+const downloadingAssetId = ref('');
 
 const HighlightedText = defineComponent({
   name: 'HighlightedText',
@@ -329,6 +360,11 @@ const defaultTexts = {
   empty: '暂无搜索结果',
   view: '查看',
   close: '关闭',
+  download: '下载档案',
+  downloadUnavailable: '该档案暂无可下载资源',
+  downloadLoading: '正在读取…',
+  downloadChoose: '请选择要下载的文件',
+  downloadFailed: '下载失败，请稍后重试',
   metadata: '档案元数据',
   noMetadata: '暂无可展示的元数据',
   expandDetails: '展开',
@@ -389,10 +425,63 @@ const detailEntries = computed(() => {
 });
 
 const hasMetadataEntries = computed(() => detailEntries.value.length > 0);
+const canDownload = computed(
+  () =>
+    Boolean(activeArchive.value?.archive_id || activeArchive.value?.archiveId) &&
+    Boolean(activeArchive.value?.download_available ?? activeArchive.value?.downloadAvailable)
+);
 
 function openDetails(archive) {
   activeArchive.value = archive;
+  assetItems.value = [];
+  assetError.value = '';
+  loadingAssets.value = false;
+  downloadingAssetId.value = '';
   isDetailOpen.value = true;
+}
+
+async function handleDownload() {
+  if (!canDownload.value || loadingAssets.value) {
+    assetError.value = uiTexts.value.downloadUnavailable;
+    return;
+  }
+  loadingAssets.value = true;
+  assetError.value = '';
+  try {
+    const archiveId = activeArchive.value?.archive_id || activeArchive.value?.archiveId;
+    const response = await fetchArchiveAssets(archiveId);
+    assetItems.value = response.items || [];
+    if (!assetItems.value.length) {
+      assetError.value = uiTexts.value.downloadUnavailable;
+      return;
+    }
+    if (assetItems.value.length === 1) {
+      await startAssetDownload(assetItems.value[0]);
+    }
+  } catch (error) {
+    assetError.value = uiTexts.value.downloadFailed;
+  } finally {
+    loadingAssets.value = false;
+  }
+}
+
+async function startAssetDownload(asset) {
+  downloadingAssetId.value = asset.id;
+  assetError.value = '';
+  try {
+    await downloadArchiveAsset(asset);
+  } catch (error) {
+    assetError.value = uiTexts.value.downloadFailed;
+  } finally {
+    downloadingAssetId.value = '';
+  }
+}
+
+function formatAssetSize(size) {
+  const bytes = Number(size) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatFallback(archive) {
@@ -676,6 +765,62 @@ function resolveDomainName(archive) {
   border-radius: 10px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.archive-table__footer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.archive-table__download {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.archive-table__download:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.archive-table__download:disabled {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.archive-detail__assets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.archive-detail__assets h4 {
+  margin: 0;
+}
+
+.archive-detail__asset {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.archive-detail__asset-error {
+  margin: 0;
+  color: #dc2626;
 }
 
 .archive-table__close:hover {

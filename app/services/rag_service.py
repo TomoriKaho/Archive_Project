@@ -160,7 +160,7 @@ _PROMPT_TEMPLATES = {
         "answer_output_intro": (
             "请阅读上面的档案资料和对话记录，回答下面的问题。\n"
             "你必须只输出一个 JSON 对象，不要输出 Markdown 代码块或任何额外说明。\n"
-            "JSON 格式固定为：{\"answer\": string, \"need_references\": boolean}\n"
+            "JSON 格式固定为：{{\"answer\": string, \"need_references\": boolean}}\n"
             "字段要求：\n"
             "1. answer：写给用户看的回答正文，不要包含“参考资料”“参考文献”等附录；\n"
             "2. need_references：只有当 answer 直接使用了档案中的具体事实、编号、日期、姓名、地点、链接，或其他需要用户追溯原始档案的信息时才为 true；\n"
@@ -196,7 +196,7 @@ _PROMPT_TEMPLATES = {
         "answer_output_intro": (
             "Read the archive material and conversation above, then answer the question below.\n"
             "You must output exactly one JSON object, with no Markdown fences or extra commentary.\n"
-            "Use this exact shape: {\"answer\": string, \"need_references\": boolean}\n"
+            "Use this exact shape: {{\"answer\": string, \"need_references\": boolean}}\n"
             "Field requirements:\n"
             "1. answer: the user-facing reply only; do not include a references appendix;\n"
             "2. need_references: set to true only when the answer directly uses concrete archival facts, identifiers, dates, names, places, links, or other details that should be traceable to the source archive;\n"
